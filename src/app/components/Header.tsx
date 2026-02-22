@@ -176,11 +176,11 @@ export function Header({ onMenuClick }: HeaderProps) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate('/profile')}>Profile</DropdownMenuItem>
                 <DropdownMenuItem>Settings</DropdownMenuItem>
-                {(user?.role === 'manager' || user?.role === 'admin') && (
+                {(user?.role === 'manager') && (
                   <DropdownMenuItem>Team</DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
-                {(user?.role === 'manager' || user?.role === 'admin') && (
+                {(user?.role === 'manager' ) && (
                   <>
                     <DropdownMenuItem onClick={() => setCreateUserOpen(true)} className="gap-2">
                       <UserPlus className="h-4 w-4" />

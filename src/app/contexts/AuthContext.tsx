@@ -173,15 +173,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const mappedUser = mapBackendUser(profile);
       setUser(mappedUser);
       await fetchUserList(mappedUser.role, setUsers);
-      return { success: true, message: 'Connexion réussie' };
+      return { success: true, message: 'Login successful' };
     } catch (err) {
       TokenStorage.clear();
       if (err instanceof ApiError) {
-        if (err.status === 401) return { success: false, message: 'Email ou mot de passe incorrect' };
-        if (err.status === 403) return { success: false, message: 'Votre compte est en attente de validation' };
+        if (err.status === 401) return { success: false, message: 'Incorrect email or password' };
+        if (err.status === 403) return { success: false, message: 'Your account is pending validation' };
         return { success: false, message: err.userMessage };
       }
-      return { success: false, message: 'Erreur de connexion' };
+      return { success: false, message: 'Connection error' };
     } finally {
       setIsLoading(false);
     }
@@ -190,10 +190,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── SIGNUP ─────────────────────────────────────────────────────────────
   const signup = async (userData: SignupData): Promise<{ success: boolean; message: string }> => {
     if (userData.role !== 'manager') {
-      return { success: false, message: "Seuls les managers peuvent s'inscrire via ce formulaire" };
+      return { success: false, message: 'Only managers can register via this form' };
     }
     if (!userData.companyName?.trim()) {
-      return { success: false, message: 'Le nom de la société est obligatoire.' };
+      return { success: false, message: 'Company name is required.' };
     }
     setIsLoading(true);
     try {
@@ -209,9 +209,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password: userData.password,
         password_confirm: userData.password,
       });
-      return { success: true, message: "Compte créé ! En attente de vérification par l'admin." };
+      return { success: true, message: 'Account created! Awaiting verification by the admin.' };
     } catch (err) {
-      return { success: false, message: err instanceof ApiError ? err.userMessage : "Erreur lors de l'inscription" };
+      return { success: false, message: err instanceof ApiError ? err.userMessage : 'Error during registration' };
     } finally {
       setIsLoading(false);
     }
@@ -228,7 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, isVerified: true } : u));
   };
 
-  const rejectManager = async (userId: string, reason = 'Demande rejetée') => {
+  const rejectManager = async (userId: string, reason = 'Request rejected') => {
     await authApi.reviewManager(userId, { action: 'reject', reason });
     setUsers(prev => prev.filter(u => u.id !== userId));
   };
@@ -259,7 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await authApi.createAgent(payload);
       setUsers(prev => [...prev, mapListItem(res.agent)]);
     } catch (err) {
-      console.error('[createAgent] Erreur →', (err as { data?: unknown })?.data ?? err);
+      console.error('[createAgent] Error →', (err as { data?: unknown })?.data ?? err);
       throw err;
     }
   };

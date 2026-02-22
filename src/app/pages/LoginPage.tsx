@@ -17,7 +17,7 @@ export function LoginPage() {
     e.preventDefault();
     const result = await login(formData.email, formData.password);
     if (result.success) {
-      toast.success('Connexion réussie');
+      toast.success('Login successful');
       navigate('/dashboard');
     } else {
       toast.error(result.message);
@@ -41,17 +41,17 @@ export function LoginPage() {
         {/* Login Form */}
         <div className="bg-background border rounded-2xl shadow-xl p-8">
           <div className="mb-6">
-            <h2 className="text-2xl font-bold">Bienvenue</h2>
-            <p className="text-muted-foreground text-sm mt-1">Connectez-vous à votre compte</p>
+            <h2 className="text-2xl font-bold">Welcome</h2>
+            <p className="text-muted-foreground text-sm mt-1">Sign in to your account</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Adresse email</Label>
+              <Label htmlFor="email">Email address</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="votre@email.com"
+                placeholder="your@email.com"
                 value={formData.email}
                 onChange={e => setFormData({ ...formData, email: e.target.value })}
                 required
@@ -59,9 +59,11 @@ export function LoginPage() {
                 autoComplete="email"
               />
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Mot de passe</Label>
+                   <div className="space-y-2">
+              {/* Label + Forgot password link on same line */}
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+              </div>
               <div className="relative">
                 <Input
                   id="password"
@@ -82,29 +84,39 @@ export function LoginPage() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-            </div>
-
-            <Button type="submit" className="w-full" disabled={isLoading}>
+      <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? (
                 <span className="flex items-center gap-2">
                   <span className="animate-spin">⏳</span>
-                  Connexion en cours...
+                  Signing in...
                 </span>
               ) : (
                 <span className="flex items-center gap-2">
                   <LogIn className="h-4 w-4" />
-                  Se connecter
+                  Sign in
                 </span>
               )}
             </Button>
+
+            </div>
           </form>
           {/* Sign Up Link */}
-          <div className="mt-6 text-center text-sm">
-            <span className="text-muted-foreground">Pas de compte ? </span>
+          <div className="mt-6 text-center text-sm ">
+              <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">No account? </span>
             <Link to="/signup" className="text-indigo-600 hover:text-indigo-700 font-medium">
-              Inscription Manager
+              Manager Sign Up
             </Link>
-          </div>
+             <Link
+                  to="/forgot-password"
+                  className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+    </div>
+
+
         </div>
       </div>
     </div>

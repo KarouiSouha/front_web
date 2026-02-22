@@ -1,8 +1,3 @@
-/**
- * Permissions constants — séparées de AuthContext pour éviter le warning HMR Vite
- * (un fichier ne doit pas mélanger exports React et exports non-React)
- */
-
 export interface Permission {
   id: string;
   label: string;

@@ -52,22 +52,22 @@ export function SettingsPage() {
 
   const handleSaveProfile = async () => {
     if (!profileForm.first_name.trim()) {
-      toast.error('Le prénom est obligatoire');
+      toast.error('First name is required');
       return;
     }
     if (!profileForm.last_name.trim()) {
-      toast.error('Le nom est obligatoire');
+      toast.error('Last name is required');
       return;
     }
     setSavingProfile(true);
     try {
       await api.patch('/users/profile/', profileForm);
       await refreshProfile();
-      toast.success('Profil mis à jour avec succès');
+      toast.success('Profile updated successfully');
     } catch (err: any) {
       const data = err?.data ?? {};
       const msg = data.first_name?.[0] || data.last_name?.[0] || data.phone_number?.[0]
-        || err?.userMessage || 'Erreur lors de la mise à jour du profil';
+        || err?.userMessage || 'Error updating profile';
       toast.error(msg);
     } finally {
       setSavingProfile(false);
@@ -92,26 +92,26 @@ export function SettingsPage() {
     setPasswordErrors({});
 
     if (!passwordForm.old_password) {
-      setPasswordErrors(e => ({ ...e, old_password: 'Champ obligatoire' }));
+      setPasswordErrors(e => ({ ...e, old_password: 'Required field' }));
       return;
     }
     if (passwordForm.new_password.length < 8) {
-      setPasswordErrors(e => ({ ...e, new_password: 'Minimum 8 caractères' }));
+      setPasswordErrors(e => ({ ...e, new_password: 'Minimum 8 characters' }));
       return;
     }
     if (passwordForm.new_password !== passwordForm.new_password_confirm) {
-      setPasswordErrors(e => ({ ...e, new_password_confirm: 'Les mots de passe ne correspondent pas' }));
+      setPasswordErrors(e => ({ ...e, new_password_confirm: 'Passwords do not match' }));
       return;
     }
     if (passwordForm.old_password === passwordForm.new_password) {
-      setPasswordErrors(e => ({ ...e, new_password: 'Le nouveau mot de passe doit être différent' }));
+      setPasswordErrors(e => ({ ...e, new_password: 'New password must be different' }));
       return;
     }
 
     setSavingPassword(true);
     try {
       await api.post('/users/change-password/', passwordForm);
-      toast.success('Mot de passe modifié. Reconnectez-vous dans 2 secondes...');
+      toast.success('Password changed. Signing you out in 2 seconds...');
       setTimeout(async () => {
         await logout();
         navigate('/login');
@@ -127,7 +127,7 @@ export function SettingsPage() {
       } else if (data.new_password_confirm) {
         setPasswordErrors({ new_password_confirm: Array.isArray(data.new_password_confirm) ? data.new_password_confirm[0] : data.new_password_confirm });
       } else {
-        toast.error(err?.userMessage ?? 'Erreur lors du changement de mot de passe');
+        toast.error(err?.userMessage ?? 'Error changing password');
       }
     } finally {
       setSavingPassword(false);
@@ -137,17 +137,16 @@ export function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Paramètres</h1>
-        <p className="text-muted-foreground mt-1">Gérez votre compte et vos préférences</p>
+        <h1 className="text-3xl font-bold">Settings</h1>
+        <p className="text-muted-foreground mt-1">Manage your account and preferences</p>
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="profile">Profil</TabsTrigger>
-          <TabsTrigger value="company">Société</TabsTrigger>
+          <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="company">Company</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
-          <TabsTrigger value="security">Sécurité</TabsTrigger>
-          <TabsTrigger value="integrations">Intégrations</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
         </TabsList>
 
         {/* ── PROFILE ── */}
@@ -157,8 +156,8 @@ export function SettingsPage() {
               <div className="flex items-center gap-3">
                 <User className="h-5 w-5" />
                 <div>
-                  <CardTitle>Informations personnelles</CardTitle>
-                  <CardDescription>Mettez à jour vos informations de profil</CardDescription>
+                  <CardTitle>Personal information</CardTitle>
+                  <CardDescription>Update your profile information</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -171,21 +170,21 @@ export function SettingsPage() {
                 <>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="firstName">Prénom *</Label>
+                      <Label htmlFor="firstName">First name *</Label>
                       <Input
                         id="firstName"
                         value={profileForm.first_name}
                         onChange={e => setProfileForm(f => ({ ...f, first_name: e.target.value }))}
-                        placeholder="Votre prénom"
+                        placeholder="Your first name"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="lastName">Nom *</Label>
+                      <Label htmlFor="lastName">Last name *</Label>
                       <Input
                         id="lastName"
                         value={profileForm.last_name}
                         onChange={e => setProfileForm(f => ({ ...f, last_name: e.target.value }))}
-                        placeholder="Votre nom"
+                        placeholder="Your last name"
                       />
                     </div>
                   </div>
@@ -199,11 +198,11 @@ export function SettingsPage() {
                       disabled
                       className="opacity-60 cursor-not-allowed"
                     />
-                    <p className="text-xs text-muted-foreground">L'email ne peut pas être modifié</p>
+                    <p className="text-xs text-muted-foreground">Email cannot be changed</p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Numéro de téléphone</Label>
+                    <Label htmlFor="phone">Phone number</Label>
                     <Input
                       id="phone"
                       type="tel"
@@ -214,7 +213,7 @@ export function SettingsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Rôle</Label>
+                    <Label>Role</Label>
                     <Input
                       value={user?.role || ''}
                       disabled
@@ -224,8 +223,8 @@ export function SettingsPage() {
 
                   <Button onClick={handleSaveProfile} disabled={savingProfile}>
                     {savingProfile
-                      ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Enregistrement...</>
-                      : 'Sauvegarder'
+                      ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Saving...</>
+                      : 'Save'
                     }
                   </Button>
                 </>
@@ -241,22 +240,22 @@ export function SettingsPage() {
               <div className="flex items-center gap-3">
                 <Building className="h-5 w-5" />
                 <div>
-                  <CardTitle>Informations de la société</CardTitle>
-                  <CardDescription>Détails de votre organisation</CardDescription>
+                  <CardTitle>Company information</CardTitle>
+                  <CardDescription>Details of your organization</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>Nom de la société</Label>
-                <Input value={user?.companyName || 'Non assignée'} disabled className="opacity-60 cursor-not-allowed" />
+                <Label>Company name</Label>
+                <Input value={user?.companyName || 'Not assigned'} disabled className="opacity-60 cursor-not-allowed" />
               </div>
               <div className="space-y-2">
-                <Label>Succursale</Label>
-                <Input value={user?.branchName || 'Non assignée'} disabled className="opacity-60 cursor-not-allowed" />
+                <Label>Branch</Label>
+                <Input value={user?.branchName || 'Not assigned'} disabled className="opacity-60 cursor-not-allowed" />
               </div>
               <p className="text-xs text-muted-foreground">
-                Les informations de société sont gérées par l'administrateur.
+                Company information is managed by the administrator.
               </p>
             </CardContent>
           </Card>
@@ -269,19 +268,19 @@ export function SettingsPage() {
               <div className="flex items-center gap-3">
                 <Bell className="h-5 w-5" />
                 <div>
-                  <CardTitle>Préférences de notifications</CardTitle>
-                  <CardDescription>Choisissez les notifications que vous recevez</CardDescription>
+                  <CardTitle>Notification preferences</CardTitle>
+                  <CardDescription>Choose which notifications you receive</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 {[
-                  { id: 'email-alerts', label: 'Alertes Email', desc: 'Notifications par email pour les alertes critiques', default: true },
-                  { id: 'low-stock', label: 'Alertes de stock', desc: 'Notification quand le stock est faible', default: true },
-                  { id: 'overdue', label: 'Paiements en retard', desc: 'Alertes pour les paiements clients en retard', default: true },
-                  { id: 'ai-insights', label: 'Insights IA', desc: "Recommandations basées sur l'IA", default: true },
-                  { id: 'weekly-report', label: 'Rapport hebdomadaire', desc: 'Résumé de performance hebdomadaire', default: false },
+                  { id: 'email-alerts', label: 'Email Alerts', desc: 'Email notifications for critical alerts', default: true },
+                  { id: 'low-stock', label: 'Stock Alerts', desc: 'Notification when stock is low', default: true },
+                  { id: 'overdue', label: 'Overdue Payments', desc: 'Alerts for overdue customer payments', default: true },
+                  { id: 'ai-insights', label: 'AI Insights', desc: 'AI-powered recommendations', default: true },
+                  { id: 'weekly-report', label: 'Weekly Report', desc: 'Weekly performance summary', default: false },
                 ].map(item => (
                   <div key={item.id} className="flex items-center justify-between">
                     <div className="space-y-0.5">
@@ -292,7 +291,7 @@ export function SettingsPage() {
                   </div>
                 ))}
               </div>
-              <Button>Sauvegarder les préférences</Button>
+              <Button>Save preferences</Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -304,9 +303,9 @@ export function SettingsPage() {
               <div className="flex items-center gap-3">
                 <Shield className="h-5 w-5" />
                 <div>
-                  <CardTitle>Changer le mot de passe</CardTitle>
+                  <CardTitle>Change password</CardTitle>
                   <CardDescription>
-                    Après modification, toutes vos sessions seront fermées et vous devrez vous reconnecter.
+                    After changing, all your sessions will be closed and you will need to sign in again.
                   </CardDescription>
                 </div>
               </div>
@@ -315,7 +314,7 @@ export function SettingsPage() {
 
               {/* Old password */}
               <div className="space-y-2">
-                <Label htmlFor="old-password">Mot de passe actuel *</Label>
+                <Label htmlFor="old-password">Current password *</Label>
                 <div className="relative">
                   <Input
                     id="old-password"
@@ -339,7 +338,7 @@ export function SettingsPage() {
 
               {/* New password */}
               <div className="space-y-2">
-                <Label htmlFor="new-password">Nouveau mot de passe *</Label>
+                <Label htmlFor="new-password">New password *</Label>
                 <div className="relative">
                   <Input
                     id="new-password"
@@ -359,12 +358,12 @@ export function SettingsPage() {
                 {passwordErrors.new_password && (
                   <p className="text-xs text-red-500">{passwordErrors.new_password}</p>
                 )}
-                <p className="text-xs text-muted-foreground">Minimum 8 caractères</p>
+                <p className="text-xs text-muted-foreground">Minimum 8 characters</p>
               </div>
 
               {/* Confirm password */}
               <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirmer le nouveau mot de passe *</Label>
+                <Label htmlFor="confirm-password">Confirm new password *</Label>
                 <div className="relative">
                   <Input
                     id="confirm-password"
@@ -388,43 +387,10 @@ export function SettingsPage() {
 
               <Button onClick={handleChangePassword} disabled={savingPassword}>
                 {savingPassword
-                  ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Modification en cours...</>
-                  : 'Modifier le mot de passe'
+                  ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Updating...</>
+                  : 'Update password'
                 }
               </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ── INTEGRATIONS ── */}
-        <TabsContent value="integrations" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <Globe className="h-5 w-5" />
-                <div>
-                  <CardTitle>Intégrations</CardTitle>
-                  <CardDescription>Connectez des services externes</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {[
-                { name: 'QuickBooks', description: 'Synchronisation des données financières', connected: true },
-                { name: 'Shopify', description: 'Intégration e-commerce', connected: true },
-                { name: 'Stripe', description: 'Traitement des paiements', connected: false },
-                { name: 'Mailchimp', description: 'Marketing par email', connected: false },
-              ].map((integration) => (
-                <div key={integration.name} className="flex items-center justify-between p-4 rounded-lg border">
-                  <div>
-                    <h4 className="font-medium">{integration.name}</h4>
-                    <p className="text-sm text-muted-foreground">{integration.description}</p>
-                  </div>
-                  <Button variant={integration.connected ? 'outline' : 'default'}>
-                    {integration.connected ? 'Déconnecter' : 'Connecter'}
-                  </Button>
-                </div>
-              ))}
             </CardContent>
           </Card>
         </TabsContent>

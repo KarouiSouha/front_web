@@ -24,6 +24,7 @@ interface SidebarProps {
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'view-dashboard' },
+  { id: 'team', label: 'My Team', icon: Users, permission: 'view-team' },
   { id: 'import', label: 'Data Import', icon: Upload, permission: 'import-data' },
   { id: 'kpi', label: 'KPI Engine', icon: TrendingUp, permission: 'view-kpi' },
   { id: 'sales', label: 'Sales & Purchases', icon: ShoppingCart, permission: 'view-sales' },
@@ -32,11 +33,13 @@ const menuItems = [
   { id: 'aging', label: 'Aging Receivables', icon: Users, permission: 'view-aging' },
   { id: 'reports', label: 'Reports', icon: FileText, permission: 'view-reports' },
   { id: 'ai-insights', label: 'AI Insights', icon: Sparkles, permission: 'ai-insights' },
+
   { id: 'settings', label: 'Settings', icon: Settings, permission: 'view-profile' },
 ];
 
 const adminMenuItems = [
   { id: 'admin-verification', label: 'Verify Managers', icon: ShieldCheck },
+  { id: 'settings', label: 'settings', icon: Settings },
 ];
 
 export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarProps) {
@@ -47,12 +50,16 @@ export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarPro
   const hasPermission = (permission: string) => {
     if (!user) return false;
     if (user.role === 'manager') return true; //managers have all permissions
+    if (user.role === 'admin') return true;
     return user.permissions.includes(permission);
   };
 
   // Filter menu items based on permissions
-  const visibleMenuItems = menuItems.filter(item => hasPermission(item.permission));
-
+  // const visibleMenuItems = menuItems.filter(item => hasPermission(item.permission));
+  const visibleMenuItems = menuItems.filter(item => {
+  if (user?.role === 'admin') return false; // admin uses adminMenuItems only
+  return hasPermission(item.permission);
+});
   return (
     <>
       {/* Overlay for mobile */}

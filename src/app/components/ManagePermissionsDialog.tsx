@@ -43,7 +43,7 @@ export function ManagePermissionsDialog({
       setSelectedPermissions(found?.permissions_list ?? []);
     } catch {
       setSelectedPermissions(user.permissions ?? []);
-      toast.error('Impossible de charger les permissions actuelles');
+      toast.error('Unable to load current permissions');
     } finally {
       setLoadingUser(false);
     }
@@ -68,20 +68,20 @@ export function ManagePermissionsDialog({
   const handleSave = async () => {
     if (!selectedUser) return;
     if (selectedPermissions.length === 0) {
-      toast.error('Veuillez sélectionner au moins une permission');
+      toast.error('Please select at least one permission');
       return;
     }
     setIsSaving(true);
     try {
       await onUpdatePermissions(selectedUser.id, selectedPermissions);
-      toast.success(`Permissions mises à jour pour ${selectedUser.name}`);
+      toast.success(`Permissions updated for ${selectedUser.name}`);
       setSelectedUser(null);
       setSelectedPermissions([]);
     } catch (err: any) {
       const data = err?.data ?? {};
       const msg = data.permissions_list
         ? (Array.isArray(data.permissions_list) ? data.permissions_list[0] : data.permissions_list)
-        : (err?.userMessage ?? 'Erreur lors de la mise à jour');
+        : (err?.userMessage ?? 'Error updating permissions');
       toast.error(msg);
     } finally {
       setIsSaving(false);
@@ -107,9 +107,9 @@ export function ManagePermissionsDialog({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-[95vw] w-[1600px] max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Gérer les permissions</DialogTitle>
+          <DialogTitle>Manage permissions</DialogTitle>
           <DialogDescription>
-            Sélectionnez un utilisateur pour modifier ses permissions
+            Select a user to edit their permissions
           </DialogDescription>
         </DialogHeader>
 
@@ -117,9 +117,9 @@ export function ManagePermissionsDialog({
           {/* User List */}
           <div className="h-[240px] flex flex-col border-b pb-6 overflow-hidden">
             <div className="mb-4">
-              <Label>Sélectionner un utilisateur</Label>
+              <Label>Select a user</Label>
               <p className="text-sm text-muted-foreground mt-1">
-                {editableUsers.length} utilisateurs
+                {editableUsers.length} users
               </p>
             </div>
 
@@ -209,17 +209,17 @@ export function ManagePermissionsDialog({
                     <Button type="button" size="sm" variant="outline"
                       onClick={() => setSelectedPermissions(DEFAULT_AGENT_PERMISSIONS)}
                       disabled={loadingUser}>
-                      Agent par défaut
+                      Default agent
                     </Button>
                     <Button type="button" size="sm" variant="outline"
                       onClick={() => setSelectedPermissions(AVAILABLE_PERMISSIONS.map(p => p.id))}
                       disabled={loadingUser}>
-                      Tout sélectionner
+                      Select all
                     </Button>
                     <Button type="button" size="sm" variant="outline"
                       onClick={() => setSelectedPermissions([])}
                       disabled={loadingUser}>
-                      Tout effacer
+                      Clear all
                     </Button>
                   </div>
                 </div>
@@ -240,8 +240,8 @@ export function ManagePermissionsDialog({
                             className="h-auto py-1 text-xs"
                           >
                             {permissions.every(p => selectedPermissions.includes(p.id))
-                              ? 'Tout désélectionner'
-                              : 'Tout sélectionner'}
+                              ? 'Deselect all'
+                              : 'Select all'}
                           </Button>
                         </div>
                         <div className="grid gap-2">
@@ -277,12 +277,12 @@ export function ManagePermissionsDialog({
 
                 <div className="flex justify-end gap-2 pt-4 border-t mt-4">
                   <Button type="button" variant="outline" onClick={onClose} disabled={isSaving}>
-                    Annuler
+                    Cancel
                   </Button>
                   <Button onClick={handleSave} disabled={isSaving || loadingUser}>
                     {isSaving
-                      ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Enregistrement...</>
-                      : 'Sauvegarder'
+                      ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Saving...</>
+                      : 'Save'
                     }
                   </Button>
                 </div>
@@ -293,9 +293,9 @@ export function ManagePermissionsDialog({
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mx-auto mb-4">
                     <Shield className="h-8 w-8 text-muted-foreground" />
                   </div>
-                  <p className="font-medium">Sélectionnez un utilisateur</p>
+                  <p className="font-medium">Select a user</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Choisissez un utilisateur pour gérer ses permissions
+                    Choose a user to manage their permissions
                   </p>
                 </div>
               </div>

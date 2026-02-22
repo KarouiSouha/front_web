@@ -26,26 +26,26 @@ export function ProfilePage() {
     setPasswordErrors({});
 
     if (!passwordData.old_password) {
-      setPasswordErrors(err => ({ ...err, old_password: 'Champ obligatoire' }));
+      setPasswordErrors(err => ({ ...err, old_password: 'Required field' }));
       return;
     }
     if (passwordData.new_password.length < 8) {
-      setPasswordErrors(err => ({ ...err, new_password: 'Minimum 8 caractères' }));
+      setPasswordErrors(err => ({ ...err, new_password: 'Minimum 8 characters' }));
       return;
     }
     if (passwordData.new_password !== passwordData.new_password_confirm) {
-      setPasswordErrors(err => ({ ...err, new_password_confirm: 'Les mots de passe ne correspondent pas' }));
+      setPasswordErrors(err => ({ ...err, new_password_confirm: 'Passwords do not match' }));
       return;
     }
     if (passwordData.old_password === passwordData.new_password) {
-      setPasswordErrors(err => ({ ...err, new_password: 'Le nouveau mot de passe doit être différent' }));
+      setPasswordErrors(err => ({ ...err, new_password: 'New password must be different' }));
       return;
     }
 
     setIsSaving(true);
     try {
       await api.post('/users/change-password/', passwordData);
-      toast.success('Mot de passe modifié. Reconnectez-vous dans 2 secondes...');
+      toast.success('Password changed. Signing you out in 2 seconds...');
       setPasswordData({ old_password: '', new_password: '', new_password_confirm: '' });
       setShowPasswordForm(false);
       setTimeout(async () => {
@@ -63,7 +63,7 @@ export function ProfilePage() {
       } else if (data.new_password_confirm) {
         setPasswordErrors({ new_password_confirm: Array.isArray(data.new_password_confirm) ? data.new_password_confirm[0] : data.new_password_confirm });
       } else {
-        toast.error(err?.userMessage ?? 'Erreur lors du changement de mot de passe');
+        toast.error(err?.userMessage ?? 'Error changing password');
       }
     } finally {
       setIsSaving(false);
@@ -71,7 +71,7 @@ export function ProfilePage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('fr-FR', {
+    return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -93,10 +93,10 @@ export function ProfilePage() {
   }, {} as Record<string, typeof AVAILABLE_PERMISSIONS>);
 
   const categoryLabels: Record<string, string> = {
-    data: 'Gestion des données',
-    analytics: 'Analytiques & Rapports',
-    sales: 'Ventes & Inventaire',
-    system: 'Accès système',
+    data: 'Data Management',
+    analytics: 'Analytics & Reports',
+    sales: 'Sales & Inventory',
+    system: 'System Access',
   };
 
   if (!user) return null;
@@ -104,8 +104,8 @@ export function ProfilePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Mon Profil</h1>
-        <p className="text-muted-foreground mt-2">Consultez et gérez vos informations</p>
+        <h1 className="text-3xl font-bold">My Profile</h1>
+        <p className="text-muted-foreground mt-2">View and manage your information</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -132,18 +132,18 @@ export function ProfilePage() {
             <div className="space-y-3 pt-6 border-t">
               <div className="flex items-center gap-3 text-sm">
                 <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span className="text-muted-foreground">Email :</span>
+                <span className="text-muted-foreground">Email:</span>
                 <span className="font-medium flex-1 truncate">{user.email}</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span className="text-muted-foreground">Inscrit :</span>
+                <span className="text-muted-foreground">Joined:</span>
                 <span className="font-medium">{formatDate(user.createdAt)}</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <Shield className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span className="text-muted-foreground">Statut :</span>
-                <span className="font-medium text-green-600">Actif</span>
+                <span className="text-muted-foreground">Status:</span>
+                <span className="font-medium text-green-600">Active</span>
               </div>
             </div>
 
@@ -157,7 +157,7 @@ export function ProfilePage() {
               }}
             >
               <Key className="h-4 w-4 mr-2" />
-              {showPasswordForm ? 'Annuler' : 'Changer le mot de passe'}
+              {showPasswordForm ? 'Cancel' : 'Change password'}
             </Button>
           </div>
         </div>
@@ -167,15 +167,15 @@ export function ProfilePage() {
           {/* Change Password Form — CONNECTED TO API */}
           {showPasswordForm && (
             <div className="border rounded-lg p-6">
-              <h3 className="font-semibold text-lg mb-1">Changer le mot de passe</h3>
+              <h3 className="font-semibold text-lg mb-1">Change password</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Après modification, toutes vos sessions seront fermées.
+                After changing, all your sessions will be closed.
               </p>
               <form onSubmit={handlePasswordChange} className="space-y-4">
 
-                {/* Mot de passe actuel */}
+                {/* Current password */}
                 <div className="space-y-2">
-                  <Label htmlFor="old_password">Mot de passe actuel *</Label>
+                  <Label htmlFor="old_password">Current password *</Label>
                   <div className="relative">
                     <Input
                       id="old_password"
@@ -193,9 +193,9 @@ export function ProfilePage() {
                   {passwordErrors.old_password && <p className="text-xs text-red-500">{passwordErrors.old_password}</p>}
                 </div>
 
-                {/* Nouveau mot de passe */}
+                {/* New password */}
                 <div className="space-y-2">
-                  <Label htmlFor="new_password">Nouveau mot de passe *</Label>
+                  <Label htmlFor="new_password">New password *</Label>
                   <div className="relative">
                     <Input
                       id="new_password"
@@ -211,12 +211,12 @@ export function ProfilePage() {
                     </button>
                   </div>
                   {passwordErrors.new_password && <p className="text-xs text-red-500">{passwordErrors.new_password}</p>}
-                  <p className="text-xs text-muted-foreground">Minimum 8 caractères</p>
+                  <p className="text-xs text-muted-foreground">Minimum 8 characters</p>
                 </div>
 
                 {/* Confirmation */}
                 <div className="space-y-2">
-                  <Label htmlFor="new_password_confirm">Confirmer le nouveau mot de passe *</Label>
+                  <Label htmlFor="new_password_confirm">Confirm new password *</Label>
                   <div className="relative">
                     <Input
                       id="new_password_confirm"
@@ -237,13 +237,13 @@ export function ProfilePage() {
                 <div className="flex gap-2">
                   <Button type="submit" disabled={isSaving}>
                     {isSaving
-                      ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Modification...</>
-                      : 'Modifier le mot de passe'
+                      ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Updating...</>
+                      : 'Update password'
                     }
                   </Button>
                   <Button type="button" variant="outline"
                     onClick={() => { setShowPasswordForm(false); setPasswordErrors({}); }}>
-                    Annuler
+                    Cancel
                   </Button>
                 </div>
               </form>
@@ -253,18 +253,18 @@ export function ProfilePage() {
           {/* Permissions */}
           <div className="border rounded-lg p-6">
             <div className="mb-6">
-              <h3 className="font-semibold text-lg">Mes Permissions</h3>
+              <h3 className="font-semibold text-lg">My Permissions</h3>
               <p className="text-sm text-muted-foreground mt-1">
                 {user.role === 'admin'
-                  ? 'Vous avez un accès administrateur complet'
-                  : `Vous avez ${userPermissions.length} permission${userPermissions.length > 1 ? 's' : ''}`
+                  ? 'You have full administrator access'
+                  : `You have ${userPermissions.length} permission${userPermissions.length > 1 ? 's' : ''}`
                 }
               </p>
             </div>
 
             {userPermissions.length === 0 && user.role !== 'admin' ? (
               <p className="text-sm text-muted-foreground text-center py-8">
-                Aucune permission assignée pour le moment.
+                No permissions assigned yet.
               </p>
             ) : (
               <div className="space-y-6">

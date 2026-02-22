@@ -1,9 +1,3 @@
-/**
- * FASI Data Hooks
- * Custom React hooks that wrap the data API with loading, error, and refetch state.
- * Drop-in replacement for components currently using mockData.
- */
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ApiError } from './api';
 import {

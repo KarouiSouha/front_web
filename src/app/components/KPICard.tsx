@@ -5,7 +5,7 @@ import { generateSparklineData } from '../lib/utils';
 
 interface KPICardProps {
   title: string;
-  value: string | number;
+  value: string | number | React.ReactNode;
   trend?: {
     value: number;
     isPositive: boolean;

@@ -15,6 +15,8 @@ import { AIInsightsPage } from './pages/AIInsightsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AdminVerificationPage } from './pages/AdminVerificationPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { TeamPage } from './pages/TeamPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 
 export const router = createBrowserRouter([
   {
@@ -30,12 +32,20 @@ export const router = createBrowserRouter([
     element: <SignupPage />,
   },
   {
+    path: '/forgot-password',
+    element: <ForgotPasswordPage />,
+  },
+  {
     path: '/dashboard',
     element: <MainLayout />,
     children: [
       {
         index: true,
         element: <DashboardPage />,
+      },
+      {
+        path: 'team',
+        element: <TeamPage />,
       },
       {
         path: 'import',
@@ -81,6 +91,7 @@ export const router = createBrowserRouter([
         path: 'profile',
         element: <ProfilePage />,
       },
+
     ],
   },
 ]);

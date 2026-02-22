@@ -43,11 +43,11 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
     e.preventDefault();
 
     if (!formData.name || !formData.email) {
-      toast.error('Veuillez remplir tous les champs obligatoires');
+      toast.error('Please fill in all required fields');
       return;
     }
     if (selectedPermissions.length === 0) {
-      toast.error('Veuillez sélectionner au moins une permission');
+      toast.error('Please select at least one permission');
       return;
     }
 
@@ -67,11 +67,11 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
     } catch (err: any) {
       const data = err?.data ?? {};
       if (data.email) {
-        toast.error(`Email : ${Array.isArray(data.email) ? data.email[0] : data.email}`);
+        toast.error(`Email: ${Array.isArray(data.email) ? data.email[0] : data.email}`);
       } else if (data.non_field_errors) {
         toast.error(Array.isArray(data.non_field_errors) ? data.non_field_errors[0] : data.non_field_errors);
       } else {
-        toast.error(err?.userMessage ?? 'Erreur lors de la création du compte');
+        toast.error(err?.userMessage ?? 'Error creating account');
       }
     } finally {
       setIsSubmitting(false);
@@ -109,45 +109,45 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Créer un compte Agent</DialogTitle>
+          <DialogTitle>Create Agent Account</DialogTitle>
           <DialogDescription>
-            Créez un compte agent pour votre société. L'agent sera automatiquement rattaché à votre société.
+            Create an agent account for your company. The agent will be automatically linked to your company.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-6 flex-1 overflow-hidden">
-          {/* Info société — lecture seule */}
+          {/* Company info — read only */}
           {user?.companyName && (
             <div className="flex items-center gap-3 p-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg">
               <Building className="h-4 w-4 text-indigo-600 shrink-0" />
               <div>
-                <p className="text-xs text-muted-foreground">Société</p>
+                <p className="text-xs text-muted-foreground">Company</p>
                 <p className="text-sm font-medium">{user.companyName}</p>
               </div>
               <span className="ml-auto text-xs text-muted-foreground italic">
-                Hérité automatiquement
+                Automatically inherited
               </span>
             </div>
           )}
 
-          {/* Informations de base */}
+          {/* Basic information */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Nom complet *</Label>
+              <Label htmlFor="name">Full name *</Label>
               <Input
                 id="name"
-                placeholder="Nom de l'agent"
+                placeholder="Agent name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Adresse email *</Label>
+              <Label htmlFor="email">Email address *</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="agent@societe.com"
+                placeholder="agent@company.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
@@ -155,31 +155,31 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
             </div>
           </div>
 
-          {/* Mot de passe temporaire */}
+          {/* Temporary password */}
           <div className="space-y-2">
-            <Label htmlFor="tempPassword">Mot de passe temporaire</Label>
+            <Label htmlFor="tempPassword">Temporary password</Label>
             <Input
               id="tempPassword"
               type="text"
-              placeholder="Laisser vide pour le mot de passe par défaut"
+              placeholder="Leave blank for default password"
               value={formData.tempPassword}
               onChange={(e) => setFormData({ ...formData, tempPassword: e.target.value })}
             />
-            <p className="text-xs text-muted-foreground">Par défaut : Agent@123456</p>
+            <p className="text-xs text-muted-foreground">Default: Agent@123456</p>
           </div>
 
-          {/* Sélection rapide de permissions */}
+          {/* Quick permission selection */}
           <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-            <span className="text-sm font-medium">Sélection rapide :</span>
+            <span className="text-sm font-medium">Quick selection:</span>
             <div className="flex gap-2">
               <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPermissions(DEFAULT_AGENT_PERMISSIONS)}>
-                Agent par défaut
+                Default agent
               </Button>
               <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPermissions(AVAILABLE_PERMISSIONS.map(p => p.id))}>
-                Tout sélectionner
+                Select all
               </Button>
               <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPermissions([])}>
-                Tout effacer
+                Clear all
               </Button>
             </div>
           </div>
@@ -187,9 +187,9 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
           {/* Permissions */}
           <div className="flex-1 overflow-y-auto border rounded-lg p-4 space-y-6">
             <div>
-              <h3 className="font-semibold mb-2">Permissions ({selectedPermissions.length} sélectionnées)</h3>
+              <h3 className="font-semibold mb-2">Permissions ({selectedPermissions.length} selected)</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Sélectionnez les permissions accordées à cet agent dans le système
+                Select the permissions granted to this agent in the system
               </p>
             </div>
 
@@ -204,7 +204,7 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
                     onClick={() => selectAllInCategory(category)}
                     className="h-auto py-1 text-xs"
                   >
-                    {permissions.every(p => selectedPermissions.includes(p.id)) ? 'Tout désélectionner' : 'Tout sélectionner'}
+                    {permissions.every(p => selectedPermissions.includes(p.id)) ? 'Deselect all' : 'Select all'}
                   </Button>
                 </div>
                 <div className="grid gap-2">
@@ -238,10 +238,10 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-4 border-t">
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
-              Annuler
+              Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Création...' : 'Créer le compte agent'}
+              {isSubmitting ? 'Creating...' : 'Create agent account'}
             </Button>
           </div>
         </form>

@@ -1,18 +1,5 @@
-/**
- * FASI Auth API
- * URLs mappées exactement sur config/urls.py :
- *
- *   /api/auth/      → apps.token_security  (JWT login, refresh, blacklist)
- *   /api/users/     → apps.authentication  (profile, agents, users, signup...)
- *   /api/companies/ → apps.companies       (gestion des sociétés)
- */
-
 import { api, apiFetch, TokenStorage } from './api';
 
-
-// ─────────────────────────────────────────────
-// Types (matching Django serializers)
-// ─────────────────────────────────────────────
 
 export interface LoginPayload {
   email: string;
@@ -48,7 +35,7 @@ export interface ManagerSignupPayload {
   first_name: string;
   last_name: string;
   phone_number?: string;
-  company_name: string;          // ← nouveau champ obligatoire
+  company_name: string;
   password: string;
   password_confirm: string;
 }
@@ -61,7 +48,7 @@ export interface CreateAgentPayload {
   branch?: string;
   permissions_list: string[];
   temporary_password: string;
-  // NB: company est automatiquement hérité du manager côté backend
+// NB: the company is automatically inherited from the manager on the backend side
 }
 
 export interface ChangePasswordPayload {
@@ -154,7 +141,7 @@ export const authApi = {
     TokenStorage.clear();
   },
 
-  // ── Profile (authentication app → /api/users/) ─────────────────────────
+  // ── Profile ─────────────────────────
 
   getProfile: (): Promise<BackendUser> =>
     api.get<BackendUser>('/users/profile/'),
@@ -164,10 +151,6 @@ export const authApi = {
 
   // ── Signup Manager ──────────────────────────────────────────────────────
 
-  /**
-   * POST /api/users/signup/
-   * Inclut maintenant le champ company_name.
-   */
   managerSignup: (payload: ManagerSignupPayload) =>
     apiFetch<{ message: string; email: string }>('/users/signup/', {
       method: 'POST',

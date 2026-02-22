@@ -1,9 +1,3 @@
-/**
- * FASI Data API Services
- * All data-related API calls (products, sales, inventory, KPI, alerts, aging, reports, AI)
- * Each service maps to Django app endpoints.
- */
-
 import { api } from './api';
 
 // ─────────────────────────────────────────────
