@@ -1,4 +1,4 @@
-// Utility functions for FASI platform
+// Utility functions for WEEG platform
 
 export const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('en-US', {

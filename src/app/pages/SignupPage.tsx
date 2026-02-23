@@ -7,6 +7,26 @@ import { Link, useNavigate } from 'react-router';
 import { Eye, EyeOff, UserPlus, Check, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 
+// ── WEEG Logo mark ─────────────────────────────────────────────────────────
+function WeegMark({ size = 56 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="suWBlue" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#38bdf8" />
+          <stop offset="100%" stopColor="#0284c7" />
+        </linearGradient>
+        <linearGradient id="suWOrange" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#f97316" />
+          <stop offset="100%" stopColor="#ea580c" />
+        </linearGradient>
+      </defs>
+      <text x="2" y="31" fontFamily="Arial Black, Arial, sans-serif" fontWeight="900" fontSize="30" fill="url(#suWBlue)">W</text>
+      <path d="M 4 28 Q 20 36 36 22" stroke="url(#suWOrange)" strokeWidth="2.5" strokeLinecap="round" fill="none" opacity="0.9" />
+    </svg>
+  );
+}
+
 export function SignupPage() {
   const { signup, isLoading } = useAuth();
   const navigate = useNavigate();
@@ -55,17 +75,19 @@ export function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-violet-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 mb-4">
-            <span className="text-white font-bold text-2xl">F</span>
+          <div className="flex justify-center mb-3">
+            <WeegMark size={56} />
           </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
-            FASI
+          <h1 className="text-3xl font-black" style={{ color: '#1e2130' }}>
+            <span className="dark:text-white">Weeg</span>
           </h1>
-          <p className="text-muted-foreground mt-2">Financial Analytics & System Intelligence</p>
+          <p className="text-muted-foreground text-sm mt-1">
+            Where Data Finds <span style={{ color: '#f97316' }} className="font-semibold">Balance</span>
+          </p>
         </div>
 
         {/* Signup Form */}
@@ -104,7 +126,6 @@ export function SignupPage() {
               </div>
             </div>
 
-            {/* Email */}
             <div className="space-y-2">
               <Label htmlFor="email">Email *</Label>
               <Input
@@ -118,7 +139,6 @@ export function SignupPage() {
               />
             </div>
 
-            {/* Phone */}
             <div className="space-y-2">
               <Label htmlFor="phone">Phone (optional)</Label>
               <Input
@@ -131,7 +151,6 @@ export function SignupPage() {
               />
             </div>
 
-            {/* Company — new required field */}
             <div className="space-y-2">
               <Label htmlFor="companyName">Company name *</Label>
               <div className="relative">
@@ -151,7 +170,6 @@ export function SignupPage() {
               </p>
             </div>
 
-            {/* Password */}
             <div className="space-y-2">
               <Label htmlFor="password">Password *</Label>
               <div className="relative">
@@ -175,7 +193,6 @@ export function SignupPage() {
               </div>
             </div>
 
-            {/* Confirm password */}
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirm password *</Label>
               <Input
@@ -190,14 +207,17 @@ export function SignupPage() {
             </div>
 
             {/* Info box */}
-            <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4">
+            <div className="rounded-lg p-4 border" style={{ background: '#f0f9ff', borderColor: '#bae6fd' }}>
               <div className="flex items-start gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-white shrink-0">
+                <div
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-white shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #0284c7, #0ea5e9)' }}
+                >
                   <Check className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="font-medium text-sm">Manager Account</p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="font-semibold text-sm" style={{ color: '#0284c7' }}>Manager Account</p>
+                  <p className="text-xs text-slate-600 mt-1">
                     Your account will be reviewed by an administrator before activation.
                     You will then be able to create agent accounts for your company.
                   </p>
@@ -205,7 +225,12 @@ export function SignupPage() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button
+              type="submit"
+              className="w-full text-white"
+              style={{ background: 'linear-gradient(135deg, #0284c7, #0ea5e9)' }}
+              disabled={isLoading}
+            >
               {isLoading ? (
                 <span className="flex items-center gap-2">
                   <span className="animate-spin">⏳</span>
@@ -220,9 +245,15 @@ export function SignupPage() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center text-sm">
+          <div className="mt-4 h-px bg-gradient-to-r from-transparent via-orange-300 to-transparent opacity-50" />
+
+          <div className="mt-4 text-center text-sm">
             <span className="text-muted-foreground">Already have an account? </span>
-            <Link to="/login" className="text-indigo-600 hover:text-indigo-700 font-medium">
+            <Link
+              to="/login"
+              className="font-semibold hover:underline"
+              style={{ color: '#f97316' }}
+            >
               Sign in
             </Link>
           </div>

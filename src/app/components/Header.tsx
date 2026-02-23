@@ -31,6 +31,26 @@ interface UserAccountData {
   tempPassword?: string;
 }
 
+// ── Inline WEEG logo mark ──────────────────────────────────────────────────
+function WeegMark({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="hWBlue" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#38bdf8" />
+          <stop offset="100%" stopColor="#0284c7" />
+        </linearGradient>
+        <linearGradient id="hWOrange" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#f97316" />
+          <stop offset="100%" stopColor="#ea580c" />
+        </linearGradient>
+      </defs>
+      <text x="2" y="31" fontFamily="Arial Black, Arial, sans-serif" fontWeight="900" fontSize="30" fill="url(#hWBlue)">W</text>
+      <path d="M 4 28 Q 20 36 36 22" stroke="url(#hWOrange)" strokeWidth="2.5" strokeLinecap="round" fill="none" opacity="0.9" />
+    </svg>
+  );
+}
+
 export function Header({ onMenuClick }: HeaderProps) {
   const { theme, setTheme } = useTheme();
   const { user, users, logout, createAgent, updateUserPermissions } = useAuth();
@@ -44,7 +64,6 @@ export function Header({ onMenuClick }: HeaderProps) {
     toast.success('Agent créé avec succès');
   };
 
-  // ← async now, matches Promise<void> expected by ManagePermissionsDialog
   const handleUpdatePermissions = async (userId: string, permissions: string[]): Promise<void> => {
     await updateUserPermissions(userId, permissions);
   };
@@ -69,11 +88,12 @@ export function Header({ onMenuClick }: HeaderProps) {
               </svg>
             </button>
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
-                <span className="text-white font-bold text-sm">F</span>
-              </div>
-              <span className="hidden sm:inline-block text-lg font-semibold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
-                FASI
+              <WeegMark size={32} />
+              <span
+                className="hidden sm:inline-block text-xl font-black tracking-tight"
+                style={{ color: '#1e2130' }}
+              >
+                <span className="dark:text-white">Weeg</span>
               </span>
             </div>
           </div>
@@ -110,7 +130,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                 <button className="relative rounded-full p-2 hover:bg-accent transition-colors">
                   <Bell className="h-5 w-5" />
                   {alertCount > 0 && (
-                    <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-red-500 text-white text-xs">
+                    <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-orange-500 text-white text-xs">
                       {alertCount}
                     </Badge>
                   )}
@@ -132,7 +152,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                   </DropdownMenuItem>
                   <DropdownMenuItem className="flex flex-col items-start gap-1 p-3">
                     <div className="flex items-center gap-2 w-full">
-                      <span className="text-red-500">💰</span>
+                      <span className="text-orange-500">💰</span>
                       <span className="text-sm font-medium flex-1">Overdue Payment</span>
                       <span className="text-xs text-muted-foreground">5h ago</span>
                     </div>
@@ -142,7 +162,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                   </DropdownMenuItem>
                   <DropdownMenuItem className="flex flex-col items-start gap-1 p-3">
                     <div className="flex items-center gap-2 w-full">
-                      <span className="text-yellow-500">📈</span>
+                      <span className="text-sky-500">📈</span>
                       <span className="text-sm font-medium flex-1">High Sales</span>
                       <span className="text-xs text-muted-foreground">1d ago</span>
                     </div>
@@ -152,7 +172,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                   </DropdownMenuItem>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="justify-center text-indigo-600 cursor-pointer">
+                <DropdownMenuItem className="justify-center text-sky-600 cursor-pointer">
                   View all notifications
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -162,8 +182,8 @@ export function Header({ onMenuClick }: HeaderProps) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 rounded-full pl-2 pr-3 py-1 hover:bg-accent transition-colors">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
-                    <User className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-900">
+                    <User className="h-4 w-4 text-sky-600 dark:text-sky-400" />
                   </div>
                   <div className="hidden md:flex flex-col items-start">
                     <span className="text-sm font-medium">{user?.name || 'User'}</span>
@@ -180,7 +200,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                   <DropdownMenuItem>Team</DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
-                {(user?.role === 'manager' ) && (
+                {(user?.role === 'manager') && (
                   <>
                     <DropdownMenuItem onClick={() => setCreateUserOpen(true)} className="gap-2">
                       <UserPlus className="h-4 w-4" />

@@ -20,7 +20,7 @@ export function KPICard({
   value,
   trend,
   icon: Icon,
-  iconColor = 'text-indigo-600',
+  iconColor = 'text-sky-600',
   showSparkline = true,
 }: KPICardProps) {
   const sparklineData = generateSparklineData().map((value, index) => ({ index, value }));
@@ -28,7 +28,7 @@ export function KPICard({
   return (
     <Card className="p-6 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-4">
-        <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-950 dark:to-violet-950`}>
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-sky-50 to-blue-50 dark:from-sky-950 dark:to-blue-950">
           <Icon className={`h-6 w-6 ${iconColor}`} />
         </div>
         {trend && (
@@ -51,7 +51,7 @@ export function KPICard({
               <Line
                 type="monotone"
                 dataKey="value"
-                stroke="#4f46e5"
+                stroke="#0284c7"
                 strokeWidth={2}
                 dot={false}
               />

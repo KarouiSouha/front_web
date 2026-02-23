@@ -3,79 +3,79 @@
 :root {
   --font-size: 16px;
   --background: #fafafa;
-  --foreground: oklch(0.145 0 0);
+  --foreground: #1e2130;
   --card: #ffffff;
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: #4f46e5;
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.95 0.0058 264.53);
-  --secondary-foreground: #030213;
-  --muted: #ececf0;
-  --muted-foreground: #717182;
-  --accent: #e9ebef;
-  --accent-foreground: #030213;
+  --card-foreground: #1e2130;
+  --popover: #ffffff;
+  --popover-foreground: #1e2130;
+  --primary: #0284c7;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f9ff;
+  --secondary-foreground: #1e2130;
+  --muted: #f0f4f8;
+  --muted-foreground: #64748b;
+  --accent: #fff7ed;
+  --accent-foreground: #1e2130;
   --destructive: #d4183d;
   --destructive-foreground: #ffffff;
   --border: rgba(0, 0, 0, 0.1);
   --input: transparent;
-  --input-background: #f3f3f5;
-  --switch-background: #cbced4;
+  --input-background: #f3f6f9;
+  --switch-background: #cbd5e1;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: oklch(0.708 0 0);
-  --chart-1: #4f46e5;
-  --chart-2: #8b5cf6;
-  --chart-3: #f59e0b;
+  --ring: #0284c7;
+  --chart-1: #0284c7;
+  --chart-2: #0ea5e9;
+  --chart-3: #f97316;
   --chart-4: #10b981;
   --chart-5: #ef4444;
   --radius: 0.75rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: #4f46e5;
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: #f8fafc;
+  --sidebar-foreground: #1e2130;
+  --sidebar-primary: #0284c7;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f0f9ff;
+  --sidebar-accent-foreground: #1e2130;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #0284c7;
 }
 
 .dark {
   --background: #0f172a;
-  --foreground: oklch(0.985 0 0);
+  --foreground: #f8fafc;
   --card: #1e293b;
-  --card-foreground: oklch(0.985 0 0);
+  --card-foreground: #f8fafc;
   --popover: #1e293b;
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: #6366f1;
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --popover-foreground: #f8fafc;
+  --primary: #38bdf8;
+  --primary-foreground: #0f172a;
+  --secondary: #1e293b;
+  --secondary-foreground: #f8fafc;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #1e293b;
+  --accent-foreground: #f8fafc;
+  --destructive: #7f1d1d;
+  --destructive-foreground: #fca5a5;
   --border: #334155;
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
+  --input: #1e293b;
+  --ring: #38bdf8;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --chart-1: #6366f1;
-  --chart-2: #a78bfa;
-  --chart-3: #fbbf24;
+  --chart-1: #38bdf8;
+  --chart-2: #7dd3fc;
+  --chart-3: #fb923c;
   --chart-4: #34d399;
   --chart-5: #f87171;
   --sidebar: #1e293b;
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: #6366f1;
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #38bdf8;
+  --sidebar-primary-foreground: #0f172a;
+  --sidebar-accent: #0f172a;
+  --sidebar-accent-foreground: #f8fafc;
   --sidebar-border: #334155;
-  --sidebar-ring: oklch(0.439 0 0);
+  --sidebar-ring: #38bdf8;
 }
 
 @theme inline {
@@ -127,11 +127,6 @@
   body {
     @apply bg-background text-foreground;
   }
-
-  /**
-  * Default typography styles for HTML elements (h1-h4, p, label, button, input).
-  * These are in @layer base, so Tailwind utility classes (like text-sm, text-lg) automatically override them.
-  */
 
   html {
     font-size: var(--font-size);

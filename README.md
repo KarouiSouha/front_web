@@ -1,4 +1,4 @@
-# FASI - Smart Inventory & Financial Intelligence System
+# WEEG - Smart Inventory & Financial Intelligence System
 
 A modern SaaS platform for intelligent multi-branch inventory management, financial analysis, customer risk assessment, and automated AI-powered KPIs.
 
