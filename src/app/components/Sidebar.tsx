@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   Upload,
@@ -13,6 +14,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import weegLogo from './image/logo.jpeg';
+import weegLogoDark from './image/logoDark.png';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -47,6 +49,22 @@ const logoSize = 120;
 export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    const isDark = document.documentElement.classList.contains('dark');
+    setIsDarkMode(isDark);
+
+    const observer = new MutationObserver(() => {
+      const isDark = document.documentElement.classList.contains('dark');
+      setIsDarkMode(isDark);
+    });
+
+    observer.observe(document.documentElement, { attributes: true });
+    return () => observer.disconnect();
+  }, []);
+
+  const logoSrc = isDarkMode ? weegLogoDark : weegLogo;
 
   const hasPermission = (permission: string) => {
     if (!user) return false;
@@ -82,7 +100,7 @@ export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarPro
           <div className="flex h-16 items-center justify-between border-b px-6 lg:justify-center">
             <div className="flex items-center gap-2">
               <img
-                src={weegLogo}
+                src={logoSrc}
                 alt="Weeg"
                 width={logoSize}
                 height={logoSize}

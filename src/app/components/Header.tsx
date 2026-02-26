@@ -1,6 +1,5 @@
-import { Bell, Search, User, Moon, Sun, UserPlus, Shield, LogOut } from 'lucide-react';
+import { Bell, User, Moon, Sun, UserPlus, Shield, LogOut } from 'lucide-react';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import {
   DropdownMenu,
@@ -181,12 +180,6 @@ export function Header({ onMenuClick }: HeaderProps) {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/profile')}>Profile</DropdownMenuItem>
-                <DropdownMenuItem>Settings</DropdownMenuItem>
-                {(user?.role === 'manager') && (
-                  <DropdownMenuItem>Team</DropdownMenuItem>
-                )}
                 <DropdownMenuSeparator />
                 {(user?.role === 'manager') && (
                   <>

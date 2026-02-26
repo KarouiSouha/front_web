@@ -1,12 +1,12 @@
 /**
  * FASI API Service
- * Centralized HTTP client with JWT authentication, token refresh, and error handling
+ * Centralized HTTP client with JWT authentication, auto-refresh, and error handling
  */
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 // ─────────────────────────────────────────────
-// Token Management (localStorage)
+// Token Management
 // ─────────────────────────────────────────────
 
 export const TokenStorage = {
@@ -29,16 +29,20 @@ export const TokenStorage = {
 // ─────────────────────────────────────────────
 
 let isRefreshing = false;
-let refreshQueue: Array<(token: string) => void> = [];
+let refreshSubscribers: Array<(token: string) => void> = [];
 
-const processQueue = (token: string) => {
-  refreshQueue.forEach(cb => cb(token));
-  refreshQueue = [];
+const onRefreshed = (token: string) => {
+  refreshSubscribers.forEach(cb => cb(token));
+  refreshSubscribers = [];
 };
 
 async function refreshAccessToken(): Promise<string> {
   const refreshToken = TokenStorage.getRefresh();
-  if (!refreshToken) throw new Error('No refresh token');
+  if (!refreshToken) {
+    TokenStorage.clear();
+    window.location.href = '/login';
+    throw new Error('No refresh token available');
+  }
 
   const res = await fetch(`${BASE_URL}/auth/token/refresh/`, {
     method: 'POST',
@@ -49,7 +53,7 @@ async function refreshAccessToken(): Promise<string> {
   if (!res.ok) {
     TokenStorage.clear();
     window.location.href = '/login';
-    throw new Error('Session expired');
+    throw new Error('Refresh token invalid or expired');
   }
 
   const data = await res.json();
@@ -65,36 +69,51 @@ export async function apiFetch<T = unknown>(
 ): Promise<T> {
   const { skipAuth = false, ...fetchOptions } = options;
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(fetchOptions.headers as Record<string, string> || {}),
+  const url = endpoint.startsWith('http') ? endpoint : `${BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+
+  const headers: HeadersInit = {
+    ...(fetchOptions.headers || {}),
   };
 
+  // Ajout automatique du token si pas skipAuth
   if (!skipAuth) {
     const token = TokenStorage.getAccess();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (token) {
+      (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+    }
   }
 
-  const url = endpoint.startsWith('http') ? endpoint : `${BASE_URL}${endpoint}`;
+  // Ne pas forcer Content-Type pour FormData (upload)
+  if (!(fetchOptions.body instanceof FormData)) {
+    (headers as Record<string, string>)['Content-Type'] =
+      (headers as Record<string, string>)['Content-Type'] || 'application/json';
+  }
 
-  let response = await fetch(url, { ...fetchOptions, headers });
+  let response = await fetch(url, {
+    ...fetchOptions,
+    headers,
+    credentials: 'same-origin',
+  });
 
-  // Auto-refresh on 401
+  // Gestion auto-refresh sur 401 (sauf si skipAuth)
   if (response.status === 401 && !skipAuth) {
     if (isRefreshing) {
-      // Queue this request until token is refreshed
-      const newToken = await new Promise<string>((resolve) => {
-        refreshQueue.push(resolve);
+      // En attente du refresh en cours
+      const newToken = await new Promise<string>(resolve => {
+        refreshSubscribers.push(resolve);
       });
-      headers['Authorization'] = `Bearer ${newToken}`;
+      (headers as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
       response = await fetch(url, { ...fetchOptions, headers });
     } else {
       isRefreshing = true;
       try {
         const newToken = await refreshAccessToken();
-        processQueue(newToken);
-        headers['Authorization'] = `Bearer ${newToken}`;
+        onRefreshed(newToken);
+        (headers as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
         response = await fetch(url, { ...fetchOptions, headers });
+      } catch (refreshErr) {
+        console.error('Refresh token failed:', refreshErr);
+        throw refreshErr;
       } finally {
         isRefreshing = false;
       }
@@ -103,52 +122,39 @@ export async function apiFetch<T = unknown>(
 
   if (!response.ok) {
     let errorData: unknown;
-    try { errorData = await response.json(); } catch { errorData = { detail: response.statusText }; }
-    throw new ApiError(response.status, errorData);
+    try {
+      errorData = await response.json();
+    } catch {
+      errorData = { detail: response.statusText || 'Unknown error' };
+    }
+
+    const err = new Error(
+      (errorData as any)?.message ||
+      (errorData as any)?.detail ||
+      (errorData as any)?.error ||
+      `Request failed (${response.status})`
+    );
+
+    (err as any).status = response.status;
+    (err as any).data = errorData;
+
+    if (response.status === 401) {
+      console.warn('401 Unauthorized - Possible token issue');
+    }
+
+    throw err;
   }
 
-  // Handle empty responses (204, etc.)
-  if (response.status === 204) return null as T;
+  // Réponses vides (DELETE, 204)
+  if (response.status === 204) {
+    return null as T;
+  }
 
   return response.json() as Promise<T>;
 }
 
 // ─────────────────────────────────────────────
-// ApiError class
-// ─────────────────────────────────────────────
-
-export class ApiError extends Error {
-  status: number;
-  data: unknown;
-
-  constructor(status: number, data: unknown) {
-    super(extractMessage(data));
-    this.status = status;
-    this.data = data;
-  }
-
-  /** Returns a human-readable message from DRF error response */
-  get userMessage(): string {
-    return extractMessage(this.data);
-  }
-}
-
-function extractMessage(data: unknown): string {
-  if (typeof data === 'string') return data;
-  if (data && typeof data === 'object') {
-    const d = data as Record<string, unknown>;
-    if (d.detail) return String(d.detail);
-    if (d.message) return String(d.message);
-    if (d.error) return String(d.error);
-    // DRF field errors: { field: ["message"] }
-    const first = Object.values(d)[0];
-    if (Array.isArray(first)) return String(first[0]);
-  }
-  return 'Une erreur est survenue';
-}
-
-// ─────────────────────────────────────────────
-// Convenience helpers
+// Public API methods
 // ─────────────────────────────────────────────
 
 export const api = {
@@ -158,24 +164,44 @@ export const api = {
   post: <T>(endpoint: string, body?: unknown, opts?: RequestOptions) =>
     apiFetch<T>(endpoint, {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: body instanceof FormData ? body : JSON.stringify(body),
       ...opts,
     }),
 
   patch: <T>(endpoint: string, body?: unknown, opts?: RequestOptions) =>
     apiFetch<T>(endpoint, {
       method: 'PATCH',
-      body: JSON.stringify(body),
+      body: body instanceof FormData ? body : JSON.stringify(body),
       ...opts,
     }),
 
   put: <T>(endpoint: string, body?: unknown, opts?: RequestOptions) =>
     apiFetch<T>(endpoint, {
       method: 'PUT',
-      body: JSON.stringify(body),
+      body: body instanceof FormData ? body : JSON.stringify(body),
       ...opts,
     }),
 
   delete: <T>(endpoint: string, opts?: RequestOptions) =>
     apiFetch<T>(endpoint, { method: 'DELETE', ...opts }),
 };
+
+// ─────────────────────────────────────────────
+// ApiError (optionnel – pour typer les erreurs)
+// ─────────────────────────────────────────────
+
+export class ApiError extends Error {
+  status: number;
+  data: unknown;
+
+  constructor(status: number, data: unknown) {
+    super(
+      (data as any)?.message ||
+      (data as any)?.detail ||
+      (data as any)?.error ||
+      `Error ${status}`
+    );
+    this.status = status;
+    this.data = data;
+  }
+}
