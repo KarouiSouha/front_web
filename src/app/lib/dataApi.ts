@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────
 // Data Import (adapted to real backend endpoints)
 // ─────────────────────────────────────────────
-import { api } from './api';
+import { api } from "./api";
 
 // ─────────────────────────────────────────────
 // Arabic movement type constants
@@ -9,16 +9,20 @@ import { api } from './api';
 // ─────────────────────────────────────────────
 
 export const MOVEMENT_TYPES = {
-  SALE:             'ف بيع',
-  SALE_RETURN:      'مردودات بيع',
-  PURCHASE:         'ف شراء',
-  PURCHASE_RETURN:  'مردودات شراء',
-  MAIN_ENTRY:       'ادخال رئيسي',
+  SALE: "ف بيع",
+  SALE_RETURN: "مردودات بيع",
+  PURCHASE: "ف شراء",
+  PURCHASE_RETURN: "مردودات شراء",
+  MAIN_ENTRY: "ادخال رئيسي",
 } as const;
 
-export type MovementTypeValue = typeof MOVEMENT_TYPES[keyof typeof MOVEMENT_TYPES];
+export type MovementTypeValue =
+  (typeof MOVEMENT_TYPES)[keyof typeof MOVEMENT_TYPES];
 
-export const SALE_TYPES: string[]     = [MOVEMENT_TYPES.SALE, MOVEMENT_TYPES.SALE_RETURN];
+export const SALE_TYPES: string[] = [
+  MOVEMENT_TYPES.SALE,
+  MOVEMENT_TYPES.SALE_RETURN,
+];
 export const PURCHASE_TYPES: string[] = [
   MOVEMENT_TYPES.PURCHASE,
   MOVEMENT_TYPES.PURCHASE_RETURN,
@@ -27,11 +31,11 @@ export const PURCHASE_TYPES: string[] = [
 
 /** Maps a raw Arabic value to a friendly English display label */
 export const MOVEMENT_TYPE_LABELS: Record<string, string> = {
-  [MOVEMENT_TYPES.SALE]:            'Sale',
-  [MOVEMENT_TYPES.SALE_RETURN]:     'Sales Return',
-  [MOVEMENT_TYPES.PURCHASE]:        'Purchase',
-  [MOVEMENT_TYPES.PURCHASE_RETURN]: 'Purchase Return',
-  [MOVEMENT_TYPES.MAIN_ENTRY]:      'Main Entry',
+  [MOVEMENT_TYPES.SALE]: "Sale",
+  [MOVEMENT_TYPES.SALE_RETURN]: "Sales Return",
+  [MOVEMENT_TYPES.PURCHASE]: "Purchase",
+  [MOVEMENT_TYPES.PURCHASE_RETURN]: "Purchase Return",
+  [MOVEMENT_TYPES.MAIN_ENTRY]: "Main Entry",
 };
 
 export function getMovementTypeLabel(rawType: string): string {
@@ -54,7 +58,7 @@ export interface ImportLogEntry {
   id: string;
   file_type: string;
   original_filename: string;
-  status: 'pending' | 'processing' | 'success' | 'partial' | 'failed';
+  status: "pending" | "processing" | "success" | "partial" | "failed";
   row_count: number;
   success_count: number;
   error_count: number;
@@ -91,18 +95,20 @@ export const dataImportApi = {
       snapshot_date?: string;
       report_date?: string;
       onProgress?: (progress: number) => void;
-    } = {}
+    } = {},
   ): Promise<ImportResult> => {
     const formData = new FormData();
-    formData.append('file', file);
-    if (options.file_type) formData.append('file_type', options.file_type);
-    if (options.snapshot_date) formData.append('snapshot_date', options.snapshot_date);
-    if (options.report_date) formData.append('report_date', options.report_date);
+    formData.append("file", file);
+    if (options.file_type) formData.append("file_type", options.file_type);
+    if (options.snapshot_date)
+      formData.append("snapshot_date", options.snapshot_date);
+    if (options.report_date)
+      formData.append("report_date", options.report_date);
 
-    const token = localStorage.getItem('fasi_access_token');
+    const token = localStorage.getItem("fasi_access_token");
 
-    const response = await fetch('/api/import/upload/', {
-      method: 'POST',
+    const response = await fetch("/api/import/upload/", {
+      method: "POST",
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
@@ -111,9 +117,16 @@ export const dataImportApi = {
 
     if (!response.ok) {
       let errorData;
-      try { errorData = await response.json(); }
-      catch { errorData = { message: 'Network or server error' }; }
-      throw new Error(errorData.message || errorData.error || `Upload failed (${response.status})`);
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { message: "Network or server error" };
+      }
+      throw new Error(
+        errorData.message ||
+          errorData.error ||
+          `Upload failed (${response.status})`,
+      );
     }
 
     return response.json();
@@ -121,12 +134,12 @@ export const dataImportApi = {
 
   detectFile: async (file: File): Promise<DetectResult> => {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
 
-    const token = localStorage.getItem('fasi_access_token');
+    const token = localStorage.getItem("fasi_access_token");
 
-    const response = await fetch('/api/import/detect/', {
-      method: 'POST',
+    const response = await fetch("/api/import/detect/", {
+      method: "POST",
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
@@ -135,7 +148,7 @@ export const dataImportApi = {
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.error || 'Detection failed');
+      throw new Error(err.error || "Detection failed");
     }
 
     return response.json();
@@ -143,24 +156,24 @@ export const dataImportApi = {
 
   getImportLogs: async (params?: { file_type?: string; status?: string }) => {
     const query = new URLSearchParams(params as any).toString();
-    const url = `/api/import/logs/${query ? `?${query}` : ''}`;
-    const token = localStorage.getItem('fasi_access_token');
+    const url = `/api/import/logs/${query ? `?${query}` : ""}`;
+    const token = localStorage.getItem("fasi_access_token");
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!response.ok) throw new Error('Failed to fetch logs');
+    if (!response.ok) throw new Error("Failed to fetch logs");
     return response.json();
   },
 
   downloadTemplate: async (type: string) => {
-    const token = localStorage.getItem('fasi_access_token');
+    const token = localStorage.getItem("fasi_access_token");
     const response = await fetch(`/api/import/template/${type}/`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!response.ok) throw new Error('Template download failed');
+    if (!response.ok) throw new Error("Template download failed");
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = `${type}-import-template.xlsx`;
     a.click();
@@ -185,13 +198,13 @@ export interface QueryParams {
 }
 
 function qs(params?: QueryParams): string {
-  if (!params) return '';
+  if (!params) return "";
   const p = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== '' && v !== null) p.set(k, String(v));
+    if (v !== undefined && v !== "" && v !== null) p.set(k, String(v));
   });
   const s = p.toString();
-  return s ? `?${s}` : '';
+  return s ? `?${s}` : "";
 }
 
 // ─────────────────────────────────────────────
@@ -223,11 +236,9 @@ export const productsApi = {
   list: (params?: QueryParams & { category?: string }) =>
     api.get<ProductsListResponse>(`/products/${qs(params)}`),
 
-  get: (id: string) =>
-    api.get<Product>(`/products/${id}/`),
+  get: (id: string) => api.get<Product>(`/products/${id}/`),
 
-  categories: () =>
-    api.get<{ categories: string[] }>('/products/categories/'),
+  categories: () => api.get<{ categories: string[] }>("/products/categories/"),
 
   inventoryHistory: (id: string, params?: QueryParams) =>
     api.get<any>(`/products/${id}/inventory/${qs(params)}`),
@@ -266,14 +277,12 @@ export const customersApi = {
   list: (params?: QueryParams & { area_code?: string }) =>
     api.get<CustomersListResponse>(`/customers/${qs(params)}`),
 
-  get: (id: string) =>
-    api.get<Customer>(`/customers/${id}/`),
+  get: (id: string) => api.get<Customer>(`/customers/${id}/`),
 
   movements: (id: string, params?: QueryParams) =>
     api.get<any>(`/customers/${id}/movements/${qs(params)}`),
 
-  aging: (id: string) =>
-    api.get<any>(`/customers/${id}/aging/`),
+  aging: (id: string) => api.get<any>(`/customers/${id}/aging/`),
 };
 
 // ─────────────────────────────────────────────
@@ -287,21 +296,21 @@ export interface InventoryItem {
   product_code: string;
   product_name: string;
   category: string | null;
-  // Django DecimalField → serialized as strings ("5.0000"). Use toNum() before display.
-  qty_alkarimia: number | string;
-  qty_benghazi: number | string;
-  qty_mazraa: number | string;
-  qty_dahmani: number | string;
-  qty_janzour: number | string;
-  qty_misrata: number | string;
-  value_alkarimia: number | string;
-  value_mazraa: number | string;
-  value_dahmani: number | string;
-  value_janzour: number | string;
-  value_misrata: number | string;
-  total_qty: number | string;
-  cost_price: number | string;
-  total_value: number | string;
+  // Django DecimalField → serialized as strings ("5.0000") or null. Use toNum() before display.
+  qty_alkarimia: number | string | null;
+  qty_benghazi: number | string | null;
+  qty_mazraa: number | string | null;
+  qty_dahmani: number | string | null;
+  qty_janzour: number | string | null;
+  qty_misrata: number | string | null;
+  value_alkarimia: number | string | null;
+  value_mazraa: number | string | null;
+  value_dahmani: number | string | null;
+  value_janzour: number | string | null;
+  value_misrata: number | string | null;
+  total_qty: number | string | null;
+  cost_price: number | string | null;
+  total_value: number | string | null;
 }
 
 export interface InventoryListResponse {
@@ -327,23 +336,22 @@ export interface CategoryBreakdown {
 }
 
 export const inventoryApi = {
-  list: (params?: QueryParams & { snapshot_date?: string; category?: string }) =>
-    api.get<InventoryListResponse>(`/inventory/${qs(params)}`),
+  list: (
+    params?: QueryParams & { snapshot_date?: string; category?: string },
+  ) => api.get<InventoryListResponse>(`/inventory/${qs(params)}`),
 
-  get: (id: string) =>
-    api.get<InventoryItem>(`/inventory/${id}/`),
+  get: (id: string) => api.get<InventoryItem>(`/inventory/${id}/`),
 
-  dates: () =>
-    api.get<{ dates: string[] }>('/inventory/dates/'),
+  dates: () => api.get<{ dates: string[] }>("/inventory/dates/"),
 
   branchSummary: (params?: { snapshot_date?: string; category?: string }) =>
     api.get<{ snapshot_date: string | null; branches: BranchSummary[] }>(
-      `/inventory/branch-summary/${qs(params)}`
+      `/inventory/branch-summary/${qs(params)}`,
     ),
 
   categoryBreakdown: (params?: { snapshot_date?: string }) =>
     api.get<{ snapshot_date: string | null; categories: CategoryBreakdown[] }>(
-      `/inventory/category-breakdown/${qs(params)}`
+      `/inventory/category-breakdown/${qs(params)}`,
     ),
 };
 
@@ -405,24 +413,26 @@ export interface BranchBreakdownItem {
 }
 
 export const transactionsApi = {
-  list: (params?: QueryParams & {
-    /** Pass a raw Arabic movement_type value, e.g. MOVEMENT_TYPES.SALE */
-    movement_type?: string;
-    branch?: string;
-    date_from?: string;
-    date_to?: string;
-  }) =>
-    api.get<MovementsListResponse>(`/transactions/${qs(params)}`),
+  list: (
+    params?: QueryParams & {
+      /** Pass a raw Arabic movement_type value, e.g. MOVEMENT_TYPES.SALE */
+      movement_type?: string;
+      branch?: string;
+      date_from?: string;
+      date_to?: string;
+    },
+  ) => api.get<MovementsListResponse>(`/transactions/${qs(params)}`),
 
-  get: (id: string) =>
-    api.get<any>(`/transactions/${id}/`),
+  get: (id: string) => api.get<any>(`/transactions/${id}/`),
 
   summary: (params?: { year?: number; months?: number }) =>
-    api.get<{ summary: MonthlySummaryItem[] }>(`/transactions/summary/${qs(params)}`),
+    api.get<{ summary: MonthlySummaryItem[] }>(
+      `/transactions/summary/${qs(params)}`,
+    ),
 
   typeBreakdown: (params?: { date_from?: string; date_to?: string }) =>
     api.get<{ breakdown: TypeBreakdownItem[] }>(
-      `/transactions/type-breakdown/${qs(params)}`
+      `/transactions/type-breakdown/${qs(params)}`,
     ),
 
   /**
@@ -436,7 +446,7 @@ export const transactionsApi = {
     date_to?: string;
   }) =>
     api.get<{ movement_type: string; branches: BranchBreakdownItem[] }>(
-      `/transactions/branch-breakdown/${qs(params)}`
+      `/transactions/branch-breakdown/${qs(params)}`,
     ),
 
   /**
@@ -445,7 +455,7 @@ export const transactionsApi = {
    * GET /api/transactions/movement-types/
    */
   movementTypes: () =>
-    api.get<{ movement_types: string[] }>('/transactions/movement-types/'),
+    api.get<{ movement_types: string[] }>("/transactions/movement-types/"),
 };
 
 // ─────────────────────────────────────────────
@@ -474,7 +484,7 @@ export interface AgingRecord {
   over_330: number;
   total: number;
   overdue_total: number;
-  risk_score: 'low' | 'medium' | 'high' | 'critical';
+  risk_score: "low" | "medium" | "high" | "critical";
 }
 
 export interface AgingListResponse {
@@ -509,16 +519,16 @@ export const agingApi = {
   list: (params?: QueryParams & { report_date?: string; risk?: string }) =>
     api.get<AgingListResponse>(`/aging/${qs(params)}`),
 
-  get: (id: string) =>
-    api.get<AgingRecord>(`/aging/${id}/`),
+  get: (id: string) => api.get<AgingRecord>(`/aging/${id}/`),
 
-  dates: () =>
-    api.get<{ dates: string[] }>('/aging/dates/'),
+  dates: () => api.get<{ dates: string[] }>("/aging/dates/"),
 
   risk: (params?: { report_date?: string; risk?: string; limit?: number }) =>
-    api.get<{ report_date: string | null; count: number; top_risk: AgingRiskItem[] }>(
-      `/aging/risk/${qs(params)}`
-    ),
+    api.get<{
+      report_date: string | null;
+      count: number;
+      top_risk: AgingRiskItem[];
+    }>(`/aging/risk/${qs(params)}`),
 
   distribution: (params?: { report_date?: string }) =>
     api.get<{
@@ -549,20 +559,21 @@ export const kpiApi = {
     ]);
 
     const summary =
-      summaryRes.status === 'fulfilled' ? summaryRes.value.summary : [];
+      summaryRes.status === "fulfilled" ? summaryRes.value.summary : [];
 
     const stockValue =
-      inventoryRes.status === 'fulfilled'
-        ? inventoryRes.value.totals?.grand_total_value ?? 0
+      inventoryRes.status === "fulfilled"
+        ? (inventoryRes.value.totals?.grand_total_value ?? 0)
         : 0;
 
     const totalReceivables =
-      agingRes.status === 'fulfilled'
-        ? agingRes.value.grand_total ?? 0
-        : 0;
+      agingRes.status === "fulfilled" ? (agingRes.value.grand_total ?? 0) : 0;
 
     const totalSalesValue = summary.reduce((s, m) => s + m.total_sales, 0);
-    const totalPurchasesValue = summary.reduce((s, m) => s + m.total_purchases, 0);
+    const totalPurchasesValue = summary.reduce(
+      (s, m) => s + m.total_purchases,
+      0,
+    );
 
     return {
       totalSalesValue,
@@ -601,7 +612,7 @@ export interface RiskyCustomer {
   total: number;
   current: number;
   overdue_total: number;
-  risk_score: 'low' | 'medium' | 'high' | 'critical';
+  risk_score: "low" | "medium" | "high" | "critical";
   overdue_percentage: number;
   dmp_days: number;
   buckets: Record<string, number>;
@@ -638,7 +649,9 @@ export interface CreditKPIData {
 
 export const creditKpiApi = {
   getAll: (params?: { report_date?: string }) =>
-    api.get<CreditKPIData>(`/kpi/credit/${params?.report_date ? `?report_date=${params.report_date}` : ''}`),
+    api.get<CreditKPIData>(
+      `/kpi/credit/${params?.report_date ? `?report_date=${params.report_date}` : ""}`,
+    ),
 };
 
 // ─────────────────────────────────────────────
@@ -647,4 +660,136 @@ export const creditKpiApi = {
 
 export const branchesApi = {
   list: () => inventoryApi.branchSummary(),
+};
+
+// ─────────────────────────────────────────────
+// Sales KPI  — GET /api/kpi/sales/
+// ─────────────────────────────────────────────
+
+export interface SalesKPIProduct {
+  material_code: string;
+  material_name: string;
+  total_revenue: number;
+  total_qty: number;
+  transaction_count: number;
+  revenue_share: number; // %
+  margin_pct?: number; // only in product_margins array
+  rotation_rate?: number;
+  coverage_days?: number;
+}
+
+export interface SalesKPIClient {
+  customer_name: string;
+  total_revenue: number;
+  transaction_count: number;
+  revenue_share: number; // %
+}
+
+export interface MonthlySalesKPIItem {
+  year: number;
+  month: number;
+  month_label: string;
+  total_revenue: number;
+  total_qty: number;
+  count: number;
+}
+
+export interface SalesVelocityProduct {
+  material_code: string;
+  material_name: string;
+  avg_daily_revenue: number;
+  avg_daily_qty: number;
+  days_to_sell_100: number;
+  total_qty: number;
+}
+
+export interface SalesKPIData {
+  year: number;
+  period_from: string | null;
+  period_to: string | null;
+  ca: { total: number; previous: number; label: string; unit: string };
+  sales_evolution: {
+    value: number;
+    is_up: boolean;
+    label: string;
+    unit: string;
+    description: string;
+  };
+  top_products: SalesKPIProduct[];
+  monthly_sales: MonthlySalesKPIItem[];
+  product_margins: SalesKPIProduct[];
+  top_clients: SalesKPIClient[];
+  sales_velocity: {
+    avg_daily_revenue: number;
+    avg_daily_qty: number;
+    n_days: number;
+    by_product: SalesVelocityProduct[];
+  };
+}
+
+export const salesKpiApi = {
+  getAll: (params?: {
+    year?: number;
+    date_from?: string;
+    date_to?: string;
+    top_n?: number;
+  }) => {
+    const p = new URLSearchParams();
+    if (params?.year) p.set("year", String(params.year));
+    if (params?.date_from) p.set("date_from", params.date_from);
+    if (params?.date_to) p.set("date_to", params.date_to);
+    if (params?.top_n) p.set("top_n", String(params.top_n));
+    const qs = p.toString();
+    return api.get<SalesKPIData>(`/kpi/sales/${qs ? `?${qs}` : ""}`);
+  },
+};
+
+// ─────────────────────────────────────────────
+// Stock KPI  — GET /api/kpi/stock/
+// ─────────────────────────────────────────────
+
+export interface StockKPIProduct {
+  material_code: string;
+  product_name: string;
+  category: string | null;
+  stock_qty: number;
+  stock_value: number;
+  cost_price: number;
+  qty_sold: number;
+  revenue: number;
+  rotation_rate: number;
+  coverage_days: number | null;
+}
+
+export interface StockKPIData {
+  snapshot_date: string | null;
+  year: number;
+  stock_summary: {
+    total_products: number;
+    total_qty: number;
+    total_value: number;
+    zero_stock_count: number;
+    low_rotation_count: number;
+    low_rotation_threshold: number;
+  };
+  top_rotation_products: StockKPIProduct[];
+  low_rotation_products: StockKPIProduct[];
+  zero_stock_products: StockKPIProduct[];
+  coverage_at_risk: StockKPIProduct[];
+}
+
+export const stockKpiApi = {
+  getAll: (params?: {
+    snapshot_date?: string;
+    year?: number;
+    low_rotation_threshold?: number;
+  }) => {
+    const p = new URLSearchParams();
+    if (params?.snapshot_date) p.set("snapshot_date", params.snapshot_date);
+    if (params?.year) p.set("year", String(params.year));
+    if (params?.low_rotation_threshold !== undefined)
+      p.set("low_rotation_threshold", String(params.low_rotation_threshold));
+    const qs = p.toString();
+    return api.get<StockKPIData>(`/kpi/stock/${qs ? `?${qs}` : ""}`);
+  },
 };

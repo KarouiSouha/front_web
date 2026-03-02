@@ -5,7 +5,6 @@ import { TrendingUp, Package, DollarSign, BarChart3, Info, RefreshCw, Loader2 } 
 import { KPICard } from '../components/KPICard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
-import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Progress } from '../components/ui/progress';
 import {
@@ -14,6 +13,8 @@ import {
   Legend, ResponsiveContainer,
 } from 'recharts';
 import { CreditKPISection } from '../components/CreditKPISection';
+import { SalesKPISection } from '../components/SalesKPISection';
+import { StockKPISection } from '../components/StockKPISection';
 import {
   MOVEMENT_TYPES,
   useKPIs,
@@ -28,14 +29,13 @@ import { formatCurrency, formatNumber } from '../lib/utils';
 
 const BRANCH_COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
-// ── FIX: icon typed as LucideIcon (same as KPICardProps.icon) ────────────────
 function TooltipKPICard({
   title, value, trend, icon: Icon, tooltip, formula,
 }: {
   title: string;
   value: React.ReactNode;
   trend?: { value: number; isPositive: boolean };
-  icon: LucideIcon;   // ← correct type — no more $$typeof mismatch
+  icon: LucideIcon;
   tooltip: string;
   formula: string;
 }) {
@@ -86,7 +86,10 @@ export function KPIEnginePage() {
   }));
 
   const typeData = (typeBreakdownRes?.breakdown ?? []).map(t => ({
-    name: getMovementTypeLabel(t.movement_type) || t.label || t.movement_type, in: t.total_in, out: t.total_out, count: t.count,
+    name: getMovementTypeLabel(t.movement_type) || t.label || t.movement_type,
+    in: t.total_in,
+    out: t.total_out,
+    count: t.count,
   }));
 
   const totalSales = kpis?.totalSalesValue ?? 0;
@@ -103,8 +106,6 @@ export function KPIEnginePage() {
           isPositive: lastTwo[1].total_sales >= lastTwo[0].total_sales,
         }
       : undefined;
-
-  const topRisk = agingRiskRes?.top_risk ?? [];
 
   return (
     <div className="space-y-6">
@@ -131,9 +132,9 @@ export function KPIEnginePage() {
 
       {!kpiLoading && (
         <>
-          {/* Core KPIs */}
+          {/* ── Core KPI summary ── */}
           <div>
-            <h2 className="text-xl font-semibold mb-4">Business KPIs</h2>
+            <h2 className="text-xl font-semibold mb-4">Business Overview</h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               <TooltipKPICard title="Total Sales" value={formatCurrency(totalSales)} trend={salesTrend}
                 icon={TrendingUp} tooltip="Total revenue from all sales movements"
@@ -165,7 +166,7 @@ export function KPIEnginePage() {
             </div>
           </div>
 
-          {/* Monthly Chart */}
+          {/* ── Monthly Chart ── */}
           <Card>
             <CardHeader>
               <CardTitle>Sales vs Purchases — Monthly Trend</CardTitle>
@@ -209,7 +210,7 @@ export function KPIEnginePage() {
             </CardContent>
           </Card>
 
-          {/* Branch Performance */}
+          {/* ── Branch Performance ── */}
           {branchPerformanceData.length > 0 && (
             <Card>
               <CardHeader>
@@ -235,7 +236,7 @@ export function KPIEnginePage() {
             </Card>
           )}
 
-          {/* Movement Type Breakdown */}
+          {/* ── Movement Type Breakdown ── */}
           {typeData.length > 0 && (
             <Card>
               <CardHeader>
@@ -274,7 +275,17 @@ export function KPIEnginePage() {
             </Card>
           )}
 
-          {/* Credit KPIs */}
+          {/* ── Sales KPIs (Section 1) ── */}
+          <div className="mt-6 pt-6 border-t">
+            <SalesKPISection />
+          </div>
+
+          {/* ── Stock KPIs (Section 2) ── */}
+          <div className="mt-6 pt-6 border-t">
+            <StockKPISection />
+          </div>
+
+          {/* ── Credit KPIs (Section 3) ── */}
           <div className="mt-6 pt-6 border-t">
             <CreditKPISection />
           </div>

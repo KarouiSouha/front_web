@@ -1,6 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { ApiError, api } from './api';
+import { useState, useEffect, useCallback, useRef } from "react";
+import { ApiError } from "./api";
 import {
+  salesKpiApi,
+  stockKpiApi,
+  creditKpiApi,
+  SalesKPIData,
+  StockKPIData,
+  CreditKPIData,
   productsApi,
   customersApi,
   inventoryApi,
@@ -20,7 +26,7 @@ import {
   type CategoryBreakdown,
   type KPIData,
   type QueryParams,
-} from './dataApi';
+} from "./dataApi";
 
 // ─────────────────────────────────────────────
 // Generic async hook
@@ -35,7 +41,7 @@ interface AsyncState<T> {
 
 function useAsync<T>(
   fetchFn: () => Promise<T>,
-  deps: unknown[] = []
+  deps: unknown[] = [],
 ): AsyncState<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,7 +71,9 @@ function useAsync<T>(
   useEffect(() => {
     mountedRef.current = true;
     execute();
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+    };
   }, [execute]);
 
   return { data, loading, error, refetch: execute };
@@ -82,7 +90,7 @@ export function useProducts(params?: QueryParams & { category?: string }) {
 export function useProduct(id: string | null) {
   return useAsync(
     () => (id ? productsApi.get(id) : Promise.resolve(null as any)),
-    [id]
+    [id],
   );
 }
 
@@ -102,7 +110,9 @@ export function useCustomers(params?: QueryParams & { area_code?: string }) {
 // Inventory
 // ─────────────────────────────────────────────
 
-export function useInventory(params?: QueryParams & { snapshot_date?: string; category?: string }) {
+export function useInventory(
+  params?: QueryParams & { snapshot_date?: string; category?: string },
+) {
   return useAsync(() => inventoryApi.list(params), [JSON.stringify(params)]);
 }
 
@@ -110,17 +120,20 @@ export function useInventoryDates() {
   return useAsync(() => inventoryApi.dates(), []);
 }
 
-export function useBranchSummary(params?: { snapshot_date?: string; category?: string }) {
+export function useBranchSummary(params?: {
+  snapshot_date?: string;
+  category?: string;
+}) {
   return useAsync(
     () => inventoryApi.branchSummary(params),
-    [JSON.stringify(params)]
+    [JSON.stringify(params)],
   );
 }
 
 export function useCategoryBreakdown(params?: { snapshot_date?: string }) {
   return useAsync(
     () => inventoryApi.categoryBreakdown(params),
-    [JSON.stringify(params)]
+    [JSON.stringify(params)],
   );
 }
 
@@ -135,18 +148,15 @@ export function useTransactions(
     branch?: string;
     date_from?: string;
     date_to?: string;
-  }
+  },
 ) {
-  return useAsync(
-    () => transactionsApi.list(params),
-    [JSON.stringify(params)]
-  );
+  return useAsync(() => transactionsApi.list(params), [JSON.stringify(params)]);
 }
 
 export function useTransactionSummary(params?: { year?: number }) {
   return useAsync(
     () => transactionsApi.summary(params),
-    [JSON.stringify(params)]
+    [JSON.stringify(params)],
   );
 }
 
@@ -166,14 +176,17 @@ export function useBranchBreakdown(params?: {
 }) {
   return useAsync(
     () => transactionsApi.branchBreakdown(params),
-    [JSON.stringify(params)]
+    [JSON.stringify(params)],
   );
 }
 
-export function useTypeBreakdown(params?: { date_from?: string; date_to?: string }) {
+export function useTypeBreakdown(params?: {
+  date_from?: string;
+  date_to?: string;
+}) {
   return useAsync(
     () => transactionsApi.typeBreakdown(params),
-    [JSON.stringify(params)]
+    [JSON.stringify(params)],
   );
 }
 
@@ -189,28 +202,28 @@ export function useMovementTypes() {
 // Aging
 // ─────────────────────────────────────────────
 
-export function useAgingList(params?: QueryParams & { report_date?: string; risk?: string }) {
-  return useAsync(
-    () => agingApi.list(params),
-    [JSON.stringify(params)]
-  );
+export function useAgingList(
+  params?: QueryParams & { report_date?: string; risk?: string },
+) {
+  return useAsync(() => agingApi.list(params), [JSON.stringify(params)]);
 }
 
 export function useAgingDates() {
   return useAsync(() => agingApi.dates(), []);
 }
 
-export function useAgingRisk(params?: { report_date?: string; risk?: string; limit?: number }) {
-  return useAsync(
-    () => agingApi.risk(params),
-    [JSON.stringify(params)]
-  );
+export function useAgingRisk(params?: {
+  report_date?: string;
+  risk?: string;
+  limit?: number;
+}) {
+  return useAsync(() => agingApi.risk(params), [JSON.stringify(params)]);
 }
 
 export function useAgingDistribution(params?: { report_date?: string }) {
   return useAsync(
     () => agingApi.distribution(params),
-    [JSON.stringify(params)]
+    [JSON.stringify(params)],
   );
 }
 
@@ -264,7 +277,7 @@ export interface AgingRow {
   over_330: number;
   total: number;
   overdue_total: number;
-  risk_score: 'low' | 'medium' | 'high' | 'critical';
+  risk_score: "low" | "medium" | "high" | "critical";
 }
 
 export interface AgingReportResponse {
@@ -301,3 +314,27 @@ export function useAgingReport(params?: {
     refetch: result.refetch,
   };
 }
+
+export function useSalesKPI(params?: {
+  year?: number;
+  date_from?: string;
+  date_to?: string;
+  top_n?: number;
+}) {
+  return useAsync(() => salesKpiApi.getAll(params), [JSON.stringify(params)]);
+}
+
+export function useStockKPI(params?: {
+  snapshot_date?: string;
+  year?: number;
+  low_rotation_threshold?: number;
+}) {
+  return useAsync(() => stockKpiApi.getAll(params), [JSON.stringify(params)]);
+}
+
+export function useCreditKPI(params?: { report_date?: string }) {
+  return useAsync(() => creditKpiApi.getAll(params), [JSON.stringify(params)]);
+}
+
+// Also re-export the new types for convenience:
+export type { SalesKPIData, StockKPIData, CreditKPIData };

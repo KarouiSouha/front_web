@@ -1,7 +1,13 @@
 // Utility functions for WEEG platform
 
-export const formatCurrency = (amount?: number | null): string => {
-  const n = typeof amount === "number" && isFinite(amount) ? amount : 0;
+export const formatCurrency = (amount?: number | string | null): string => {
+  let n = 0;
+  if (typeof amount === "number" && isFinite(amount)) {
+    n = amount;
+  } else if (typeof amount === "string") {
+    const parsed = parseFloat(amount);
+    n = isFinite(parsed) ? parsed : 0;
+  }
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -10,8 +16,14 @@ export const formatCurrency = (amount?: number | null): string => {
   }).format(n);
 };
 
-export const formatNumber = (num?: number | null): string => {
-  const n = typeof num === "number" && isFinite(num) ? num : 0;
+export const formatNumber = (num?: number | string | null): string => {
+  let n = 0;
+  if (typeof num === "number" && isFinite(num)) {
+    n = num;
+  } else if (typeof num === "string") {
+    const parsed = parseFloat(num);
+    n = isFinite(parsed) ? parsed : 0;
+  }
   return new Intl.NumberFormat("en-US").format(n);
 };
 
@@ -146,6 +158,16 @@ export const exportToCSV = (data: any[], filename: string) => {
   link.href = URL.createObjectURL(blob);
   link.download = `${filename}.csv`;
   link.click();
+};
+
+/**
+ * Safely convert a numeric value (number, string, or null) to a finite number
+ * Useful for API responses that may return decimal values as strings
+ */
+export const toNum = (value?: number | string | null): number => {
+  if (value === null || value === undefined) return 0;
+  const num = typeof value === "string" ? parseFloat(value) : value;
+  return isFinite(num) ? num : 0;
 };
 
 export const cn = (

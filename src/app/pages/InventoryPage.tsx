@@ -17,12 +17,7 @@ import {
   useCategoryBreakdown,
   type InventoryItem,
 } from '../lib/dataHooks';
-import { formatCurrency, formatNumber } from '../lib/utils';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper: Django DecimalField returns strings like "5.0000" — parse to number
-// ─────────────────────────────────────────────────────────────────────────────
-const toNum = (val: unknown): number => parseFloat(String(val ?? 0)) || 0;
+import { formatCurrency, formatNumber, toNum } from '../lib/utils';
 
 // ── Branch columns ───────────────────────────────────────────────────────────
 
