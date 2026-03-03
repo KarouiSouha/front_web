@@ -361,7 +361,7 @@ export function CreditKPISection() {
     },
     {
       label:     'Credit Revenue',
-      value:     formatCurrency(summary.ca_credit),
+      value:     formatCurrency(summary.ca_total - summary.grand_total_receivables),
       icon:      TrendingUp,
       iconColor: 'text-emerald-600',
       iconBg:    'bg-emerald-50 dark:bg-emerald-950/40',
@@ -420,7 +420,7 @@ export function CreditKPISection() {
           isGood={v => v <= 85}
           subline={
             <p className="text-xs text-muted-foreground">
-              <span className="font-bold text-violet-600">{formatCurrency(kpis.taux_credit_total.ca_credit ?? 0)}</span>
+              <span className="font-bold text-violet-600">{formatCurrency (summary.ca_total - summary.grand_total_receivables)}</span>
               {' '}<span className="text-muted-foreground/60">of</span>{' '}
               <span className="font-semibold text-foreground">{formatCurrency(kpis.taux_credit_total.ca_total ?? 0)}</span>
             </p>

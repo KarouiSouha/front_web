@@ -9,11 +9,9 @@ export const formatCurrency = (amount?: number | string | null): string => {
     n = isFinite(parsed) ? parsed : 0;
   }
   return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(n);
+  }).format(n) + " LYD";
 };
 
 export const formatNumber = (num?: number | string | null): string => {
