@@ -23,6 +23,7 @@ import {
   useBranchBreakdown,
   useCategoryBreakdown,
   MOVEMENT_TYPES,
+  useTypeBreakdown,  
 } from '../lib/dataHooks';
 import { formatCurrency, formatNumber } from '../lib/utils';
 
@@ -78,6 +79,7 @@ export function DashboardPage() {
   const branchStockSummary = useBranchSummary();
   const branchSales = useBranchBreakdown({ movement_type: MOVEMENT_TYPES.SALE });
   const categoryBreakdown = useCategoryBreakdown();
+  const typeBreakdown = useTypeBreakdown();
 
   // ── KPI derived values ─────────────────────────────────────────────────
   const kpiData = kpi.data;
@@ -114,7 +116,10 @@ export function DashboardPage() {
     value: c.total_value,
     fill: BRANCH_COLORS[i % BRANCH_COLORS.length],
   }));
-
+// 3. Extraire total purchases de la même source que KPIEnginePage :
+const totalPurchases = (typeBreakdown.data?.breakdown ?? [])
+  .find(t => t.movement_type === MOVEMENT_TYPES.PURCHASE)
+  ?.total_in ?? 0;
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -167,11 +172,11 @@ export function DashboardPage() {
             value={formatCurrency(kpiData?.totalSalesValue ?? 0)}
             icon={TrendingUp}
           />
-          <KPICard
-            title="Total Purchases"
-            value={formatCurrency(kpiData?.totalPurchasesValue ?? 0)}
-            icon={DollarSign}
-          />
+        <KPICard
+          title="Total Purchases"
+          value={formatCurrency(totalPurchases)}
+          icon={ShoppingCart}
+        />
           <KPICard
             title="Current Stock Value"
             value={formatCurrency(kpiData?.stockValue ?? 0)}
