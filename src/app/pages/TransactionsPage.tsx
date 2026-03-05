@@ -545,7 +545,7 @@ export function TransactionsPage() {
           </div>
           <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: css.mutedFg, margin: 0 }}>Total Value Out</p>
           <p style={{ fontSize: 22, fontWeight: 800, color: C.rose, margin: '4px 0 0', letterSpacing: '-0.03em' }}>{formatCurrency(grandTotalOut)}</p>
-          <p style={{ fontSize: 11, color: css.mutedFg, marginTop: 4 }}>of Sales (فاتورة بيع)</p>
+          <p style={{ fontSize: 11, color: css.mutedFg, marginTop: 4 }}>of Sales</p>
         </div>
 
         {/* Total Value In — of Sales (فاتورة بيع → total_in) */}

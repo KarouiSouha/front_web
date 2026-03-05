@@ -2,20 +2,24 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import axios from 'axios';
 import {
   Search, RefreshCw, Loader2, AlertCircle, Download,
   TrendingUp, AlertTriangle, CheckCircle2, Clock,
-  ChevronDown as ChevronDownIcon,
+  ChevronDown as ChevronDownIcon, BarChart3, Users,
+  Wallet, ArrowUpRight, ArrowDownRight, Building2,
+  Target, Activity,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie,
+  AreaChart, Area, LineChart, Line, Legend,
 } from 'recharts';
 import { useAgingReport, useAgingDates, type AgingRow } from '../lib/dataHooks';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, formatNumber } from '../lib/utils';
 import { DataTable } from '../components/DataTable';
 
-// ── Normalize ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function normalizeRow(r: AgingRow): AgingRow {
   const num = (v: unknown) => { const n = Number(v); return isFinite(n) ? n : 0; };
   return {
@@ -27,6 +31,11 @@ function normalizeRow(r: AgingRow): AgingRow {
     over_330: num(r.over_330), total: num(r.total), overdue_total: num(r.overdue_total),
     customer_name: r.customer_name || r.account || null,
   };
+}
+
+function getAuthHeaders() {
+  const token = localStorage.getItem('fasi_access_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -60,6 +69,7 @@ const cardStyle: React.CSSProperties = {
 };
 
 const axisStyle = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' };
+const legendStyle = { fontSize: 12, color: 'hsl(var(--muted-foreground))', paddingTop: 8 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const RISK_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -100,6 +110,38 @@ const RISK_OPTIONS = [
   { key: 'high',     label: 'High'            },
   { key: 'critical', label: 'Critical'        },
 ];
+
+const BRANCH_COLORS = [C.indigo, C.cyan, C.teal, C.emerald, C.amber, C.rose, C.violet];
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface TrendPoint {
+  date:            string;
+  label:           string;
+  total:           number;
+  overdue:         number;
+  credit_customers: number;
+  collection_rate: number;
+}
+
+interface BranchTrendPoint {
+  month:  string;
+  [branch: string]: number | string;
+}
+
+interface CreditKPIData {
+  kpis: {
+    taux_recouvrement: { value: number };
+    taux_impayes:      { value: number; overdue_amount?: number; total_receivables?: number };
+    dmp:               { value: number };
+  };
+  summary: {
+    grand_total_receivables: number;
+    overdue_amount: number;
+    ca_total: number;
+    credit_customers: number;
+    total_customers: number;
+  };
+}
 
 // ── StyledDropdown ─────────────────────────────────────────────────────────────
 function StyledDropdown({
@@ -183,9 +225,10 @@ function StyledDropdown({
 }
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, icon: Icon, accent }: {
+function KpiCard({ label, value, sub, icon: Icon, accent, trend }: {
   label: string; value: string; sub?: string;
   icon: React.ElementType; accent: string;
+  trend?: { direction: 'up' | 'down'; label: string };
 }) {
   return (
     <div style={{ ...cardStyle, position: 'relative', overflow: 'hidden' }}>
@@ -194,6 +237,18 @@ function KpiCard({ label, value, sub, icon: Icon, accent }: {
         <div style={{ width: 40, height: 40, borderRadius: 12, background: `${accent}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Icon size={17} style={{ color: accent }} />
         </div>
+        {trend && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3,
+            fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20,
+            background: trend.direction === 'up' ? `${C.emerald}18` : `${C.rose}18`,
+            color: trend.direction === 'up' ? C.emerald : C.rose,
+            border: `1px solid ${trend.direction === 'up' ? C.emerald : C.rose}35`,
+          }}>
+            {trend.direction === 'up' ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
+            {trend.label}
+          </span>
+        )}
       </div>
       <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: css.mutedFg, margin: 0 }}>{label}</p>
       <p style={{ fontSize: 20, fontWeight: 800, color: css.cardFg, margin: '4px 0 0', letterSpacing: '-0.03em' }}>{value}</p>
@@ -203,14 +258,29 @@ function KpiCard({ label, value, sub, icon: Icon, accent }: {
 }
 
 // ── Panel ─────────────────────────────────────────────────────────────────────
-function Panel({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+function Panel({ title, sub, children, action }: {
+  title: string; sub?: string; children: React.ReactNode; action?: React.ReactNode;
+}) {
   return (
     <div style={cardStyle}>
-      <div style={{ marginBottom: 20 }}>
-        <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>{title}</h3>
-        {sub && <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>{sub}</p>}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>{title}</h3>
+          {sub && <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>{sub}</p>}
+        </div>
+        {action}
       </div>
       {children}
+    </div>
+  );
+}
+
+// ── Section Divider ────────────────────────────────────────────────────────────
+function SectionTitle({ title, sub }: { title: string; sub?: string }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 800, color: css.fg, letterSpacing: '-0.02em', margin: 0 }}>{title}</h2>
+      {sub && <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>{sub}</p>}
     </div>
   );
 }
@@ -225,7 +295,11 @@ function ChartTooltip({ active, payload, label }: any) {
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.fill ?? p.color, display: 'inline-block' }} />
           <span style={{ color: '#6b7280' }}>{p.name}</span>
-          <span style={{ marginLeft: 'auto', paddingLeft: 16, fontWeight: 700, color: '#111827' }}>{formatCurrency(p.value)}</span>
+          <span style={{ marginLeft: 'auto', paddingLeft: 16, fontWeight: 700, color: '#111827' }}>
+            {typeof p.value === 'number' && p.name !== 'Collection Rate' && p.name !== 'Overdue Rate'
+              ? formatCurrency(p.value)
+              : typeof p.value === 'number' ? `${p.value.toFixed(1)}%` : p.value}
+          </span>
         </div>
       ))}
     </div>
@@ -238,7 +312,26 @@ export function AgingReceivablePage() {
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [period, setPeriod]             = useState<string>('all');
   const [riskFilter, setRiskFilter]     = useState<string>('all');
-  const [openDropdown, setOpenDropdown] = useState<'period' | 'date' | 'risk' | null>(null);
+  const [branchFilter, setBranchFilter] = useState<string>('all');
+  const [openDropdown, setOpenDropdown] = useState<'period' | 'date' | 'risk' | 'branch' | null>(null);
+
+  // ── Branch & mapping state ────────────────────────────────────────────────
+  const [availableBranches, setAvailableBranches] = useState<string[]>([]);
+  const [customerNamesInBranch, setCustomerNamesInBranch] = useState<Set<string> | null>(null);
+  const [branchFilterLoading, setBranchFilterLoading] = useState(false);
+
+  // ── Trend state ────────────────────────────────────────────────────────────
+  const [trendData, setTrendData] = useState<TrendPoint[]>([]);
+  const [trendLoading, setTrendLoading] = useState(false);
+
+  // ── Branch monthly sales (for branch receivables chart) ────────────────────
+  const [branchTrend, setBranchTrend] = useState<BranchTrendPoint[]>([]);
+  const [branchTrendBranches, setBranchTrendBranches] = useState<string[]>([]);
+  const [branchTrendLoading, setBranchTrendLoading] = useState(false);
+
+  // ── Credit KPI (collection rate) ──────────────────────────────────────────
+  const [creditKPI, setCreditKPI] = useState<CreditKPIData | null>(null);
+  const [creditKPILoading, setCreditKPILoading] = useState(false);
 
   const reportDate = selectedDate || datesData?.dates?.[0] || '';
 
@@ -254,6 +347,93 @@ export function AgingReceivablePage() {
 
   const totalAccounts: number = (agingData as any)?.total_accounts ?? 0;
 
+  // ── Fetch branches ────────────────────────────────────────────────────────
+  useEffect(() => {
+    axios.get('/api/transactions/branches/', { headers: getAuthHeaders() })
+      .then(res => setAvailableBranches(res.data.branches ?? []))
+      .catch(() => {});
+  }, []);
+
+  // ── Fetch customer names for selected branch ──────────────────────────────
+  useEffect(() => {
+    if (branchFilter === 'all') {
+      setCustomerNamesInBranch(null);
+      return;
+    }
+    setBranchFilterLoading(true);
+    // Fetch sales transactions for this branch to get customer names
+    axios.get('/api/transactions/', {
+      headers: getAuthHeaders(),
+      params: { movement_type: 'ف بيع', branch: branchFilter, page_size: 200, page: 1 },
+    }).then(res => {
+      const names = new Set<string>(
+        (res.data.movements ?? [])
+          .map((m: any) => m.customer_name)
+          .filter(Boolean)
+      );
+      setCustomerNamesInBranch(names);
+    }).catch(() => setCustomerNamesInBranch(null))
+      .finally(() => setBranchFilterLoading(false));
+  }, [branchFilter]);
+
+  // ── Fetch receivables trend (across all report dates) ─────────────────────
+  useEffect(() => {
+    const dates = datesData?.dates ?? [];
+    if (!dates.length) return;
+    setTrendLoading(true);
+
+    // Fetch grand_total + credit_customers for each date (use last 12)
+    const datesToFetch = dates.slice(0, 12);
+    Promise.all(
+      datesToFetch.map(d =>
+        axios.get('/api/aging/', {
+          headers: getAuthHeaders(),
+          params: { report_date: d, page_size: 1, page: 1 },
+        }).then(res => {
+          const data = res.data;
+          const overdue = data.grand_total * 0; // we'll get from credit kpi if available
+          return {
+            date:  d,
+            label: d.slice(0, 7), // YYYY-MM
+            total: data.grand_total ?? 0,
+            overdue: 0, // placeholder
+            credit_customers: data.credit_customers ?? 0,
+            collection_rate: 0,
+          } as TrendPoint;
+        }).catch(() => null)
+      )
+    ).then(results => {
+      const valid = results.filter(Boolean) as TrendPoint[];
+      setTrendData(valid.reverse()); // oldest first
+    }).finally(() => setTrendLoading(false));
+  }, [datesData]);
+
+  // ── Fetch branch monthly sales trend ─────────────────────────────────────
+  useEffect(() => {
+    setBranchTrendLoading(true);
+    axios.get('/api/transactions/branch-monthly/', {
+      headers: getAuthHeaders(),
+      params: { movement_type: 'ف بيع' },
+    }).then(res => {
+      setBranchTrend(res.data.monthly_data ?? []);
+      setBranchTrendBranches(res.data.branches ?? []);
+    }).catch(() => {})
+      .finally(() => setBranchTrendLoading(false));
+  }, []);
+
+  // ── Fetch credit KPIs ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!reportDate) return;
+    setCreditKPILoading(true);
+    axios.get('/api/kpi/credit/', {
+      headers: getAuthHeaders(),
+      params: { report_date: reportDate },
+    }).then(res => setCreditKPI(res.data))
+      .catch(() => {})
+      .finally(() => setCreditKPILoading(false));
+  }, [reportDate]);
+
+  // ── Derived totals ────────────────────────────────────────────────────────
   const totals = useMemo(() => ({
     total:   rows.reduce((s, r) => s + r.total,         0),
     overdue: rows.reduce((s, r) => s + r.overdue_total, 0),
@@ -284,12 +464,56 @@ export function AgingReceivablePage() {
     ...(datesData?.dates ?? []).map(d => ({ key: d, label: d })),
   ];
 
+  const branchOptions = [
+    { key: 'all', label: 'All Branches' },
+    ...availableBranches.map(b => ({ key: b, label: b })),
+  ];
+
+  // ── Top debtors ───────────────────────────────────────────────────────────
+  const topDebtors = useMemo(() =>
+    [...rows]
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10)
+      .map(r => ({
+        name:    (r.customer_name || r.account_code || '').slice(0, 28),
+        total:   r.total,
+        overdue: r.overdue_total,
+        current: r.current,
+        risk:    r.risk_score,
+        color:   RISK_CONFIG[r.risk_score]?.color ?? C.indigo,
+      })),
+  [rows]);
+
+  // ── Top debtors by branch (from branchTrend data) ─────────────────────────
+  // Aggregate per customer within filtered rows
+  const topDebtorsByBranch = useMemo(() => {
+    const source = customerNamesInBranch !== null
+      ? rows.filter(r => customerNamesInBranch.has(r.customer_name ?? ''))
+      : rows;
+    return [...source]
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10)
+      .map(r => ({
+        name:    (r.customer_name || r.account_code || '').slice(0, 28),
+        total:   r.total,
+        overdue: r.overdue_total,
+        color:   RISK_CONFIG[r.risk_score]?.color ?? C.indigo,
+      }));
+  }, [rows, customerNamesInBranch]);
+
+  // ── Collection rate trend (computed from trendData + ca_total estimate) ───
+  const collectionRate = creditKPI?.kpis?.taux_recouvrement?.value ?? 0;
+  const overdueRate    = creditKPI?.kpis?.taux_impayes?.value ?? 0;
+
   // ── Filtered rows for DataTable ───────────────────────────────────────────
   const filtered = useMemo(() => {
     let data = [...rows];
     if (riskFilter !== 'all') data = data.filter(r => r.risk_score === riskFilter);
+    if (customerNamesInBranch !== null) {
+      data = data.filter(r => customerNamesInBranch.has(r.customer_name ?? ''));
+    }
     return data;
-  }, [rows, riskFilter]);
+  }, [rows, riskFilter, customerNamesInBranch]);
 
   // ── Export CSV ────────────────────────────────────────────────────────────
   const exportCSV = () => {
@@ -310,7 +534,7 @@ export function AgingReceivablePage() {
     a.click();
   };
 
-  // ── DataTable columns — Transactions style ────────────────────────────────
+  // ── DataTable columns ─────────────────────────────────────────────────────
   const columns = useMemo(() => [
     {
       key: 'customer_name',
@@ -327,20 +551,13 @@ export function AgingReceivablePage() {
         </div>
       ),
     },
-    // Bucket columns
     ...BUCKETS.map((b, i) => ({
       key: b.key as string,
       label: b.label,
       render: (row: AgingRow) => {
         const val       = (row[b.key] as number) || 0;
         const isOverdue = i >= 3;
-        const color     = val === 0
-          ? css.mutedFg
-          : isOverdue
-            ? C.rose
-            : i > 0
-              ? C.amber
-              : C.emerald;
+        const color     = val === 0 ? css.mutedFg : isOverdue ? C.rose : i > 0 ? C.amber : C.emerald;
         return val > 0
           ? <span style={{ color, fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap' }}>{formatCurrency(val)}</span>
           : <span style={{ color: css.mutedFg, fontSize: 12 }}>—</span>;
@@ -393,7 +610,7 @@ export function AgingReceivablePage() {
             Accounts Receivable Aging
           </h1>
           <p style={{ fontSize: 13, color: css.mutedFg, marginTop: 4 }}>
-            Receivables breakdown by age bucket and customer risk assessment
+            Receivables breakdown by age bucket, customer risk, and branch performance
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -421,13 +638,36 @@ export function AgingReceivablePage() {
       <div style={cardStyle}>
         <div style={{ marginBottom: 16 }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>Filters</h3>
-          <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>Customize your receivables view</p>
+          <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>
+            Customize your receivables view · Branch filter cross-references sales transactions
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <StyledDropdown label="Period"      options={PERIOD_OPTIONS} value={period}                       onChange={v => setPeriod(v)}                                    isOpen={openDropdown === 'period'} onToggle={() => setOpenDropdown(o => o === 'period' ? null : 'period')} onClose={() => setOpenDropdown(null)} />
-          <StyledDropdown label="Report Date" options={dateOptions}    value={selectedDate || '__latest__'} onChange={v => setSelectedDate(v === '__latest__' ? '' : v)}     isOpen={openDropdown === 'date'}   onToggle={() => setOpenDropdown(o => o === 'date'   ? null : 'date')}   onClose={() => setOpenDropdown(null)} />
-          <StyledDropdown label="Risk Level"  options={RISK_OPTIONS}   value={riskFilter}                  onChange={v => setRiskFilter(v)}                                 isOpen={openDropdown === 'risk'}   onToggle={() => setOpenDropdown(o => o === 'risk'   ? null : 'risk')}   onClose={() => setOpenDropdown(null)} />
+          <StyledDropdown label="Period"      options={PERIOD_OPTIONS} value={period}
+            onChange={v => setPeriod(v)}
+            isOpen={openDropdown === 'period'} onToggle={() => setOpenDropdown(o => o === 'period' ? null : 'period')} onClose={() => setOpenDropdown(null)} />
+          <StyledDropdown label="Report Date" options={dateOptions}    value={selectedDate || '__latest__'}
+            onChange={v => setSelectedDate(v === '__latest__' ? '' : v)}
+            isOpen={openDropdown === 'date'}   onToggle={() => setOpenDropdown(o => o === 'date'   ? null : 'date')}   onClose={() => setOpenDropdown(null)} />
+          <StyledDropdown label="Risk Level"  options={RISK_OPTIONS}   value={riskFilter}
+            onChange={v => setRiskFilter(v)}
+            isOpen={openDropdown === 'risk'}   onToggle={() => setOpenDropdown(o => o === 'risk'   ? null : 'risk')}   onClose={() => setOpenDropdown(null)} />
+          <StyledDropdown label="Branch"      options={branchOptions}  value={branchFilter}
+            onChange={v => setBranchFilter(v)}
+            isOpen={openDropdown === 'branch'} onToggle={() => setOpenDropdown(o => o === 'branch' ? null : 'branch')} onClose={() => setOpenDropdown(null)}
+            minWidth={180} />
+          {branchFilterLoading && (
+            <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 8 }}>
+              <Loader2 size={16} className="animate-spin" style={{ color: C.indigo }} />
+            </div>
+          )}
         </div>
+        {branchFilter !== 'all' && customerNamesInBranch !== null && (
+          <p style={{ fontSize: 12, color: C.indigo, marginTop: 12, paddingTop: 12, borderTop: `1px dashed ${css.border}` }}>
+            <Building2 size={12} style={{ display: 'inline', marginRight: 4 }} />
+            Branch filter active — showing {customerNamesInBranch.size} customers linked to <strong>{branchFilter}</strong> via sales transactions
+          </p>
+        )}
       </div>
 
       {/* ── Error ── */}
@@ -435,13 +675,10 @@ export function AgingReceivablePage() {
         <div style={{ ...cardStyle, display: 'flex', alignItems: 'center', gap: 12, color: C.rose }}>
           <AlertCircle size={18} />
           <span style={{ fontSize: 13, flex: 1 }}>{error}</span>
-          <button onClick={refetch} style={{ height: 32, padding: '0 14px', borderRadius: 8, border: `1px solid ${css.border}`, background: css.card, color: css.cardFg, fontSize: 12, cursor: 'pointer' }}>
-            Retry
-          </button>
+          <button onClick={refetch} style={{ height: 32, padding: '0 14px', borderRadius: 8, border: `1px solid ${css.border}`, background: css.card, color: css.cardFg, fontSize: 12, cursor: 'pointer' }}>Retry</button>
         </div>
       )}
 
-      {/* ── Loading ── */}
       {loading && !error && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 0', gap: 12, color: css.mutedFg }}>
           <Loader2 size={20} className="animate-spin" style={{ color: C.indigo }} />
@@ -453,70 +690,259 @@ export function AgingReceivablePage() {
         <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 0', gap: 12 }}>
           <AlertCircle size={40} style={{ color: css.mutedFg, opacity: 0.4 }} />
           <p style={{ fontSize: 14, color: css.mutedFg }}>No aging data available</p>
-          <button onClick={refetch} style={{ height: 34, padding: '0 16px', borderRadius: 8, border: `1px solid ${css.border}`, background: css.card, color: css.cardFg, fontSize: 13, cursor: 'pointer' }}>
-            Retry
-          </button>
+          <button onClick={refetch} style={{ height: 34, padding: '0 16px', borderRadius: 8, border: `1px solid ${css.border}`, background: css.card, color: css.cardFg, fontSize: 13, cursor: 'pointer' }}>Retry</button>
         </div>
       )}
 
       {!loading && !error && rows.length > 0 && (
         <>
-          {/* ── KPI Cards ── */}
+          {/* ════════════════════════════════════════════════════════════════
+              SECTION 1 — Snapshot KPIs
+          ════════════════════════════════════════════════════════════════ */}
+          <SectionTitle title="Snapshot Overview" sub={`Report date: ${reportDate || 'latest'}`} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
-            <KpiCard label="Total Receivables"  value={formatCurrency(totals.total)}   icon={TrendingUp}    accent={C.indigo}
-              sub={totalAccounts > 0 ? `${rows.length} active · ${totalAccounts} total accounts` : `${rows.length} customers with open balance`} />
-            <KpiCard label="Current (not due)"  value={formatCurrency(totals.current)} icon={CheckCircle2}  accent={C.emerald}
-              sub={totals.total > 0 ? `${((totals.current / totals.total) * 100).toFixed(1)}% of total` : undefined} />
-            <KpiCard label="Overdue (>60d)"     value={formatCurrency(totals.overdue)} icon={AlertTriangle} accent={C.rose}
-              sub={totals.total > 0 ? `${((totals.overdue / totals.total) * 100).toFixed(1)}% of total` : undefined} />
-            <KpiCard label="At-Risk Customers"  value={`${(riskCounts.high ?? 0) + (riskCounts.critical ?? 0)}`} icon={Clock} accent={C.orange}
-              sub={`${riskCounts.critical ?? 0} critical · ${riskCounts.high ?? 0} high`} />
+            <KpiCard
+              label="Total Receivables"
+              value={formatCurrency(totals.total)}
+              icon={TrendingUp}
+              accent={C.indigo}
+              sub={totalAccounts > 0 ? `${rows.length} active · ${totalAccounts} total accounts` : `${rows.length} customers with open balance`}
+            />
+            <KpiCard
+              label="Current (not due)"
+              value={formatCurrency(totals.current)}
+              icon={CheckCircle2}
+              accent={C.emerald}
+              sub={totals.total > 0 ? `${((totals.current / totals.total) * 100).toFixed(1)}% of total` : undefined}
+            />
+            <KpiCard
+              label="Overdue (>60d)"
+              value={formatCurrency(totals.overdue)}
+              icon={AlertTriangle}
+              accent={C.rose}
+              sub={totals.total > 0 ? `${((totals.overdue / totals.total) * 100).toFixed(1)}% of total` : undefined}
+              trend={overdueRate > 20 ? { direction: 'down', label: 'High' } : { direction: 'up', label: 'Normal' }}
+            />
+            <KpiCard
+              label="At-Risk Customers"
+              value={`${(riskCounts.high ?? 0) + (riskCounts.critical ?? 0)}`}
+              icon={Clock}
+              accent={C.orange}
+              sub={`${riskCounts.critical ?? 0} critical · ${riskCounts.high ?? 0} high`}
+            />
           </div>
 
-          {/* ── Charts ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+          {/* Credit KPI cards (collection rate + overdue rate + DSO) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
+            <KpiCard
+              label="Collection Rate"
+              value={creditKPILoading ? '…' : `${collectionRate.toFixed(1)}%`}
+              icon={Target}
+              accent={C.emerald}
+              sub="% of credit sales successfully collected"
+              trend={collectionRate >= 70 ? { direction: 'up', label: 'Good' } : { direction: 'down', label: 'Alert' }}
+            />
+            <KpiCard
+              label="Overdue Rate"
+              value={creditKPILoading ? '…' : `${overdueRate.toFixed(1)}%`}
+              icon={AlertTriangle}
+              accent={C.rose}
+              sub="Overdue receivables as % of total"
+              trend={overdueRate <= 20 ? { direction: 'up', label: 'Good' } : { direction: 'down', label: 'Alert' }}
+            />
+            <KpiCard
+              label="DSO"
+              value={creditKPILoading ? '…' : `${(creditKPI?.kpis?.dmp?.value ?? 0).toFixed(0)} days`}
+              icon={Activity}
+              accent={C.amber}
+              sub="Average days customers take to pay"
+              trend={(creditKPI?.kpis?.dmp?.value ?? 0) <= 90 ? { direction: 'up', label: 'Normal' } : { direction: 'down', label: 'High' }}
+            />
+          </div>
 
-            {/* Bar chart */}
-            <Panel title="Receivables by Age Bucket" sub="Aggregated amounts (LYD)">
-              {bucketTotals.length === 0 ? (
-                <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', color: css.mutedFg, fontSize: 13 }}>No data</div>
+          {/* ════════════════════════════════════════════════════════════════
+              SECTION 3 — Total Receivables by Branch (sales transactions)
+          ════════════════════════════════════════════════════════════════ */}
+          <SectionTitle
+            title="Revenue by Branch (Monthly)"
+            sub="Monthly credit sales volume per branch — proxy for branch-level receivables exposure"
+          />
+          <Panel
+            title="Branch Revenue Trend"
+            sub={`${branchTrendBranches.length} branches · last ${branchTrend.length} months`}
+          >
+            {branchTrendLoading ? (
+              <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: css.mutedFg }}>
+                <Loader2 size={16} className="animate-spin" style={{ color: C.cyan }} />
+                <span style={{ fontSize: 13 }}>Loading branch data…</span>
+              </div>
+            ) : branchTrend.length === 0 ? (
+              <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', color: css.mutedFg, fontSize: 13 }}>
+                No branch trend data available
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart
+                  data={branchTrend.slice(-12)}
+                  margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="4 4" stroke={css.border} vertical={false} />
+                  <XAxis
+                    dataKey="month"
+                    tick={axisStyle} axisLine={false} tickLine={false}
+                    tickFormatter={(v, i) => {
+                      const row = branchTrend.slice(-12)[i];
+                      return row ? `${v} ${row.year ?? ''}` : String(v);
+                    }}
+                  />
+                  <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Legend wrapperStyle={legendStyle} iconType="circle" iconSize={8} />
+                  {branchTrendBranches
+                    .filter(b => branchFilter === 'all' || b === branchFilter)
+                    .map((branch, i) => (
+                      <Line
+                        key={branch}
+                        type="monotone"
+                        dataKey={branch}
+                        stroke={BRANCH_COLORS[i % BRANCH_COLORS.length]}
+                        strokeWidth={2.5}
+                        dot={false}
+                        activeDot={{ r: 5, strokeWidth: 0 }}
+                        name={branch}
+                      />
+                    ))}
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </Panel>
+
+          {/* ════════════════════════════════════════════════════════════════
+              SECTION 4 — Top Debtors by Month & Branch
+          ════════════════════════════════════════════════════════════════ */}
+          <SectionTitle
+            title="Top Debtors"
+            sub={branchFilter !== 'all' ? `Filtered to branch: ${branchFilter}` : 'All branches · current report snapshot'}
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 16 }}>
+
+            {/* Bar chart — top debtors */}
+            <Panel
+              title="Top 10 Debtors by Balance"
+              sub={`${branchFilter !== 'all' ? `Branch: ${branchFilter} · ` : ''}Ranked by total outstanding balance`}
+            >
+              {/* Legend explaining the two bars */}
+              <div style={{
+                display: 'flex', gap: 16, marginBottom: 14, flexWrap: 'wrap',
+                padding: '8px 12px', borderRadius: 8,
+                background: css.muted, alignItems: 'flex-start',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+                  <span style={{ width: 12, height: 12, borderRadius: 3, background: C.indigo, display: 'inline-block', marginTop: 1, flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, color: css.mutedFg }}>
+                    <strong style={{ color: css.cardFg }}>Total Balance</strong> — full amount owed by the customer
+                    (current + all aging buckets)
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+                  <span style={{ width: 12, height: 12, borderRadius: 3, background: C.rose, display: 'inline-block', marginTop: 1, flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, color: css.mutedFg }}>
+                    <strong style={{ color: C.rose }}>Overdue (&gt;60 days)</strong> — portion of their balance that
+                    is <em>past due</em>: 61-90d + 91-120d + … + &gt;330d buckets.
+                    This is the amount that should have been collected already.
+                  </span>
+                </div>
+              </div>
+              {topDebtorsByBranch.length === 0 ? (
+                <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: css.mutedFg, fontSize: 13 }}>
+                  No debtors match the current filters
+                </div>
               ) : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={bucketTotals} margin={{ left: 5, right: 5, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={css.border} vertical={false} />
-                    <XAxis dataKey="label" tick={axisStyle} angle={-30} textAnchor="end" height={50} axisLine={false} tickLine={false} />
-                    <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="amount" name="Amount" radius={[5, 5, 0, 0]}>
-                      {bucketTotals.map((_, i) => <Cell key={i} fill={bucketTotals[i].color} />)}
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart
+                    data={topDebtorsByBranch}
+                    layout="vertical"
+                    margin={{ left: 0, right: 16, top: 4, bottom: 4 }}
+                    barCategoryGap="20%"
+                  >
+                    <CartesianGrid strokeDasharray="4 4" stroke={css.border} horizontal={false} />
+                    <XAxis
+                      type="number"
+                      tick={axisStyle} axisLine={false} tickLine={false}
+                      tickFormatter={v => `${(v / 1000).toFixed(0)}k`}
+                    />
+                    <YAxis
+                      type="category" dataKey="name" width={140}
+                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                      axisLine={false} tickLine={false}
+                    />
+                    <Tooltip
+                      content={(props: any) => {
+                        const { active, payload, label } = props;
+                        if (!active || !payload?.length) return null;
+                        const total   = payload.find((p: any) => p.dataKey === 'total')?.value ?? 0;
+                        const overdue = payload.find((p: any) => p.dataKey === 'overdue')?.value ?? 0;
+                        const pct     = total > 0 ? ((overdue / total) * 100).toFixed(1) : '0';
+                        return (
+                          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 14px', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', fontSize: 12, maxWidth: 220 }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 8, textTransform: 'uppercase' }}>{label}</p>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 4 }}>
+                              <span style={{ color: '#6b7280' }}>Total balance</span>
+                              <span style={{ fontWeight: 700, color: '#111827' }}>{formatCurrency(total)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 8 }}>
+                              <span style={{ color: '#6b7280' }}>Overdue (&gt;60d)</span>
+                              <span style={{ fontWeight: 700, color: C.rose }}>{formatCurrency(overdue)}</span>
+                            </div>
+                            <div style={{ height: 5, borderRadius: 999, background: '#f3f4f6', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', borderRadius: 999, width: `${pct}%`, background: `linear-gradient(90deg, ${C.rose}70, ${C.rose})` }} />
+                            </div>
+                            <p style={{ fontSize: 10, color: '#9ca3af', marginTop: 5 }}>{pct}% of balance is overdue</p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Legend
+                      wrapperStyle={legendStyle}
+                      iconType="square"
+                      iconSize={10}
+                      formatter={(value: string) =>
+                        value === 'overdue' ? 'Overdue (>60d)' : 'Total Balance'
+                      }
+                    />
+                    <Bar dataKey="total" name="total" radius={[0, 6, 6, 0]}>
+                      {topDebtorsByBranch.map((d, i) => <Cell key={i} fill={d.color} fillOpacity={0.85} />)}
                     </Bar>
+                    <Bar dataKey="overdue" name="overdue" radius={[0, 6, 6, 0]} fill={C.rose} fillOpacity={0.55} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
             </Panel>
 
-            {/* Donut — Risk distribution */}
+            {/* Ranked list with risk badges */}
             <div style={cardStyle}>
-              <div style={{ marginBottom: 20 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>Risk Distribution</h3>
+              <div style={{ marginBottom: 16 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>Risk Breakdown</h3>
                 <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>
-                  {rows.length} active{totalAccounts > 0 ? ` of ${totalAccounts} total` : ''}
+                  {filtered.length} customers · {branchFilter !== 'all' ? `Branch: ${branchFilter}` : 'all branches'}
                 </p>
               </div>
               <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
-                <ResponsiveContainer width="100%" height={200}>
+                <ResponsiveContainer width="100%" height={160}>
                   <PieChart>
-                    <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={88} paddingAngle={3} strokeWidth={0}>
+                    <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={3} strokeWidth={0}>
                       {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                     </Pie>
                     <Tooltip formatter={(v: number) => [`${v} customers`, '']} contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, fontSize: 12 }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
                 {Object.entries(RISK_CONFIG).map(([key, cfg]) => {
-                  const count = riskCounts[key] ?? 0;
-                  const total = rows.length;
+                  const count = branchFilter !== 'all'
+                    ? filtered.filter(r => r.risk_score === key).length
+                    : riskCounts[key] ?? 0;
+                  const total = branchFilter !== 'all' ? filtered.length : rows.length;
                   const pct   = total > 0 ? (count / total) * 100 : 0;
                   return (
                     <div key={key}>
@@ -542,17 +968,272 @@ export function AgingReceivablePage() {
             </div>
           </div>
 
-          {/* ── Customer Table — DataTable style (same as TransactionsPage) ── */}
-          <div style={cardStyle}>
-            <div style={{ marginBottom: 20 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>Customer Detail</h3>
-              <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>
-                {filtered.length} active{totalAccounts > 0 ? ` of ${totalAccounts} total accounts` : ''}
-                {reportDate && <span style={{ color: C.indigo }}> · Report: {reportDate}</span>}
-              </p>
-            </div>
+          {/* ════════════════════════════════════════════════════════════════
+              SECTION 5 — Collection Rate by Month
+          ════════════════════════════════════════════════════════════════ */}
+          <SectionTitle
+            title="Collection Rate"
+            sub={trendData.length >= 2
+              ? 'Trend across imported report snapshots'
+              : `Current snapshot analysis · ${reportDate || 'latest'}`}
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+            <Panel
+              title={trendData.length >= 2 ? 'Collection Rate Trend' : 'Receivables Breakdown — Collected vs Outstanding'}
+              sub={trendData.length >= 2
+                ? 'Derived from aging snapshots and sales data'
+                : 'How much of credit sales has been collected vs still owed'}
+            >
+              {creditKPILoading ? (
+                <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: css.mutedFg }}>
+                  <Loader2 size={16} className="animate-spin" style={{ color: C.emerald }} />
+                  <span style={{ fontSize: 13 }}>Loading…</span>
+                </div>
+              ) : trendData.length >= 2 ? (
+                /* ── Multi-snapshot trend ── */
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={trendData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="agGradRecovery" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%"  stopColor={C.emerald} stopOpacity={0.2} />
+                        <stop offset="95%" stopColor={C.emerald} stopOpacity={0}   />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="4 4" stroke={css.border} vertical={false} />
+                    <XAxis dataKey="label" tick={axisStyle} axisLine={false} tickLine={false} />
+                    <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Legend wrapperStyle={legendStyle} iconType="circle" iconSize={8} />
+                    <Area type="monotone" dataKey="total" name="Total Receivables"
+                      stroke={C.indigo} strokeWidth={2} fill="url(#agGradRecovery)"
+                      dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (() => {
+                /* ── Single snapshot: collected vs outstanding bar chart ── */
+                const caTotal    = creditKPI?.summary?.ca_total ?? 0;
+                const grandTotal = creditKPI?.summary?.grand_total_receivables ?? totals.total;
+                const collected  = Math.max(0, caTotal - grandTotal);
+                const outstanding = grandTotal;
+                const notCredit  = Math.max(0, caTotal - collected - outstanding);
 
-            {/* Risk legend — same as category legend in TransactionsPage */}
+                const breakdownData = [
+                  { label: 'Collected', amount: collected,   color: C.emerald,
+                    note: 'Credit sales already paid by customers' },
+                  { label: 'Still Owed', amount: outstanding, color: C.rose,
+                    note: 'Credit sales not yet paid (= total receivables)' },
+                ];
+
+                return (
+                  <>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      {breakdownData.map(item => {
+                        const pct = caTotal > 0 ? (item.amount / caTotal) * 100 : 0;
+                        return (
+                          <div key={item.label}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ width: 10, height: 10, borderRadius: 3, background: item.color, flexShrink: 0 }} />
+                                <div>
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: css.cardFg }}>{item.label}</span>
+                                  <span style={{ fontSize: 11, color: css.mutedFg, marginLeft: 8 }}>{item.note}</span>
+                                </div>
+                              </div>
+                              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                <span style={{ fontSize: 15, fontWeight: 800, color: item.color }}>{formatCurrency(item.amount)}</span>
+                                <span style={{ fontSize: 11, color: css.mutedFg, marginLeft: 6 }}>{pct.toFixed(1)}%</span>
+                              </div>
+                            </div>
+                            <div style={{ height: 10, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
+                              <div style={{
+                                height: '100%', borderRadius: 999, width: `${Math.min(100, pct)}%`,
+                                background: `linear-gradient(90deg, ${item.color}70, ${item.color})`,
+                                transition: 'width 0.7s cubic-bezier(0.4,0,0.2,1)',
+                              }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Stacked summary */}
+                    <div style={{ marginTop: 20, padding: '14px 16px', borderRadius: 12, background: `${C.indigo}06`, border: `1px solid ${css.border}` }}>
+                      <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: css.mutedFg, margin: '0 0 10px' }}>
+                        How collection rate is calculated
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {[
+                          { label: 'Total credit sales (CA)',   value: formatCurrency(caTotal),     color: css.cardFg },
+                          { label: '− Still owed (receivables)', value: `−${formatCurrency(outstanding)}`, color: C.rose },
+                          { label: '= Collected',               value: formatCurrency(collected),   color: C.emerald },
+                        ].map(row => (
+                          <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: 12, color: css.mutedFg }}>{row.label}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: row.color }}>{row.value}</span>
+                          </div>
+                        ))}
+                        <div style={{ borderTop: `1px dashed ${css.border}`, paddingTop: 8, marginTop: 4, display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: css.cardFg }}>Collection Rate</span>
+                          <span style={{ fontSize: 14, fontWeight: 800, color: collectionRate >= 70 ? C.emerald : C.rose }}>
+                            {collectionRate.toFixed(1)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </Panel>
+
+            {/* Current period collection rate summary */}
+            <div style={cardStyle}>
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>Current Period</h3>
+                <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>
+                  {reportDate || 'Latest snapshot'}
+                </p>
+              </div>
+              {creditKPILoading ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, gap: 8, color: css.mutedFg }}>
+                  <Loader2 size={15} className="animate-spin" /> <span style={{ fontSize: 13 }}>Loading…</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {[
+                    {
+                      label: 'Collection Rate',
+                      value: `${collectionRate.toFixed(1)}%`,
+                      accent: C.emerald,
+                      good: collectionRate >= 70,
+                      bar: collectionRate,
+                    },
+                    {
+                      label: 'Overdue Rate',
+                      value: `${overdueRate.toFixed(1)}%`,
+                      accent: C.rose,
+                      good: overdueRate <= 20,
+                      bar: Math.min(100, overdueRate),
+                    },
+                    {
+                      label: 'DSO',
+                      value: `${(creditKPI?.kpis?.dmp?.value ?? 0).toFixed(0)}d`,
+                      accent: C.amber,
+                      good: (creditKPI?.kpis?.dmp?.value ?? 0) <= 90,
+                      bar: Math.min(100, ((creditKPI?.kpis?.dmp?.value ?? 0) / 180) * 100),
+                    },
+                  ].map(item => (
+                    <div key={item.label}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: item.accent }} />
+                          <span style={{ fontSize: 12, color: css.mutedFg }}>{item.label}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: item.accent }}>{item.value}</span>
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 20,
+                            background: item.good ? `${C.emerald}18` : `${C.rose}18`,
+                            color: item.good ? C.emerald : C.rose,
+                          }}>
+                            {item.good ? 'Good' : 'Alert'}
+                          </span>
+                        </div>
+                      </div>
+                      <div style={{ height: 5, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
+                        <div style={{
+                          height: '100%', borderRadius: 999, width: `${item.bar}%`,
+                          background: `linear-gradient(90deg, ${item.accent}60, ${item.accent})`,
+                          transition: 'width 0.6s ease',
+                        }} />
+                      </div>
+                    </div>
+                  ))}
+
+                  <div style={{ marginTop: 4, paddingTop: 12, borderTop: `1px dashed ${css.border}` }}>
+                    {[
+                      { label: 'Collection rate target', threshold: '> 70%' },
+                      { label: 'Overdue rate threshold',  threshold: '< 20%' },
+                      { label: 'DSO target',               threshold: '< 90d' },
+                    ].map(t => (
+                      <div key={t.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <span style={{ fontSize: 11, color: css.mutedFg }}>{t.label}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: css.cardFg }}>{t.threshold}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ════════════════════════════════════════════════════════════════
+              SECTION 6 — Age Bucket Distribution
+          ════════════════════════════════════════════════════════════════ */}
+          <SectionTitle title="Receivables Age Distribution" sub="Bucket breakdown for the selected snapshot" />
+          <Panel title="Receivables by Age Bucket" sub="Aggregated amounts (LYD)">
+            {bucketTotals.length === 0 ? (
+              <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', color: css.mutedFg, fontSize: 13 }}>No data</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={bucketTotals} margin={{ left: 5, right: 5, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={css.border} vertical={false} />
+                  <XAxis dataKey="label" tick={axisStyle} angle={-30} textAnchor="end" height={50} axisLine={false} tickLine={false} />
+                  <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Bar dataKey="amount" name="Amount" radius={[5, 5, 0, 0]}>
+                    {bucketTotals.map((_, i) => <Cell key={i} fill={bucketTotals[i].color} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </Panel>
+
+          {/* ════════════════════════════════════════════════════════════════
+              SECTION 7 — Balance per Customer (filtered by month + branch)
+          ════════════════════════════════════════════════════════════════ */}
+          <SectionTitle
+            title="Balance per Customer"
+            sub={[
+              `${filtered.length} customers`,
+              totalAccounts > 0 ? `of ${totalAccounts} total` : '',
+              reportDate ? `· Report: ${reportDate}` : '',
+              branchFilter !== 'all' ? `· Branch: ${branchFilter}` : '',
+              riskFilter !== 'all' ? `· Risk: ${RISK_CONFIG[riskFilter]?.label}` : '',
+            ].filter(Boolean).join(' ')}
+          />
+
+          <div style={cardStyle}>
+            {/* Active filters summary */}
+            {(branchFilter !== 'all' || riskFilter !== 'all') && (
+              <div style={{
+                display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16,
+                padding: '10px 14px', borderRadius: 10,
+                background: `${C.indigo}08`, border: `1px solid ${C.indigo}20`,
+              }}>
+                <span style={{ fontSize: 12, color: css.mutedFg, alignSelf: 'center' }}>Active filters:</span>
+                {branchFilter !== 'all' && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20,
+                    background: `${C.cyan}18`, color: C.cyan, border: `1px solid ${C.cyan}35`,
+                  }}>
+                    <Building2 size={10} /> {branchFilter}
+                  </span>
+                )}
+                {riskFilter !== 'all' && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20,
+                    background: RISK_CONFIG[riskFilter]?.bg, color: RISK_CONFIG[riskFilter]?.color,
+                    border: `1px solid ${RISK_CONFIG[riskFilter]?.color}35`,
+                  }}>
+                    {RISK_CONFIG[riskFilter]?.label} risk
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Risk legend */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 16 }}>
               <span style={{ fontSize: 11, color: css.mutedFg }}>Risk:</span>
               {Object.entries(RISK_CONFIG).map(([key, cfg]) => (
@@ -571,7 +1252,7 @@ export function AgingReceivablePage() {
               data={filtered}
               columns={columns}
               searchable
-              exportable={false}   /* export handled by header button */
+              exportable={false}
               pageSize={20}
             />
           </div>
