@@ -16,6 +16,7 @@ import {
   ResponsiveContainer, Cell, Legend, PieChart, Pie,
 } from 'recharts';
 import { formatCurrency } from '../lib/utils';
+import { PricingMarginsReport } from './PricingMarginsReport';
 
 // ─────────────────────────────────────────────────────────────────
 // Design tokens
@@ -149,8 +150,7 @@ function KCard({label,value,sub,accent,Icon,target}:{label:string;value:string;s
 const REPORT_TYPES = [
   {id:'aging',        title:'Aging Receivables',  desc:'Receivables, top debtors, collection rate & customer balances — all branches', icon:'⏰',live:true },
   {id:'turnover',     title:'Inventory Turnover', desc:'Turnover rate and slow-moving items',                                          icon:'📊',live:false},
-  {id:'profitability',title:'Pricing & Margins',  desc:'Margins, pricing strategies, product profitability',                          icon:'💰',live:false},
-  {id:'risk',         title:'Risk Assessment',    desc:'Comprehensive credit risk analysis per customer',                             icon:'⚠️',live:false},
+  {id:'profitability', title:'Pricing & Margins',  desc:'Margins, pricing strategies, product profitability', icon:'💰', live:true},  {id:'risk',         title:'Risk Assessment',    desc:'Comprehensive credit risk analysis per customer',                             icon:'⚠️',live:false},
   {id:'supply',       title:'Stock Policy',       desc:'Reorder points, lead times, optimal stock levels',                           icon:'📦',live:false},
   {id:'distribution', title:'Sales Behavior',     desc:'Patterns by channel, region, and customer segment',                          icon:'🌍',live:false},
 ];
@@ -1378,6 +1378,7 @@ export function ReportsPage(){
         ))}
       </div>
       {activeReport==='aging'&&<AgingReport/>}
+      {activeReport==='profitability'&&<PricingMarginsReport/>}
       {!activeReport&&(
         <div style={{...card,background:`${css.muted}60`,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:12,padding:56,borderStyle:'dashed'}}>
           <BarChart3 size={44} style={{color:css.mutedFg,opacity:.3}}/>
