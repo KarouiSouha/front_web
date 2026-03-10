@@ -5,9 +5,18 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import {
-  RefreshCw, Loader2, AlertCircle, TrendingUp, AlertTriangle,
-  Clock, Target, BarChart3, Printer, FileText, Download,
-  ChevronDown, ChevronUp,
+  RefreshCw,
+  Loader2,
+  AlertCircle,
+  TrendingUp,
+  AlertTriangle,
+  Clock,
+  Target,
+  BarChart3,
+  Printer,
+  FileText,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import {
   BarChart, Bar, AreaChart, Area,
@@ -16,8 +25,10 @@ import {
   LabelList,
 } from 'recharts';
 import { formatCurrency } from '../lib/utils';
-import { PricingMarginsReport } from './PricingMarginsReport';
+import { GeneralReport } from './GeneralReport';
 import { SupplyPolicyPage } from './SupplyPolicyPage';
+import { PricingProfitabilityReport } from './PricingProfitabilityReport';
+import { InventoryTurnoverReport } from './InventoryTurnoverReport';
 // ─── Design tokens ────────────────────────────────────────────────
 const C = {
   indigo:'#6366f1', violet:'#8b5cf6', cyan:'#0ea5e9', teal:'#14b8a6',
@@ -384,10 +395,10 @@ function AgingDetailPrintTable({ branchBuckets, grandTotal }: { branchBuckets: a
 }
 
 const REPORT_TYPES = [
+  { id: 'general', title: 'General Report', desc: 'Overview of key metrics and performance indicators', icon: '🎯', live: true },
   { id: 'aging', title: 'Aging Receivables', desc: 'Receivables, top debtors, collection rate & customer balances — all branches', icon: '⏰', live: true },
-  { id: 'turnover', title: 'Inventory Turnover', desc: 'Turnover rate and slow-moving items', icon: '📊', live: false },
-  { id: 'profitability', title: 'Pricing & Margins', desc: 'Margins, pricing strategies, product profitability', icon: '💰', live: true },
-  { id: 'risk', title: 'Risk Assessment', desc: 'Comprehensive credit risk analysis per customer', icon: '⚠️', live: false },
+  { id: 'turnover', title: 'Inventory Turnover', desc: 'Stock quantity · total value · value by branch · value by index/category · index ratios · rotation & slow-moving', icon: '📊', live: true },
+  { id: 'profitability', title: 'Pricing & Profitability', desc: 'Sales quantity, revenue, profit & ratio by month/branch · product & customer profitability', icon: '💰', live: true },
   { id: 'supply', title: 'Stock Policy', desc: 'Reorder points, lead times, optimal stock levels', icon: '📦', live: true  },
   { id: 'distribution', title: 'Sales Behavior', desc: 'Patterns by channel, region, and customer segment', icon: '🌍', live: false },
 ];
@@ -1320,19 +1331,20 @@ export function ReportsPage() {
                 style={{ flex: 1, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 9, border: 'none', cursor: r.live ? 'pointer' : 'not-allowed', fontSize: 13, fontWeight: 600, background: r.live ? (activeReport === r.id ? C.indigo : `${C.indigo}15`) : css.muted, color: r.live ? (activeReport === r.id ? '#fff' : C.indigo) : css.mutedFg, opacity: r.live ? 1 : 0.6 }}>
                 <FileText size={13} />{r.live ? (activeReport === r.id ? 'Close' : 'Generate') : 'Coming soon'}
               </button>
-              {r.live && <button style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 9, border: `1px solid ${css.border}`, background: css.card, cursor: 'pointer', color: css.mutedFg }}><Download size={14} /></button>}
             </div>
           </div>
         ))}
       </div>
       {activeReport === 'aging' && <AgingReport />}
-      {activeReport === 'profitability' && <PricingMarginsReport />}
+      {activeReport === 'general' && <GeneralReport />}
       {activeReport === 'supply' && <SupplyPolicyPage />}
+      {activeReport === 'profitability' && <PricingProfitabilityReport />}
+      {activeReport === 'turnover' && <InventoryTurnoverReport />}
       {!activeReport && (
         <div style={{ ...card, background: `${css.muted}60`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, padding: 56, borderStyle: 'dashed' }}>
           <BarChart3 size={44} style={{ color: css.mutedFg, opacity: .3 }} />
           <p style={{ fontSize: 14, color: css.mutedFg, margin: 0 }}>Select a report above and click <strong>Generate</strong></p>
-          <p style={{ fontSize: 12, color: css.mutedFg, margin: 0, opacity: .7 }}>Aging Receivables available · more reports coming soon</p>
+          <p style={{ fontSize: 12, color: css.mutedFg, margin: 0, opacity: .7 }}>General Report, Aging Receivables, Pricing & Profitability available · more reports coming soon</p>
         </div>
       )}
     </div>

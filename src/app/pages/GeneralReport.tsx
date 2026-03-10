@@ -1,6 +1,6 @@
 // src/app/pages/PricingMarginsReport.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// PRICING & MARGINS REPORT
+// General Report
 // Sections: Sales · Profit · Pricing/Profitability · Purchases · Top Products
 //           Customers · Supplier/Purchase Analysis
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -10,7 +10,7 @@ import { createPortal } from 'react-dom';
 import axios from 'axios';
 import {
   TrendingUp, ShoppingCart, DollarSign, Package,
-  Users, BarChart3, ArrowUpRight, ArrowDownRight,
+  Users, BarChart3,
   RefreshCw, Loader2, AlertCircle, Printer,
   ChevronDown, Star, AlertTriangle, Target,
 } from 'lucide-react';
@@ -18,7 +18,7 @@ import {
   BarChart, Bar, AreaChart, Area, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
   ResponsiveContainer, Cell, Legend, PieChart, Pie,
-  ComposedChart, Scatter,
+  ComposedChart,
 } from 'recharts';
 import { salesKpiApi, stockKpiApi, MOVEMENT_TYPES } from '../lib/dataApi';
 import { formatCurrency, formatNumber } from '../lib/utils';
@@ -217,7 +217,7 @@ function MarginBadge({ pct: p }: { pct: number }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Main report component
 // ─────────────────────────────────────────────────────────────────────────────
-export function PricingMarginsReport() {
+export function GeneralReport() {
   const currentYear = new Date().getFullYear();
   const yearOptions = [currentYear, currentYear - 1, currentYear - 2].map(y => ({ key: String(y), label: String(y) }));
 
@@ -284,7 +284,6 @@ export function PricingMarginsReport() {
   const filterBranch = <T extends { branch: string }>(arr: T[]) =>
     selectedBranch === 'all' ? arr : arr.filter(b => b.branch === selectedBranch);
 
-  const filteredSaleBranches    = filterBranch(saleBranches);
   const filteredPurchBranches   = filterBranch(purchaseBranches);
 
   const visibleSalesBranchNames = selectedBranch === 'all'
@@ -516,7 +515,7 @@ ${clone.outerHTML}
               <DollarSign size={24} style={{ color: C.emerald }} />
             </div>
             <div>
-              <h1 style={{ fontSize: 22, fontWeight: 900, color: css.fg, margin: 0, letterSpacing: '-0.03em' }}>Pricing & Margins Report</h1>
+              <h1 style={{ fontSize: 22, fontWeight: 900, color: css.fg, margin: 0, letterSpacing: '-0.03em' }}>General Report</h1>
               <p style={{ fontSize: 12, color: css.mutedFg, margin: '3px 0 0' }}>
                 Year: <strong>{selectedYear}</strong> &nbsp;·&nbsp; {selectedBranch !== 'all' ? selectedBranch : `${availableBranches.length} branches`} &nbsp;·&nbsp; {topProducts.length} products
               </p>
@@ -608,7 +607,7 @@ ${clone.outerHTML}
                     <YAxis tick={ax} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
                     <RTooltip content={<Tip />} />
                     <Legend wrapperStyle={legendStyle} iconType="circle" iconSize={8} />
-                    {visibleSalesBranchNames.map((b, i) => (
+                    {visibleSalesBranchNames.map((b) => (
                       <Line key={b} type="monotone" dataKey={b} stroke={BRANCH_PAL[salesBranchNames.indexOf(b) % BRANCH_PAL.length]} strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} name={b} />
                     ))}
                   </LineChart>
@@ -797,7 +796,7 @@ ${clone.outerHTML}
                     <YAxis tick={ax} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
                     <RTooltip content={<Tip />} />
                     <Legend wrapperStyle={legendStyle} iconType="circle" iconSize={8} />
-                    {visiblePurchBranchNames.map((b, i) => (
+                    {visiblePurchBranchNames.map((b) => (
                       <Line key={b} type="monotone" dataKey={b} stroke={BRANCH_PAL[purchBranchNames.indexOf(b) % BRANCH_PAL.length]} strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} name={b} />
                     ))}
                   </LineChart>
@@ -839,7 +838,7 @@ ${clone.outerHTML}
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Top {Math.min(topProducts.length, 12)} products by total revenue</p>
               {topProducts.length === 0 ? <Empty /> : (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {topProducts.slice(0, 10).map((p, i) => (
+                  {topProducts.slice(0, 10).map((p: any, i: number) => (
                     <RankBar key={i} rank={i + 1} label={p.name} sub={`${formatNumber(p.qty)} units · ${p.share.toFixed(1)}% of revenue`} value={p.revenue} max={maxProductRevenue} accent={p.color} />
                   ))}
                 </div>
@@ -859,7 +858,7 @@ ${clone.outerHTML}
                       <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
                       <RTooltip content={<Tip />} />
                       <Bar dataKey="revenue" name="Revenue" radius={[0, 6, 6, 0]}>
-                        {topProducts.slice(0, 8).map((p, i) => <Cell key={i} fill={p.color} fillOpacity={0.85} />)}
+                        {topProducts.slice(0, 8).map((p: any, i: number) => <Cell key={i} fill={p.color} fillOpacity={0.85} />)}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -871,7 +870,7 @@ ${clone.outerHTML}
                 <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 10 }}>Low rotation rate — stock at risk</p>
                 {lowRotation.length === 0 ? <Empty h={120} text="No slow-moving products detected" /> : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {lowRotation.slice(0, 5).map((p, i) => (
+                    {lowRotation.slice(0, 5).map((p: any, i: number) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 9, background: css.bg, border: `1px solid ${css.border}` }}>
                         <div style={{ minWidth: 0 }}>
                           <p style={{ fontSize: 12, fontWeight: 600, color: css.cardFg, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</p>
