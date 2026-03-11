@@ -3,27 +3,18 @@ import { createPortal } from 'react-dom';
 import { Package, AlertTriangle, TrendingUp, RefreshCw, Loader2, ChevronDown, ArrowUpRight } from 'lucide-react';
 import { DataTable } from '../components/DataTable';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  ResponsiveContainer, PieChart, Pie, Cell, Tooltip,
+    BarChart, Bar, XAxis, YAxis, CartesianGrid,
+    ResponsiveContainer, PieChart, Pie, Cell, Tooltip,
 } from 'recharts';
 import {
-  useInventory,
-  useInventoryDates,
-  useBranchSummary,
-  useCategoryBreakdown,
-  type InventoryItem,
+    useInventorySnapshots,
+    useInventoryLines,
+    useBranchSummary,
+    useCategoryBreakdown,
+    type InventorySnapshotLine,
 } from '../lib/dataHooks';
 import { formatCurrency, formatNumber, toNum } from '../lib/utils';
 
-// ── Branch columns ────────────────────────────────────────────────────────────
-const BRANCH_KEYS: { key: keyof InventoryItem; label: string }[] = [
-  { key: 'qty_alkarimia', label: 'Al-Karimia' },
-  { key: 'qty_benghazi',  label: 'Benghazi'   },
-  { key: 'qty_mazraa',    label: 'Mazraa'     },
-  { key: 'qty_dahmani',   label: 'Dahmani'    },
-  { key: 'qty_janzour',   label: 'Janzour'    },
-  { key: 'qty_misrata',   label: 'Misrata'    },
-];
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const C = {
@@ -272,33 +263,38 @@ function Panel({ title, sub, children }: { title: string; sub?: string; children
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export function InventoryPage() {
-  const [selectedDate,     setSelectedDate]     = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [openDropdown,     setOpenDropdown]     = useState<'date' | 'category' | null>(null);
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState<string>('');
+  const [selectedBranch,     setSelectedBranch]     = useState<string>('all');
+  const [openDropdown,       setOpenDropdown]       = useState<'snapshot' | 'branch' | null>(null);
 
-  const { data: datesData }    = useInventoryDates();
-  const dates                  = datesData?.dates ?? [];
-  const latestDate             = selectedDate || dates[0] || undefined;
+  // ── Snapshots list ───────────────────────────────────────────────────────
+  const { data: snapshotsData, loading: snapsLoading } = useInventorySnapshots({ page_size: 50 });
+  const snapshots     = snapshotsData?.items ?? [];
+  const currentSnapId = selectedSnapshotId || snapshots[0]?.id || '';
+  const currentSnap   = snapshots.find(s => s.id === currentSnapId) ?? null;
 
-  const { data: inventoryData, loading: invLoading, error: invError, refetch } = useInventory({
-    snapshot_date: latestDate,
-    category:      selectedCategory !== 'all' ? selectedCategory : undefined,
-    page_size:     200,
-  });
+  // ── Lines for selected snapshot ──────────────────────────────────────────
+  const { data: linesData, loading: linesLoading, error: linesError, refetch } =
+    useInventoryLines(currentSnapId || null, { page_size: 500 });
 
-  const { data: branchData,   loading: branchLoading } = useBranchSummary({ snapshot_date: latestDate });
-  const { data: categoryData }                          = useCategoryBreakdown({ snapshot_date: latestDate });
+  // ── Aggregations scoped to selected snapshot ─────────────────────────────
+  const { data: branchData,   loading: branchLoading } = useBranchSummary({ snapshot_id: currentSnapId });
+  const { data: categoryData }                          = useCategoryBreakdown({ snapshot_id: currentSnapId });
 
-  const items      = inventoryData?.items ?? [];
-  const totals     = inventoryData?.totals;
+  const allLines   = linesData?.lines ?? [];
   const branches   = branchData?.branches ?? [];
   const categories = categoryData?.categories ?? [];
 
-  const totalQty   = toNum(totals?.grand_total_qty);
-  const totalValue = toNum(totals?.grand_total_value);
+  // Client-side branch filter on the table
+  const lines = selectedBranch === 'all'
+    ? allLines
+    : allLines.filter(l => l.branch_name === selectedBranch);
 
-  const lowStockItems   = items.filter(item => toNum(item.total_qty) < 5 && toNum(item.total_qty) > 0);
-  const outOfStockItems = items.filter(item => toNum(item.total_qty) === 0);
+  const totalQty   = toNum(linesData?.totals?.grand_total_qty);
+  const totalValue = toNum(linesData?.totals?.grand_total_value);
+
+  const lowStockLines   = lines.filter(l => toNum(l.quantity) < 5 && toNum(l.quantity) > 0);
+  const outOfStockLines = lines.filter(l => toNum(l.quantity) === 0);
 
   const categoryPieData = categories.slice(0, 8).map((c, i) => ({
     name:  c.category || 'Uncategorized',
@@ -314,11 +310,14 @@ export function InventoryPage() {
     fill:  BRANCH_COLORS[i % BRANCH_COLORS.length],
   }));
 
-  // Dropdown options
-  const dateOptions = dates.map(d => ({ key: d, label: d }));
-  const categoryOptions = [
-    { key: 'all', label: 'All Categories' },
-    ...categories.map(c => ({ key: c.category, label: c.category })),
+  // ── Dropdown options ──────────────────────────────────────────────────────
+  const snapshotOptions = snapshots.map(s => ({
+    key:   s.id,
+    label: `${s.source_file || s.label || 'Inventory'} — ${s.uploaded_at.split('T')[0]}`,
+  }));
+  const branchOptions = [
+    { key: 'all', label: 'All Branches' },
+    ...branches.map(b => ({ key: b.branch, label: b.branch })),
   ];
 
   // ── Table columns ──────────────────────────────────────────────────────────
@@ -326,59 +325,66 @@ export function InventoryPage() {
     {
       key: 'product_code',
       label: 'Code',
-      render: (row: InventoryItem) => (
+      render: (row: InventorySnapshotLine) => (
         <span style={{ fontFamily: 'monospace', fontSize: 11, color: css.mutedFg }}>{row.product_code}</span>
       ),
     },
     {
       key: 'product_name',
       label: 'Product',
-      render: (row: InventoryItem) => (
+      render: (row: InventorySnapshotLine) => (
         <div>
           <p style={{ fontWeight: 600, fontSize: 13, margin: 0, color: css.cardFg }}>{row.product_name}</p>
-          {row.category && <p style={{ fontSize: 11, color: css.mutedFg, margin: 0 }}>{row.category}</p>}
+          {row.product_category && (
+            <p style={{ fontSize: 11, color: css.mutedFg, margin: 0 }}>{row.product_category}</p>
+          )}
         </div>
       ),
     },
     {
-      key: 'total_qty',
-      label: 'Total Qty',
-      render: (row: InventoryItem) => (
-        <span style={{ fontWeight: 700, fontSize: 13, color: css.cardFg }}>{formatNumber(toNum(row.total_qty))}</span>
+      key: 'branch_name',
+      label: 'Branch',
+      render: (row: InventorySnapshotLine) => (
+        <span style={{
+          fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+          background: `${C.indigo}15`, color: C.indigo, border: `1px solid ${C.indigo}30`,
+          whiteSpace: 'nowrap',
+        }}>
+          {row.branch_name}
+        </span>
       ),
     },
     {
-      key: 'total_value',
-      label: 'Total Value',
-      render: (row: InventoryItem) => (
-        <span style={{ fontWeight: 700, fontSize: 13, color: C.indigo }}>{formatCurrency(toNum(row.total_value))}</span>
+      key: 'quantity',
+      label: 'Quantity',
+      render: (row: InventorySnapshotLine) => (
+        <span style={{ fontWeight: 700, fontSize: 13, color: css.cardFg }}>
+          {formatNumber(toNum(row.quantity))}
+        </span>
       ),
     },
     {
-      key: 'cost_price',
-      label: 'Cost Price',
-      render: (row: InventoryItem) => (
-        <span style={{ fontSize: 13, color: css.cardFg }}>{formatCurrency(toNum(row.cost_price))}</span>
+      key: 'unit_cost',
+      label: 'Unit Cost',
+      render: (row: InventorySnapshotLine) => (
+        <span style={{ fontSize: 13, color: css.cardFg }}>{formatCurrency(toNum(row.unit_cost))}</span>
+      ),
+    },
+    {
+      key: 'line_value',
+      label: 'Line Value',
+      render: (row: InventorySnapshotLine) => (
+        <span style={{ fontWeight: 700, fontSize: 13, color: C.indigo }}>{formatCurrency(toNum(row.line_value))}</span>
       ),
     },
     {
       key: 'status',
       label: 'Status',
-      render: (row: InventoryItem) => <StockStatusBadge qty={toNum(row.total_qty)} />,
+      render: (row: InventorySnapshotLine) => <StockStatusBadge qty={toNum(row.quantity)} />,
     },
-    ...BRANCH_KEYS.map(b => ({
-      key: b.key as string,
-      label: b.label,
-      render: (row: InventoryItem) => {
-        const val = toNum(row[b.key]);
-        return (
-          <span style={{ fontSize: 13, fontWeight: val === 0 ? 400 : 600, color: val === 0 ? css.mutedFg : css.cardFg }}>
-            {val === 0 ? '—' : formatNumber(val)}
-          </span>
-        );
-      },
-    })),
   ];
+
+  const isLoading = snapsLoading || linesLoading;
 
   return (
     <div style={{ background: css.bg, minHeight: '100vh', padding: '32px 28px' }}>
@@ -394,24 +400,24 @@ export function InventoryPage() {
           </h1>
           <p style={{ fontSize: 13, color: css.mutedFg, marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
             Monitor and manage inventory across all branches
-            {latestDate && (
+            {snapshots.length > 0 && (
               <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: `${C.indigo}18`, color: C.indigo, border: `1px solid ${C.indigo}35` }}>
-                Snapshot: {latestDate}
+                {snapshots.length} snapshot{snapshots.length !== 1 ? 's' : ''} available
               </span>
             )}
           </p>
         </div>
         <button
           onClick={refetch}
-          disabled={invLoading}
+          disabled={isLoading}
           style={{
             display: 'flex', alignItems: 'center', gap: 6,
             padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
             background: 'transparent', border: `1px solid ${css.border}`,
-            color: css.mutedFg, cursor: invLoading ? 'not-allowed' : 'pointer',
+            color: css.mutedFg, cursor: isLoading ? 'not-allowed' : 'pointer',
           }}
         >
-          {invLoading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+          {isLoading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
           Refresh
         </button>
       </div>
@@ -420,25 +426,25 @@ export function InventoryPage() {
       <div style={{ ...cardStyle, marginBottom: 16 }}>
         <div style={{ marginBottom: 18 }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>Filters</h3>
-          <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>Filter inventory data by date snapshot and category</p>
+          <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>Select a snapshot and optionally filter by branch</p>
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <StyledDropdown
-            label="Snapshot Date"
-            options={dateOptions}
-            value={selectedDate || (dates[0] ?? '')}
-            onChange={setSelectedDate}
-            isOpen={openDropdown === 'date'}
-            onToggle={() => setOpenDropdown(o => o === 'date' ? null : 'date')}
+            label="Snapshot"
+            options={snapshotOptions}
+            value={currentSnapId}
+            onChange={v => { setSelectedSnapshotId(v); setSelectedBranch('all'); }}
+            isOpen={openDropdown === 'snapshot'}
+            onToggle={() => setOpenDropdown(o => o === 'snapshot' ? null : 'snapshot')}
             onClose={() => setOpenDropdown(null)}
           />
           <StyledDropdown
-            label="Category"
-            options={categoryOptions}
-            value={selectedCategory}
-            onChange={setSelectedCategory}
-            isOpen={openDropdown === 'category'}
-            onToggle={() => setOpenDropdown(o => o === 'category' ? null : 'category')}
+            label="Branch"
+            options={branchOptions}
+            value={selectedBranch}
+            onChange={setSelectedBranch}
+            isOpen={openDropdown === 'branch'}
+            onToggle={() => setOpenDropdown(o => o === 'branch' ? null : 'branch')}
             onClose={() => setOpenDropdown(null)}
           />
         </div>
@@ -447,10 +453,10 @@ export function InventoryPage() {
       {/* ── KPI Cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 16 }}>
         {[
-          { label: 'Total Stock Value', value: invLoading ? '…' : formatCurrency(totalValue),                      sub: `Across ${branches.length} branches`,               accent: C.indigo,  icon: Package       },
-          { label: 'Total SKUs',        value: invLoading ? '…' : formatNumber(inventoryData?.count ?? 0),          sub: 'Active product lines',                             accent: C.cyan,    icon: TrendingUp    },
-          { label: 'Total Units',       value: invLoading ? '…' : formatNumber(totalQty),                          sub: 'Total quantity in stock',                          accent: C.emerald, icon: Package       },
-          { label: 'Stock Alerts',      value: invLoading ? '…' : String(lowStockItems.length + outOfStockItems.length), sub: `${outOfStockItems.length} out of stock · ${lowStockItems.length} low`, accent: C.rose, icon: AlertTriangle },
+          { label: 'Total Stock Value', value: isLoading ? '…' : formatCurrency(totalValue),                                    sub: `Across ${branches.length} branch${branches.length !== 1 ? 'es' : ''}`, accent: C.indigo,  icon: Package       },
+          { label: 'Total Lines',       value: isLoading ? '…' : formatNumber(linesData?.count ?? 0),                           sub: 'Product × branch combinations',                                        accent: C.cyan,    icon: TrendingUp    },
+          { label: 'Total Units',       value: isLoading ? '…' : formatNumber(totalQty),                                        sub: 'Total quantity in stock',                                              accent: C.emerald, icon: Package       },
+          { label: 'Stock Alerts',      value: isLoading ? '…' : String(lowStockLines.length + outOfStockLines.length),         sub: `${outOfStockLines.length} out of stock · ${lowStockLines.length} low`,  accent: C.rose,    icon: AlertTriangle },
         ].map((kpi, i) => (
           <div key={i} style={{ ...cardStyle, position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', top: -24, right: -24, width: 80, height: 80, borderRadius: '50%', background: kpi.accent, opacity: 0.08, filter: 'blur(20px)', pointerEvents: 'none' }} />
@@ -584,35 +590,38 @@ export function InventoryPage() {
         </Panel>
       </div>
 
-      {/* ── Inventory Table ── */}
+      {/* ── Inventory Lines Table ── */}
       <div style={cardStyle}>
         <div style={{ marginBottom: 20 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>Inventory Details</h3>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>Inventory Lines</h3>
           <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>
-            Complete inventory across all branches{latestDate ? ` — Snapshot: ${latestDate}` : ''}
+            {currentSnap
+              ? `${currentSnap.source_file || currentSnap.label || 'Import'} — uploaded ${currentSnap.uploaded_at.split('T')[0]}`
+              : 'Select a snapshot above'}
+            {selectedBranch !== 'all' && ` · Branch: ${selectedBranch}`}
           </p>
         </div>
 
-        {invError ? (
+        {linesError ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 48, gap: 12 }}>
             <AlertTriangle size={32} style={{ color: C.rose }} />
-            <p style={{ color: C.rose, fontSize: 14, margin: 0 }}>{invError}</p>
+            <p style={{ color: C.rose, fontSize: 14, margin: 0 }}>{linesError}</p>
             <button onClick={refetch} style={{ padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: 'transparent', border: `1px solid ${css.border}`, color: css.mutedFg, cursor: 'pointer' }}>
               Retry
             </button>
           </div>
-        ) : invLoading ? (
+        ) : linesLoading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120, gap: 10, color: css.mutedFg }}>
             <Loader2 size={22} className="animate-spin" />
-            <span style={{ fontSize: 14 }}>Loading inventory...</span>
+            <span style={{ fontSize: 14 }}>Loading inventory lines…</span>
           </div>
-        ) : items.length === 0 ? (
+        ) : lines.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 48, gap: 10, color: css.mutedFg }}>
             <Package size={40} style={{ opacity: 0.25 }} />
-            <p style={{ fontSize: 13, margin: 0 }}>No inventory data found for the selected filters.</p>
+            <p style={{ fontSize: 13, margin: 0 }}>No lines found for the selected filters.</p>
           </div>
         ) : (
-          <DataTable data={items} columns={columns} searchable exportable pageSize={15} />
+          <DataTable data={lines} columns={columns} searchable exportable pageSize={15} />
         )}
       </div>
     </div>

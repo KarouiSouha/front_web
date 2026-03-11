@@ -181,7 +181,7 @@ export const dataImportApi = {
   },
 };
 
-export interface PaginatedResponse<T> {
+export interface PaginatedResponse {
   count: number;
   page: number;
   page_size: number;
@@ -286,41 +286,58 @@ export const customersApi = {
 };
 
 // ─────────────────────────────────────────────
-// Inventory
+// Inventory (two-table architecture: Snapshot + Lines)
 // ─────────────────────────────────────────────
 
-export interface InventoryItem {
+/** One import-session record per uploaded Excel file. */
+export interface InventorySnapshot {
   id: string;
-  snapshot_date: string;
-  product: string;
-  product_code: string;
-  product_name: string;
-  category: string | null;
-  // Django DecimalField → serialized as strings ("5.0000") or null. Use toNum() before display.
-  qty_alkarimia: number | string | null;
-  qty_benghazi: number | string | null;
-  qty_mazraa: number | string | null;
-  qty_dahmani: number | string | null;
-  qty_janzour: number | string | null;
-  qty_misrata: number | string | null;
-  value_alkarimia: number | string | null;
-  value_mazraa: number | string | null;
-  value_dahmani: number | string | null;
-  value_janzour: number | string | null;
-  value_misrata: number | string | null;
-  total_qty: number | string | null;
-  cost_price: number | string | null;
-  total_value: number | string | null;
+  company_name: string;
+  label: string;
+  snapshot_date: string | null;
+  fiscal_year: string;
+  source_file: string;
+  notes: string;
+  uploaded_at: string;
+  uploaded_by: string | null;
+  uploaded_by_name: string | null;
+  /** Annotated by list/detail endpoint. */
+  line_count: number;
+  /** DecimalField → may be a string. Use toNum() before display. */
+  total_lines_value: number | string | null;
+  /** Distinct branch names — present on the detail endpoint only. */
+  branches?: string[];
 }
 
-export interface InventoryListResponse {
-  snapshot_date: string | null;
+export interface InventorySnapshotListResponse {
+  count: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  items: InventorySnapshot[];
+}
+
+/** One product × branch row produced by the horizontal-melt import. */
+export interface InventorySnapshotLine {
+  id: string;
+  product_category: string;
+  product_code: string;
+  product_name: string;
+  branch_name: string;
+  /** DecimalField → may be a string. Use toNum() before display. */
+  quantity: number | string;
+  unit_cost: number | string;
+  line_value: number | string;
+}
+
+export interface InventoryLinesResponse {
+  snapshot_id: string;
   count: number;
   page: number;
   page_size: number;
   total_pages: number;
   totals: { grand_total_qty: number; grand_total_value: number };
-  items: InventoryItem[];
+  lines: InventorySnapshotLine[];
 }
 
 export interface BranchSummary {
@@ -336,21 +353,40 @@ export interface CategoryBreakdown {
 }
 
 export const inventoryApi = {
-  list: (
-    params?: QueryParams & { snapshot_date?: string; category?: string },
-  ) => api.get<InventoryListResponse>(`/inventory/${qs(params)}`),
+  /** List snapshot sessions for the current company, newest first. */
+  listSnapshots: (params?: QueryParams & { search?: string }) =>
+    api.get<InventorySnapshotListResponse>(`/inventory/${qs(params)}`),
 
-  get: (id: string) => api.get<InventoryItem>(`/inventory/${id}/`),
+  /** Full snapshot detail including branches[] list. */
+  getSnapshot: (id: string) => api.get<InventorySnapshot>(`/inventory/${id}/`),
 
+  /** Delete a snapshot and all its lines. */
+  deleteSnapshot: (id: string) => api.delete<null>(`/inventory/${id}/`),
+
+  /**
+   * Paginated product × branch lines for one snapshot.
+   * Supports ?branch= and ?search= filters.
+   */
+  getLines: (
+    snapshotId: string,
+    params?: QueryParams & { branch?: string; search?: string },
+  ) =>
+    api.get<InventoryLinesResponse>(
+      `/inventory/${snapshotId}/lines/${qs(params)}`,
+    ),
+
+  /** Distinct upload dates (from uploaded_at). */
   dates: () => api.get<{ dates: string[] }>("/inventory/dates/"),
 
-  branchSummary: (params?: { snapshot_date?: string; category?: string }) =>
-    api.get<{ snapshot_date: string | null; branches: BranchSummary[] }>(
+  /** Stock value + qty totals per branch. Optional ?snapshot_id= filter. */
+  branchSummary: (params?: { snapshot_id?: string }) =>
+    api.get<{ branches: BranchSummary[] }>(
       `/inventory/branch-summary/${qs(params)}`,
     ),
 
-  categoryBreakdown: (params?: { snapshot_date?: string }) =>
-    api.get<{ snapshot_date: string | null; categories: CategoryBreakdown[] }>(
+  /** Stock value + qty totals per product category. Optional ?snapshot_id= filter. */
+  categoryBreakdown: (params?: { snapshot_id?: string }) =>
+    api.get<{ categories: CategoryBreakdown[] }>(
       `/inventory/category-breakdown/${qs(params)}`,
     ),
 };
@@ -465,25 +501,25 @@ export const transactionsApi = {
    * Use this to dynamically populate filter dropdowns.
    * GET /api/transactions/movement-types/
    */
-branchMonthly: (params?: {
-  movement_type?: string;
-  year?: number;
-  date_from?: string;
-  date_to?: string;
-}) => {
-  const query = new URLSearchParams();
-  if (params?.movement_type) query.set('movement_type', params.movement_type);
-  if (params?.year)          query.set('year', String(params.year));
-  if (params?.date_from)     query.set('date_from', params.date_from);
-  if (params?.date_to)       query.set('date_to', params.date_to);
-  const qs = query.toString();
-  // ✅ Pas de slash final avant le ?
-  return api.get<BranchMonthlyResponse>(
-    `/transactions/branch-monthly${qs ? `/?${qs}` : '/'}`
-  );
-},
+  branchMonthly: (params?: {
+    movement_type?: string;
+    year?: number;
+    date_from?: string;
+    date_to?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.movement_type) query.set("movement_type", params.movement_type);
+    if (params?.year) query.set("year", String(params.year));
+    if (params?.date_from) query.set("date_from", params.date_from);
+    if (params?.date_to) query.set("date_to", params.date_to);
+    const qs = query.toString();
+    // ✅ Pas de slash final avant le ?
+    return api.get<BranchMonthlyResponse>(
+      `/transactions/branch-monthly${qs ? `/?${qs}` : "/"}`,
+    );
+  },
   movementTypes: () =>
-    api.get<{ types: string[] }>('/transactions/movement-types/'),
+    api.get<{ types: string[] }>("/transactions/movement-types/"),
 };
 // ─────────────────────────────────────────────
 // Aging
@@ -581,7 +617,7 @@ export const kpiApi = {
   async getAll(): Promise<KPIData> {
     const [summaryRes, inventoryRes, agingRes] = await Promise.allSettled([
       transactionsApi.summary(),
-      inventoryApi.list({ page_size: 1 }),
+      inventoryApi.listSnapshots({ page_size: 1 }),
       agingApi.list({ page_size: 1 }),
     ]);
 
@@ -590,7 +626,7 @@ export const kpiApi = {
 
     const stockValue =
       inventoryRes.status === "fulfilled"
-        ? (inventoryRes.value.totals?.grand_total_value ?? 0)
+        ? toFiniteNumber(inventoryRes.value.items?.[0]?.total_lines_value, 0)
         : 0;
 
     const totalReceivables =

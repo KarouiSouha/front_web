@@ -16,7 +16,9 @@ import {
   MOVEMENT_TYPES,
   type Product,
   type Customer,
-  type InventoryItem,
+  type InventorySnapshot,
+  type InventorySnapshotLine,
+  type InventoryLinesResponse,
   type Movement,
   type AgingRecord,
   type AgingRiskItem,
@@ -26,8 +28,6 @@ import {
   type CategoryBreakdown,
   type KPIData,
   type QueryParams,
-  type BranchMonthlyResponse,
-
 } from "./dataApi";
 
 // ─────────────────────────────────────────────
@@ -112,27 +112,40 @@ export function useCustomers(params?: QueryParams & { area_code?: string }) {
 // Inventory
 // ─────────────────────────────────────────────
 
-export function useInventory(
-  params?: QueryParams & { snapshot_date?: string; category?: string },
+export function useInventorySnapshots(
+  params?: QueryParams & { search?: string },
 ) {
-  return useAsync(() => inventoryApi.list(params), [JSON.stringify(params)]);
+  return useAsync(
+    () => inventoryApi.listSnapshots(params),
+    [JSON.stringify(params)],
+  );
+}
+
+export function useInventoryLines(
+  snapshotId: string | null,
+  params?: QueryParams & { branch?: string; search?: string },
+) {
+  return useAsync(
+    () =>
+      snapshotId
+        ? inventoryApi.getLines(snapshotId, params)
+        : Promise.resolve(null as any),
+    [snapshotId, JSON.stringify(params)],
+  );
 }
 
 export function useInventoryDates() {
   return useAsync(() => inventoryApi.dates(), []);
 }
 
-export function useBranchSummary(params?: {
-  snapshot_date?: string;
-  category?: string;
-}) {
+export function useBranchSummary(params?: { snapshot_id?: string }) {
   return useAsync(
     () => inventoryApi.branchSummary(params),
     [JSON.stringify(params)],
   );
 }
 
-export function useCategoryBreakdown(params?: { snapshot_date?: string }) {
+export function useCategoryBreakdown(params?: { snapshot_id?: string }) {
   return useAsync(
     () => inventoryApi.categoryBreakdown(params),
     [JSON.stringify(params)],
@@ -188,8 +201,8 @@ export function useBranchBreakdown(params?: {
 export function useBranchMonthly(params?: {
   movement_type?: string;
   year?: number;
-  date_from?: string;   // ← ADD
-  date_to?: string;     // ← ADD
+  date_from?: string; // ← ADD
+  date_to?: string; // ← ADD
 }) {
   return useAsync(
     () => transactionsApi.branchMonthly(params),
@@ -258,7 +271,9 @@ export function useKPIs() {
 export type {
   Product,
   Customer,
-  InventoryItem,
+  InventorySnapshot,
+  InventorySnapshotLine,
+  InventoryLinesResponse,
   Movement,
   AgingRecord,
   AgingRiskItem,

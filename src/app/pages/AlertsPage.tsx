@@ -1,24 +1,25 @@
 import { useMemo, useState } from 'react';
-import { Sparkles, CheckCircle2, AlertTriangle, Package, DollarSign, TrendingDown, RefreshCw, Loader2 } from 'lucide-react';
+import { Sparkles, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { DataTable } from '../components/DataTable';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
 } from '../components/ui/dialog';
 import {
-  useAgingRisk,
-  useInventory,
-  useTransactionSummary,
-  useAgingList,
+    useAgingRisk,
+    useInventorySnapshots,
+    useInventoryLines,
+    useTransactionSummary,
+    useAgingList,
 } from '../lib/dataHooks';
-import { formatCurrency, formatDate } from '../lib/utils';
+import { formatCurrency, formatDate, toNum } from '../lib/utils';
 
 // ─────────────────────────────────────────────
 // Smart alert generation from real data
@@ -65,7 +66,10 @@ export function AlertsPage() {
   // ── Real data ────────────────────────────────────────────────────────
   const { data: agingRiskRes, loading: riskLoading, refetch: refetchRisk } = useAgingRisk({ limit: 10 });
   const { data: agingListRes, loading: agingLoading } = useAgingList({ page_size: 100 });
-  const { data: inventoryRes, loading: invLoading } = useInventory({ page_size: 200 });
+  const { data: snapshotsRes }                             = useInventorySnapshots({ page_size: 1 });
+  const latestSnapId                                         = snapshotsRes?.items?.[0]?.id ?? null;
+  const latestSnapDate                                       = snapshotsRes?.items?.[0]?.uploaded_at?.split('T')[0] ?? today;
+  const { data: inventoryRes, loading: invLoading }         = useInventoryLines(latestSnapId, { page_size: 500 });
   const { data: summaryRes, loading: summaryLoading } = useTransactionSummary();
 
   const isLoading = riskLoading || agingLoading || invLoading || summaryLoading;
@@ -128,33 +132,52 @@ export function AlertsPage() {
       });
     });
 
-    // 3. Inventory alerts: zero stock or very low
-    const invItems = inventoryRes?.items ?? [];
+    // 3. Inventory alerts: group lines by product_code to get total qty per product
+    const rawLines = inventoryRes?.lines ?? [];
+    const productTotals = rawLines.reduce<Record<string, {
+      product_code: string; product_name: string; product_category: string;
+      total_qty: number; total_value: number;
+    }>>((acc, line) => {
+      const key = line.product_code;
+      if (!acc[key]) {
+        acc[key] = {
+          product_code:     line.product_code,
+          product_name:     line.product_name,
+          product_category: line.product_category,
+          total_qty:        0,
+          total_value:      0,
+        };
+      }
+      acc[key].total_qty   += toNum(line.quantity);
+      acc[key].total_value += toNum(line.line_value);
+      return acc;
+    }, {});
+    const invItems  = Object.values(productTotals);
     const zeroStock = invItems.filter(i => i.total_qty === 0);
-    const lowStock = invItems.filter(i => i.total_qty > 0 && i.total_qty < 5);
+    const lowStock  = invItems.filter(i => i.total_qty > 0 && i.total_qty < 5);
 
     zeroStock.slice(0, 5).forEach(item => {
       generated.push({
-        id: `zero-stock-${item.id}`,
+        id: `zero-stock-${item.product_code}`,
         type: 'low_stock',
         severity: 'critical',
         message: `${item.product_name} is completely out of stock across all branches`,
-        detail: `Product code: ${item.product_code}${item.category ? ` · Category: ${item.category}` : ''}`,
-        date: item.snapshot_date,
+        detail: `Product code: ${item.product_code}${item.product_category ? ` · Category: ${item.product_category}` : ''}`,
+        date: latestSnapDate,
         status: 'pending',
-        aiExplanation: `${item.product_name} (${item.product_code}) has zero units in inventory across all branches as of ${item.snapshot_date}. This may cause stockouts and lost sales. Immediate reorder is recommended. Review historical sales velocity to determine optimal reorder quantity.`,
+        aiExplanation: `${item.product_name} (${item.product_code}) has zero units in inventory across all branches as of ${latestSnapDate}. This may cause stockouts and lost sales. Immediate reorder is recommended. Review historical sales velocity to determine optimal reorder quantity.`,
         metadata: { ...item },
       });
     });
 
     lowStock.slice(0, 3).forEach(item => {
       generated.push({
-        id: `low-stock-${item.id}`,
+        id: `low-stock-${item.product_code}`,
         type: 'low_stock',
         severity: 'medium',
         message: `${item.product_name} has critically low stock (${item.total_qty} units)`,
         detail: `Product code: ${item.product_code} · Value: ${formatCurrency(item.total_value)}`,
-        date: item.snapshot_date,
+        date: latestSnapDate,
         status: 'pending',
         aiExplanation: `${item.product_name} currently has only ${item.total_qty} units in stock (total value: ${formatCurrency(item.total_value)}). At this level, a stockout is likely imminent. Based on the current inventory distribution, consider redistribution from higher-stocked branches and placing a reorder soon.`,
         metadata: { ...item },
@@ -186,7 +209,7 @@ export function AlertsPage() {
     }
 
     return generated;
-  }, [agingRiskRes, agingListRes, inventoryRes, summaryRes]);
+  }, [agingRiskRes, agingListRes, inventoryRes, summaryRes, snapshotsRes]);
 
   // Apply resolved state and filter
   const enrichedAlerts = alerts.map(a => ({
