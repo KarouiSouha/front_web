@@ -18,6 +18,16 @@ interface Column<T> {
   render?: (row: T) => React.ReactNode;
 }
 
+/** Pass this prop to delegate filtering and pagination to the server. */
+interface ServerPagination {
+  /** Total number of rows across all pages (from API `count`). */
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onSearch?: (query: string) => void;
+}
+
 interface DataTableProps<T> {
   data: T[];
   columns: Column<T>[];
@@ -25,6 +35,11 @@ interface DataTableProps<T> {
   exportable?: boolean;
   pageSize?: number;
   emptyMessage?: string;
+  /** Optional per-row background. Receives the row and its 0-based index in the
+   *  full filtered dataset (i.e. global position, not page-local). */
+  getRowStyle?: (row: T, globalIndex: number) => React.CSSProperties;
+  /** When provided, filtering and pagination are handled server-side. */
+  serverPagination?: ServerPagination;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -34,26 +49,44 @@ export function DataTable<T extends Record<string, any>>({
   exportable = true,
   pageSize = 10,
   emptyMessage = 'No data available',
+  getRowStyle,
+  serverPagination,
 }: DataTableProps<T>) {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Filter data based on search
-  const filteredData = searchQuery
-    ? data.filter((row) =>
+  const isServer = !!serverPagination;
+
+  // When server-paginated, data is already the current page; skip client filtering.
+  const filteredData = isServer || !searchQuery
+    ? data
+    : data.filter((row) =>
         Object.values(row).some((value) =>
           String(value).toLowerCase().includes(searchQuery.toLowerCase())
         )
-      )
-    : data;
+      );
 
-  // Pagination
-  const totalPages = Math.ceil(filteredData.length / pageSize);
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedData = filteredData.slice(startIndex, endIndex);
+  // Effective pagination values
+  const effectivePage     = isServer ? serverPagination!.page     : currentPage;
+  const effectivePageSize = isServer ? serverPagination!.pageSize : pageSize;
+  const totalItems        = isServer ? serverPagination!.totalCount : filteredData.length;
+  const totalPages        = Math.max(1, Math.ceil(totalItems / effectivePageSize));
+  const startIndex        = (effectivePage - 1) * effectivePageSize;
+  const endIndex          = startIndex + effectivePageSize;
+  const paginatedData     = isServer ? data : filteredData.slice(startIndex, endIndex);
 
-  const handleExport = (format: 'csv' | 'excel') => {
+  function changePage(newPage: number) {
+    if (isServer) serverPagination!.onPageChange(newPage);
+    else setCurrentPage(newPage);
+  }
+
+  function changeSearch(q: string) {
+    setSearchQuery(q);
+    if (isServer) serverPagination!.onSearch?.(q);
+    else setCurrentPage(1);
+  }
+
+  const handleExport = (_format: 'csv' | 'excel') => {
     const exportData = filteredData.map((row) => {
       const obj: Record<string, any> = {};
       columns.forEach((col) => {
@@ -76,10 +109,7 @@ export function DataTable<T extends Record<string, any>>({
               type="search"
               placeholder="Search..."
               value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
+              onChange={(e) => changeSearch(e.target.value)}
               className="pl-10"
             />
           </div>
@@ -139,15 +169,23 @@ export function DataTable<T extends Record<string, any>>({
                   </TableCell>
                 </TableRow>
               ) : (
-                paginatedData.map((row, rowIndex) => (
-                  <TableRow key={rowIndex} className="hover:bg-muted/50">
-                    {columns.map((column) => (
-                      <TableCell key={column.key}>
-                        {column.render ? column.render(row) : row[column.key]}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
+                paginatedData.map((row, rowIndex) => {
+                  const globalIndex = startIndex + rowIndex;
+                  const rowStyle = getRowStyle ? getRowStyle(row, globalIndex) : undefined;
+                  return (
+                    <TableRow
+                      key={rowIndex}
+                      className={getRowStyle ? 'transition-opacity hover:opacity-80' : 'hover:bg-muted/50'}
+                      style={rowStyle}
+                    >
+                      {columns.map((column) => (
+                        <TableCell key={column.key}>
+                          {column.render ? column.render(row) : row[column.key]}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -158,26 +196,26 @@ export function DataTable<T extends Record<string, any>>({
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Showing {startIndex + 1} to {Math.min(endIndex, filteredData.length)} of{' '}
-            {filteredData.length} results
+            Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of{' '}
+            {totalItems} results
           </p>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
+              onClick={() => changePage(Math.max(1, effectivePage - 1))}
+              disabled={effectivePage === 1}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="text-sm">
-              Page {currentPage} of {totalPages}
+              Page {effectivePage} of {totalPages}
             </span>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
+              onClick={() => changePage(Math.min(totalPages, effectivePage + 1))}
+              disabled={effectivePage === totalPages}
             >
               <ChevronRight className="h-4 w-4" />
             </Button>

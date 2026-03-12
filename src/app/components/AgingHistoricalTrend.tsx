@@ -5,90 +5,101 @@ import {
 } from 'recharts';
 
 interface SnapshotTrend {
-  snapshot_id:       string;
-  label:             string;
-  total_amount:      number;
-  current_amount:    number;
-  overdue_amount:    number;
-  collected_rate:    number;
-  overdue_rate:      number;
-  total_customers:   number;
-  paid_customers:    number;
-  overdue_customers: number;
-  paid_pct:          number;
-  overdue_pct:       number;
+  snapshot_id:         string;
+  label:               string;
+  total_amount:        number;
+  current_amount:      number;
+  overdue_amount:      number;
+  collected_rate:      number;
+  overdue_rate:        number;
+  total_customers:     number;
+  paid_customers:      number;
+  overdue_customers:   number;
+  overdue60_customers: number;
+  paid_pct:            number;
+  overdue_pct:         number;
+  overdue60_pct:       number;
 }
 
+// ─── Professional finance palette ───────────────────────────────────────────
 const C = {
-  emerald: '#10b981',
-  rose:    '#f43f5e',
-  indigo:  '#6366f1',
-  amber:   '#f59e0b',
-  border:  'hsl(var(--border))',
-  mutedFg: 'hsl(var(--muted-foreground))',
-  card:    'hsl(var(--card))',
-  cardFg:  'hsl(var(--card-foreground))',
-  muted:   'hsl(var(--muted))',
+  teal:       '#8c6161',   // healthy / paid
+  tealMuted:  '#0d948820',
+  tealBorder: '#0d948835',
+  crimson:    '#c88a8a',   // overdue
+  crimsonMuted:  '#a4615918',
+  crimsonBorder: '#c0392b30',
+  amber:      '#b45309',   // >60d warning
+  amberMuted: '#b4530918',
+  amberBorder:'#b4530930',
+  slate:      '#1e293b',   // headings
+  slateLight: '#475569',   // secondary text
+  slateXLight:'#94a3b8',   // muted
+  indigo:     '#3730a3',   // active toggle
+  indigoBg:   '#eef2ff',
+  border:     'hsl(var(--border))',
+  card:       'hsl(var(--card))',
+  cardFg:     'hsl(var(--card-foreground))',
+  mutedFg:    'hsl(var(--muted-foreground))',
+  bg:         '#f8fafc',
 };
 
-const axisStyle = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' };
+const axisStyle = { fontSize: 11, fill: C.slateXLight, fontFamily: 'inherit' };
 
-function formatCurrency(v: number) {
+function fmt(v: number) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency', currency: 'LYD', maximumFractionDigits: 0,
   }).format(v);
 }
 
+// ─── Tooltip ────────────────────────────────────────────────────────────────
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   const d: SnapshotTrend = payload[0]?.payload;
+
+  const metricRow = (label: string, val: string, sub: string, color: string) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: `1px solid #f1f5f9` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ width: 3, height: 16, borderRadius: 2, background: color }} />
+        <span style={{ fontSize: 11, color: C.slateLight }}>{label}</span>
+      </div>
+      <div style={{ textAlign: 'right' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color }}>{val}</span>
+        <span style={{ fontSize: 10, color: C.slateXLight, marginLeft: 6 }}>{sub}</span>
+      </div>
+    </div>
+  );
+
   return (
     <div style={{
-      background: '#fff', border: '1px solid #e5e7eb',
-      borderRadius: 12, padding: '14px 16px',
-      boxShadow: '0 8px 24px rgba(0,0,0,0.15)', fontSize: 12, minWidth: 240,
+      background: '#fff',
+      border: '1px solid #e2e8f0',
+      borderRadius: 10,
+      padding: '14px 16px',
+      boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
+      fontSize: 12,
+      minWidth: 280,
     }}>
-      <p style={{ fontWeight: 800, color: '#111827', marginBottom: 12, fontSize: 13 }}>{label}</p>
-
-      {/* Customers */}
-      <p style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-        Customers ({d.total_customers} total)
+      <p style={{ fontWeight: 700, color: C.slate, marginBottom: 10, fontSize: 12, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+        {label}
       </p>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-        <div style={{ flex: 1, padding: '8px 10px', borderRadius: 8, background: `${C.emerald}12`, border: `1px solid ${C.emerald}25` }}>
-          <p style={{ fontSize: 10, color: C.emerald, fontWeight: 700, margin: '0 0 2px' }}>✓ Paid</p>
-          <p style={{ fontSize: 16, fontWeight: 800, color: C.emerald, margin: 0 }}>{d.paid_pct}%</p>
-          <p style={{ fontSize: 10, color: '#6b7280', margin: 0 }}>{d.paid_customers} customers</p>
-        </div>
-        <div style={{ flex: 1, padding: '8px 10px', borderRadius: 8, background: `${C.rose}12`, border: `1px solid ${C.rose}25` }}>
-          <p style={{ fontSize: 10, color: C.rose, fontWeight: 700, margin: '0 0 2px' }}>✗ Overdue</p>
-          <p style={{ fontSize: 16, fontWeight: 800, color: C.rose, margin: 0 }}>{d.overdue_pct}%</p>
-          <p style={{ fontSize: 10, color: '#6b7280', margin: 0 }}>{d.overdue_customers} customers</p>
-        </div>
-      </div>
-
-      {/* Amounts */}
-      <p style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+      <p style={{ fontSize: 10, fontWeight: 600, color: C.slateXLight, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+        Customers — {d.total_customers} total
+      </p>
+      {metricRow('Paid / Current',     `${d.paid_pct}%`,      `${d.paid_customers} customers`,      C.teal)}
+      {metricRow('Overdue (all)',       `${d.overdue_pct}%`,   `${d.overdue_customers} customers`,   C.crimson)}
+      {metricRow('Overdue > 60 days',  `${d.overdue60_pct}%`, `${d.overdue60_customers} customers`, C.amber)}
+      <p style={{ fontSize: 10, fontWeight: 600, color: C.slateXLight, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '10px 0 6px' }}>
         Amounts
       </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ color: '#6b7280' }}>Total</span>
-          <span style={{ fontWeight: 700, color: '#111827' }}>{formatCurrency(d.total_amount)}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ color: C.emerald }}>Current (healthy)</span>
-          <span style={{ fontWeight: 700, color: C.emerald }}>{formatCurrency(d.current_amount)}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ color: C.rose }}>Overdue</span>
-          <span style={{ fontWeight: 700, color: C.rose }}>{formatCurrency(d.overdue_amount)}</span>
-        </div>
-      </div>
+      {metricRow('Total',           fmt(d.total_amount),   '', C.slate)}
+      {metricRow('Current',         fmt(d.current_amount), `${d.collected_rate}%`, C.teal)}
+      {metricRow('Overdue',         fmt(d.overdue_amount), `${d.overdue_rate}%`,   C.crimson)}
     </div>
   );
 }
 
+// ─── Main component ──────────────────────────────────────────────────────────
 export function AgingHistoricalTrend() {
   const [data,    setData]    = useState<SnapshotTrend[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,80 +116,163 @@ export function AgingHistoricalTrend() {
       .catch(() => { setError('Failed to load'); setLoading(false); });
   }, []);
 
-  const cardStyle: React.CSSProperties = {
-    background: C.card, borderRadius: 16, padding: 24,
-    boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 4px 20px rgba(0,0,0,0.05)',
+  const card: React.CSSProperties = {
+    background: C.card,
+    borderRadius: 14,
+    padding: 28,
     border: `1px solid ${C.border}`,
+    boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
   };
 
   if (loading) return (
-    <div style={{ ...cardStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: C.mutedFg }}>
-      Loading…
+    <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: C.mutedFg, fontSize: 13 }}>
+      Loading data…
     </div>
   );
 
   if (error || data.length === 0) return (
-    <div style={{ ...cardStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: C.mutedFg, fontSize: 13 }}>
-      {error ?? 'No data available — import multiple snapshots to see trends.'}
+    <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: C.mutedFg, fontSize: 13 }}>
+      {error ?? 'No data — import multiple snapshots to view trends.'}
     </div>
   );
 
   const latest = data[data.length - 1];
   const prev   = data.length > 1 ? data[data.length - 2] : null;
 
-  // Chart data
   const chartData = data.map(d => ({
     ...d,
-    paid_value:    mode === 'customers' ? d.paid_pct    : d.collected_rate,
-    overdue_value: mode === 'customers' ? d.overdue_pct : d.overdue_rate,
+    paid_value:      mode === 'customers' ? d.paid_pct      : d.collected_rate,
+    overdue_value:   mode === 'customers' ? d.overdue_pct   : d.overdue_rate,
+    overdue60_value: mode === 'customers' ? d.overdue60_pct : null,
   }));
 
-  return (
-    <div style={cardStyle}>
+  // ── KPI config ──────────────────────────────────────────────────────────
+  const kpis = [
+    {
+      label: 'Paid Customers',
+      value: `${latest.paid_pct}%`,
+      sub:   `${latest.paid_customers} of ${latest.total_customers}`,
+      color: C.teal,
+      muted: C.tealMuted,
+      bdr:   C.tealBorder,
+      delta: prev ? +(latest.paid_pct - prev.paid_pct).toFixed(1) : null,
+      good:  true,
+    },
+    {
+      label: 'Overdue Customers',
+      value: `${latest.overdue_pct}%`,
+      sub:   `${latest.overdue_customers} of ${latest.total_customers}`,
+      color: C.crimson,
+      muted: C.crimsonMuted,
+      bdr:   C.crimsonBorder,
+      delta: prev ? +(latest.overdue_pct - prev.overdue_pct).toFixed(1) : null,
+      good:  false,
+    },
+    {
+      label: 'Overdue > 60 Days',
+      value: `${latest.overdue60_pct}%`,
+      sub:   `${latest.overdue60_customers} of ${latest.total_customers}`,
+      color: C.amber,
+      muted: C.amberMuted,
+      bdr:   C.amberBorder,
+      delta: prev ? +(latest.overdue60_pct - prev.overdue60_pct).toFixed(1) : null,
+      good:  false,
+    },
+    {
+      label: 'Current Amount',
+      value: `${latest.collected_rate}%`,
+      sub:   fmt(latest.current_amount),
+      color: C.teal,
+      muted: C.tealMuted,
+      bdr:   C.tealBorder,
+      delta: prev ? +(latest.collected_rate - prev.collected_rate).toFixed(1) : null,
+      good:  true,
+    },
+    {
+      label: 'Overdue Amount',
+      value: `${latest.overdue_rate}%`,
+      sub:   fmt(latest.overdue_amount),
+      color: C.crimson,
+      muted: C.crimsonMuted,
+      bdr:   C.crimsonBorder,
+      delta: prev ? +(latest.overdue_rate - prev.overdue_rate).toFixed(1) : null,
+      good:  false,
+    },
+  ];
 
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+  return (
+    <div style={card}>
+
+      {/* ── Header ── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: C.cardFg, margin: 0 }}>
-            Paid vs Overdue — Historical Trend
-          </h3>
-          <p style={{ fontSize: 12, color: C.mutedFg, marginTop: 3 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            {/* Decorative accent bar */}
+            <div style={{ width: 3, height: 18, borderRadius: 2, background: `linear-gradient(180deg, ${C.teal}, ${C.indigo})` }} />
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: C.cardFg, margin: 0, letterSpacing: '-0.01em' }}>
+              Paid vs Overdue — Historical Trend
+            </h3>
+          </div>
+          <p style={{ fontSize: 12, color: C.mutedFg, margin: '0 0 0 13px' }}>
             {mode === 'customers'
-              ? '% of customers with no overdue balance vs customers with overdue balance'
-              : '% of total receivable amount that is current vs overdue'}
+              ? 'Distribution of customers by payment status across snapshots'
+              : 'Receivable amount split between current and overdue balances'}
           </p>
         </div>
 
         {/* Toggle */}
-        <div style={{ display: 'flex', gap: 0, borderRadius: 8, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+        <div style={{
+          display: 'flex',
+          borderRadius: 8,
+          border: `1px solid ${C.border}`,
+          overflow: 'hidden',
+          background: C.bg,
+        }}>
           {(['customers', 'amount'] as const).map(m => (
             <button key={m} onClick={() => setMode(m)} style={{
-              padding: '6px 16px', fontSize: 12, fontWeight: 600,
-              border: 'none', cursor: 'pointer',
-              background: mode === m ? C.indigo : C.card,
-              color:      mode === m ? '#fff'   : C.mutedFg,
-              transition: 'all 0.15s',
+              padding: '7px 18px',
+              fontSize: 12,
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              background: mode === m ? C.indigo : 'transparent',
+              color:      mode === m ? '#fff'   : C.slateLight,
+              letterSpacing: '0.02em',
+              transition: 'all 0.15s ease',
             }}>
-              {m === 'customers' ? '👥 Customers' : '💰 Amount'}
+              {m === 'customers' ? 'Customers' : 'Amount'}
             </button>
           ))}
         </div>
       </div>
 
-      {/* KPI badges — latest snapshot */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
-        {[
-          { label: 'Paid Customers',    value: `${latest.paid_pct}%`,     sub: `${latest.paid_customers} / ${latest.total_customers}`,    color: C.emerald, delta: prev ? +(latest.paid_pct - prev.paid_pct).toFixed(1) : null, good: true },
-          { label: 'Overdue Customers', value: `${latest.overdue_pct}%`,  sub: `${latest.overdue_customers} / ${latest.total_customers}`, color: C.rose,    delta: prev ? +(latest.overdue_pct - prev.overdue_pct).toFixed(1) : null, good: false },
-          { label: 'Current Amount',    value: `${latest.collected_rate}%`, sub: formatCurrency(latest.current_amount),                  color: C.emerald, delta: prev ? +(latest.collected_rate - prev.collected_rate).toFixed(1) : null, good: true },
-          { label: 'Overdue Amount',    value: `${latest.overdue_rate}%`,   sub: formatCurrency(latest.overdue_amount),                  color: C.rose,    delta: prev ? +(latest.overdue_rate - prev.overdue_rate).toFixed(1) : null, good: false },
-        ].map((kpi, i) => (
-          <div key={i} style={{ padding: '12px 14px', borderRadius: 12, background: `${kpi.color}10`, border: `1px solid ${kpi.color}25` }}>
-            <p style={{ fontSize: 10, fontWeight: 700, color: C.mutedFg, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{kpi.label}</p>
-            <p style={{ fontSize: 20, fontWeight: 800, color: kpi.color, margin: 0 }}>{kpi.value}</p>
-            <p style={{ fontSize: 11, color: C.mutedFg, margin: '2px 0 0' }}>{kpi.sub}</p>
+      {/* ── KPI Badges ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 24 }}>
+        {kpis.map((kpi, i) => (
+          <div key={i} style={{
+            padding: '14px 16px',
+            borderRadius: 10,
+            background: kpi.muted,
+            border: `1px solid ${kpi.bdr}`,
+            position: 'relative',
+            overflow: 'hidden',
+          }}>
+            {/* top accent line */}
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: kpi.color, opacity: 0.6 }} />
+            <p style={{ fontSize: 10, fontWeight: 600, color: C.slateXLight, margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              {kpi.label}
+            </p>
+            <p style={{ fontSize: 22, fontWeight: 800, color: kpi.color, margin: 0, letterSpacing: '-0.02em', lineHeight: 1 }}>
+              {kpi.value}
+            </p>
+            <p style={{ fontSize: 11, color: C.slateLight, margin: '4px 0 0' }}>{kpi.sub}</p>
             {kpi.delta !== null && (
-              <p style={{ fontSize: 10, margin: '4px 0 0', fontWeight: 600, color: (kpi.good ? kpi.delta >= 0 : kpi.delta <= 0) ? C.emerald : C.rose }}>
+              <p style={{
+                fontSize: 10,
+                margin: '6px 0 0',
+                fontWeight: 600,
+                color: (kpi.good ? kpi.delta >= 0 : kpi.delta <= 0) ? C.teal : C.crimson,
+              }}>
                 {kpi.delta >= 0 ? '▲' : '▼'} {Math.abs(kpi.delta)}% vs prev
               </p>
             )}
@@ -186,57 +280,107 @@ export function AgingHistoricalTrend() {
         ))}
       </div>
 
-      {/* Stacked 100% bar chart */}
-      <ResponsiveContainer width="100%" height={280}>
-        <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="4 4" stroke={C.border} vertical={false} />
-          <XAxis dataKey="label" tick={axisStyle} axisLine={false} tickLine={false} />
-          <YAxis
-            domain={[0, 100]}
-            tick={axisStyle} axisLine={false} tickLine={false}
-            tickFormatter={v => `${v}%`}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          <Legend
-            wrapperStyle={{ fontSize: 12, paddingTop: 12 }}
-            formatter={(value) => (
-              <span style={{ color: C.mutedFg }}>
-                {value === 'paid_value'    ? (mode === 'customers' ? '✓ Paid customers %'    : '✓ Current amount %') : ''}
-                {value === 'overdue_value' ? (mode === 'customers' ? '✗ Overdue customers %' : '✗ Overdue amount %') : ''}
-              </span>
+      {/* ── Chart ── */}
+      <div style={{ background: C.bg, borderRadius: 10, padding: '16px 8px 8px', border: `1px solid ${C.border}` }}>
+        <ResponsiveContainer width="100%" height={280}>
+          <ComposedChart data={chartData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+            <XAxis
+              dataKey="label"
+              tick={axisStyle}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              domain={[0, 100]}
+              tick={axisStyle}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={v => `${v}%`}
+            />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(99,102,241,0.04)' }} />
+            <Legend
+              wrapperStyle={{ fontSize: 11, paddingTop: 14 }}
+              formatter={(value) => {
+                const labels: Record<string, string> = {
+                  paid_value:      mode === 'customers' ? 'Paid customers'        : 'Current amount',
+                  overdue_value:   mode === 'customers' ? 'Overdue customers'     : 'Overdue amount',
+                  overdue60_value: 'Overdue > 60 days',
+                };
+                return <span style={{ color: C.slateLight }}>{labels[value] ?? value}</span>;
+              }}
+            />
+            <Bar dataKey="paid_value"    name="paid_value"    stackId="a" fill={C.teal}   radius={[0, 0, 4, 4]} />
+            <Bar dataKey="overdue_value" name="overdue_value" stackId="a" fill={C.crimson} radius={[4, 4, 0, 0]} />
+            {mode === 'customers' && (
+              <Line
+                dataKey="overdue60_value"
+                name="overdue60_value"
+                type="monotone"
+                stroke={C.amber}
+                strokeWidth={2}
+                dot={{ r: 3.5, fill: C.amber, strokeWidth: 0 }}
+                activeDot={{ r: 5, fill: C.amber }}
+                strokeDasharray="6 3"
+              />
             )}
-          />
-          <Bar dataKey="paid_value"    name="paid_value"    stackId="a" fill={C.emerald} radius={[0, 0, 0, 0]} />
-          <Bar dataKey="overdue_value" name="overdue_value" stackId="a" fill={C.rose}    radius={[4, 4, 0, 0]} />
-        </ComposedChart>
-      </ResponsiveContainer>
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
 
-      {/* Summary table */}
+      {/* ── Summary table ── */}
       <div style={{ marginTop: 20, overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
-            <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-              {['Snapshot', 'Total Customers', 'Paid %', 'Overdue %', 'Current Amount', 'Overdue Amount', 'Total'].map(h => (
-                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: C.mutedFg, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
+            <tr>
+              {['Snapshot', 'Customers', 'Paid', 'Overdue', 'Overdue > 60d', 'Current Amount', 'Overdue Amount', 'Total'].map(h => (
+                <th key={h} style={{
+                  padding: '8px 12px',
+                  textAlign: 'left',
+                  color: C.slateXLight,
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  fontSize: 10,
+                  whiteSpace: 'nowrap',
+                  borderBottom: `2px solid ${C.border}`,
+                }}>
+                  {h}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {[...data].reverse().map((row, i) => (
-              <tr key={row.snapshot_id} style={{ borderBottom: `1px solid ${C.border}`, background: i === 0 ? `${C.indigo}05` : 'transparent' }}>
-                <td style={{ padding: '8px 10px', fontWeight: i === 0 ? 700 : 400, color: C.cardFg, whiteSpace: 'nowrap' }}>{row.label}</td>
-                <td style={{ padding: '8px 10px', color: C.mutedFg }}>{row.total_customers}</td>
-                <td style={{ padding: '8px 10px' }}>
-                  <span style={{ fontWeight: 700, color: C.emerald }}>{row.paid_pct}%</span>
-                  <span style={{ color: C.mutedFg, fontSize: 10, marginLeft: 4 }}>({row.paid_customers})</span>
+              <tr key={row.snapshot_id} style={{
+                borderBottom: `1px solid ${C.border}`,
+                background: i === 0 ? '#f0f4ff' : 'transparent',
+                transition: 'background 0.1s',
+              }}>
+                <td style={{ padding: '9px 12px', fontWeight: i === 0 ? 700 : 500, color: C.slate, whiteSpace: 'nowrap', fontSize: 12 }}>
+                  {row.label}
+                  {i === 0 && (
+                    <span style={{ marginLeft: 8, fontSize: 9, fontWeight: 700, color: C.indigo, background: C.indigoBg, padding: '2px 6px', borderRadius: 4, letterSpacing: '0.05em' }}>
+                      LATEST
+                    </span>
+                  )}
                 </td>
-                <td style={{ padding: '8px 10px' }}>
-                  <span style={{ fontWeight: 700, color: C.rose }}>{row.overdue_pct}%</span>
-                  <span style={{ color: C.mutedFg, fontSize: 10, marginLeft: 4 }}>({row.overdue_customers})</span>
+                <td style={{ padding: '9px 12px', color: C.slateLight }}>{row.total_customers}</td>
+                <td style={{ padding: '9px 12px' }}>
+                  <span style={{ fontWeight: 700, color: C.teal }}>{row.paid_pct}%</span>
+                  <span style={{ color: C.slateXLight, fontSize: 10, marginLeft: 5 }}>({row.paid_customers})</span>
                 </td>
-                <td style={{ padding: '8px 10px', color: C.emerald, fontWeight: 600 }}>{formatCurrency(row.current_amount)}</td>
-                <td style={{ padding: '8px 10px', color: C.rose,    fontWeight: 600 }}>{formatCurrency(row.overdue_amount)}</td>
-                <td style={{ padding: '8px 10px', color: C.cardFg,  fontWeight: 700 }}>{formatCurrency(row.total_amount)}</td>
+                <td style={{ padding: '9px 12px' }}>
+                  <span style={{ fontWeight: 700, color: C.crimson }}>{row.overdue_pct}%</span>
+                  <span style={{ color: C.slateXLight, fontSize: 10, marginLeft: 5 }}>({row.overdue_customers})</span>
+                </td>
+                <td style={{ padding: '9px 12px' }}>
+                  <span style={{ fontWeight: 700, color: C.amber }}>{row.overdue60_pct}%</span>
+                  <span style={{ color: C.slateXLight, fontSize: 10, marginLeft: 5 }}>({row.overdue60_customers})</span>
+                </td>
+                <td style={{ padding: '9px 12px', color: C.teal,   fontWeight: 600 }}>{fmt(row.current_amount)}</td>
+                <td style={{ padding: '9px 12px', color: C.crimson, fontWeight: 600 }}>{fmt(row.overdue_amount)}</td>
+                <td style={{ padding: '9px 12px', color: C.slate,   fontWeight: 700 }}>{fmt(row.total_amount)}</td>
               </tr>
             ))}
           </tbody>

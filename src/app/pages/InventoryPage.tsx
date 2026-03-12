@@ -3,15 +3,15 @@ import { createPortal } from 'react-dom';
 import { Package, AlertTriangle, TrendingUp, RefreshCw, Loader2, ChevronDown, ArrowUpRight } from 'lucide-react';
 import { DataTable } from '../components/DataTable';
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid,
-    ResponsiveContainer, PieChart, Pie, Cell, Tooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  ResponsiveContainer, PieChart, Pie, Cell, Tooltip,
 } from 'recharts';
 import {
-    useInventorySnapshots,
-    useInventoryLines,
-    useBranchSummary,
-    useCategoryBreakdown,
-    type InventorySnapshotLine,
+  useInventorySnapshots,
+  useInventoryLines,
+  useBranchSummary,
+  useCategoryBreakdown,
+  type InventorySnapshotLine,
 } from '../lib/dataHooks';
 import { formatCurrency, formatNumber, toNum } from '../lib/utils';
 
@@ -268,6 +268,8 @@ export function InventoryPage() {
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string>('');
   const [selectedBranch,     setSelectedBranch]     = useState<string>('all');
   const [openDropdown,       setOpenDropdown]       = useState<'snapshot' | 'branch' | null>(null);
+  const [tablePage,          setTablePage]          = useState(1);
+  const [tableSearch,        setTableSearch]        = useState('');
 
   // ── Snapshots list ───────────────────────────────────────────────────────
   const { data: snapshotsData, loading: snapsLoading } = useInventorySnapshots({ page_size: 50 });
@@ -277,40 +279,29 @@ export function InventoryPage() {
 
   // ── Lines for selected snapshot ──────────────────────────────────────────
   const { data: linesData, loading: linesLoading, error: linesError, refetch } =
-    useInventoryLines(currentSnapId || null, { page_size: 500 });
+    useInventoryLines(currentSnapId || null, {
+      page:      tablePage,
+      page_size: 100,
+      branch:    selectedBranch !== 'all' ? selectedBranch : undefined,
+      search:    tableSearch    || undefined,
+    });
 
   // ── Aggregations scoped to selected snapshot ─────────────────────────────
   const { data: branchData,   loading: branchLoading } = useBranchSummary({ snapshot_id: currentSnapId });
   const { data: categoryData }                          = useCategoryBreakdown({ snapshot_id: currentSnapId });
 
-  const allLines   = linesData?.lines ?? [];
+  const lines      = linesData?.lines ?? [];
   const branches   = branchData?.branches ?? [];
   const categories = categoryData?.categories ?? [];
-
-  // Client-side branch filter on the table
-  const lines = selectedBranch === 'all'
-    ? allLines
-    : allLines.filter(l => l.branch_name === selectedBranch);
 
   const totalQty   = toNum(linesData?.totals?.grand_total_qty);
   const totalValue = toNum(linesData?.totals?.grand_total_value);
 
-  // FIX: Status uses backend field — count by `status` property, not qty thresholds.
-  // `InventorySnapshotLine` may not declare `status` in the shared type, so we
-  // use an intersection cast to tell TypeScript the field exists at runtime.
-  type LineWithStatus = InventorySnapshotLine & { status?: string };
-  const lowStockLines      = lines.filter(l => { const q = toNum(l.quantity); return q > 0  && q <= 50 && q >= 30; });
-  const criticalLines      = lines.filter(l => { const q = toNum(l.quantity); return q > 0  && q < 30; });
-  const outOfStockLines    = lines.filter(l => toNum(l.quantity) === 0);
-
-
-  // FIX: "Total Lines" = raw line count (product × branch combinations).
-  // Show separately: unique products count derived from distinct product_code values.
-
-
-const uniqueProductCount = new Set(allLines.map(l => l.product_code).filter(Boolean)).size;
-
-const totalLines = uniqueProductCount || (linesData?.count ?? allLines.length);
+  // Counts come from backend aggregates (full dataset, not just the current page)
+  const uniqueProductCount = linesData?.totals?.distinct_products  ?? 0;
+  const outOfStockCount    = linesData?.totals?.out_of_stock_count ?? 0;
+  const criticalCount      = linesData?.totals?.critical_count     ?? 0;
+  const lowCount           = linesData?.totals?.low_count          ?? 0;
 
   const categoryPieData = categories.slice(0, 8).map((c, i) => ({
     name:  c.category || 'Uncategorized',
@@ -325,6 +316,31 @@ const totalLines = uniqueProductCount || (linesData?.count ?? allLines.length);
     value: toNum(b.total_value),
     fill:  BRANCH_COLORS[i % BRANCH_COLORS.length],
   }));
+
+  // ── Product-group row colouring ──────────────────────────────────────────
+  // Map each unique product_code (order of first appearance in `lines`) to a
+  // stable group index — so all rows for the same product always share the
+  // same colour, regardless of sort order or active branch filter.
+  const productGroupMap = new Map<string, number>();
+  lines.forEach((l: InventorySnapshotLine) => {
+    if (l.product_code && !productGroupMap.has(l.product_code)) {
+      productGroupMap.set(l.product_code, productGroupMap.size);
+    }
+  });
+  const totalProductGroups = productGroupMap.size;
+
+  function getInventoryRowStyle(row: InventorySnapshotLine, _globalIndex: number): React.CSSProperties {
+    if (totalProductGroups <= 1) return {};
+    const groupIndex = productGroupMap.get(row.product_code ?? '') ?? 0;
+    const t = groupIndex / Math.max(1, totalProductGroups - 1); // 0 … 1
+    // Interpolate: indigo (99,102,241) → violet (139,92,246)
+    const r = Math.round(99  + t * 40);
+    const g = Math.round(102 - t * 10);
+    const b = Math.round(241 + t * 5);
+    // Opacity: 0.04 (barely visible) → 0.11 (slightly deeper)
+    const a = parseFloat((0.04 + t * 0.07).toFixed(3));
+    return { background: `rgba(${r},${g},${b},${a})` };
+  }
 
   // ── Dropdown options ──────────────────────────────────────────────────────
   const snapshotOptions = snapshots.map(s => ({
@@ -450,7 +466,7 @@ const totalLines = uniqueProductCount || (linesData?.count ?? allLines.length);
             label="Snapshot"
             options={snapshotOptions}
             value={currentSnapId}
-            onChange={v => { setSelectedSnapshotId(v); setSelectedBranch('all'); }}
+            onChange={v => { setSelectedSnapshotId(v); setSelectedBranch('all'); setTablePage(1); setTableSearch(''); }}
             isOpen={openDropdown === 'snapshot'}
             onToggle={() => setOpenDropdown(o => o === 'snapshot' ? null : 'snapshot')}
             onClose={() => setOpenDropdown(null)}
@@ -459,7 +475,7 @@ const totalLines = uniqueProductCount || (linesData?.count ?? allLines.length);
             label="Branch"
             options={branchOptions}
             value={selectedBranch}
-            onChange={setSelectedBranch}
+            onChange={v => { setSelectedBranch(v); setTablePage(1); }}
             isOpen={openDropdown === 'branch'}
             onToggle={() => setOpenDropdown(o => o === 'branch' ? null : 'branch')}
             onClose={() => setOpenDropdown(null)}
@@ -479,7 +495,7 @@ const totalLines = uniqueProductCount || (linesData?.count ?? allLines.length);
           },
           {
             label: 'Total Products',
-            value: isLoading ? '…' : formatNumber((linesData?.count ?? 0) / (branches.length || 1)),
+            value: isLoading ? '…' : formatNumber(uniqueProductCount),
             sub: branches.length > 0
               ? `Across ${branches.length} branch${branches.length !== 1 ? 'es' : ''} · ${formatNumber(linesData?.count ?? 0)} total lines`
               : 'Unique products in stock',
@@ -496,8 +512,8 @@ const totalLines = uniqueProductCount || (linesData?.count ?? allLines.length);
           {
             label: 'Stock Alerts',
             // FIX: uses backend status field counts
-            value: isLoading ? '…' : String(lowStockLines.length + outOfStockLines.length + criticalLines.length),
-            sub: `${outOfStockLines.length} out · ${criticalLines.length} critical · ${lowStockLines.length} low`,
+            value: isLoading ? '…' : String(lowCount + outOfStockCount + criticalCount),
+            sub: `${outOfStockCount} out · ${criticalCount} critical · ${lowCount} low`,
             accent: C.rose,
             icon: AlertTriangle,
           },
@@ -665,7 +681,20 @@ const totalLines = uniqueProductCount || (linesData?.count ?? allLines.length);
             <p style={{ fontSize: 13, margin: 0 }}>No lines found for the selected filters.</p>
           </div>
         ) : (
-          <DataTable data={lines} columns={columns} searchable exportable pageSize={15} />
+          <DataTable
+              data={lines}
+              columns={columns}
+              searchable
+              exportable
+              getRowStyle={getInventoryRowStyle}
+              serverPagination={{
+                totalCount:   linesData?.count ?? 0,
+                page:         tablePage,
+                pageSize:     100,
+                onPageChange: setTablePage,
+                onSearch:     (q) => { setTableSearch(q); setTablePage(1); },
+              }}
+            />
         )}
       </div>
     </div>

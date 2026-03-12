@@ -336,7 +336,14 @@ export interface InventoryLinesResponse {
   page: number;
   page_size: number;
   total_pages: number;
-  totals: { grand_total_qty: number; grand_total_value: number };
+  totals: {
+    grand_total_qty: number;
+    grand_total_value: number;
+    distinct_products: number;
+    out_of_stock_count: number;
+    critical_count: number;
+    low_count: number;
+  };
   lines: InventorySnapshotLine[];
 }
 
