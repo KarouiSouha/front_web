@@ -256,9 +256,8 @@ export function SalesKPISection() {
               accent={!hasSalesEvolution ? '#64748b' : salesEvolutionIsUp ? C.emerald : C.rose}
             />
             <KpiStatCard
-              label="Top Products"
-              value={String(topProducts.length)}
-              sub={topProducts[0] ? `#1: ${topProducts[0].material_name.slice(0, 24)}` : 'No data'}
+              label="Top Profitable Product"
+              value={topProducts[0] ? `${topProducts[0].material_name.slice(0, 24)}` : 'No data'}
               icon={ShoppingBag}
               accent={C.violet}
             />

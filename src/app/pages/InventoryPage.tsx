@@ -231,12 +231,14 @@ function StyledDropdown({
 }
 
 // ── Stock Status Badge ────────────────────────────────────────────────────────
-function StockStatusBadge({ qty }: { qty: number }) {
+// FIX: uses backend `status` field ("out" | "critical" | "low" | "ok")
+// instead of hardcoded qty thresholds, which were unreliable for multi-branch data.
+function StockStatusBadge({ quantity }: { quantity: number }) {
   const [accent, label] =
-    qty === 0 ? [C.rose,    'Out of Stock'] :
-    qty < 5   ? [C.rose,    '🔴 Critical'  ] :
-    qty < 20  ? [C.amber,   '🟡 Low'       ] :
-                [C.emerald, '🟢 Normal'    ];
+    quantity === 0  ? [C.rose,    'Out of Stock'] :
+    quantity < 30   ? [C.rose,    '🔴 Critical'  ] :
+    quantity <= 50  ? [C.amber,   '🟡 Low'       ] :
+                      [C.emerald, '🟢 Normal'    ];
   return (
     <span style={{
       fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
@@ -293,8 +295,22 @@ export function InventoryPage() {
   const totalQty   = toNum(linesData?.totals?.grand_total_qty);
   const totalValue = toNum(linesData?.totals?.grand_total_value);
 
-  const lowStockLines   = lines.filter(l => toNum(l.quantity) < 5 && toNum(l.quantity) > 0);
-  const outOfStockLines = lines.filter(l => toNum(l.quantity) === 0);
+  // FIX: Status uses backend field — count by `status` property, not qty thresholds.
+  // `InventorySnapshotLine` may not declare `status` in the shared type, so we
+  // use an intersection cast to tell TypeScript the field exists at runtime.
+  type LineWithStatus = InventorySnapshotLine & { status?: string };
+  const lowStockLines      = lines.filter(l => { const q = toNum(l.quantity); return q > 0  && q <= 50 && q >= 30; });
+  const criticalLines      = lines.filter(l => { const q = toNum(l.quantity); return q > 0  && q < 30; });
+  const outOfStockLines    = lines.filter(l => toNum(l.quantity) === 0);
+
+
+  // FIX: "Total Lines" = raw line count (product × branch combinations).
+  // Show separately: unique products count derived from distinct product_code values.
+
+
+const uniqueProductCount = new Set(allLines.map(l => l.product_code).filter(Boolean)).size;
+
+const totalLines = uniqueProductCount || (linesData?.count ?? allLines.length);
 
   const categoryPieData = categories.slice(0, 8).map((c, i) => ({
     name:  c.category || 'Uncategorized',
@@ -380,7 +396,8 @@ export function InventoryPage() {
     {
       key: 'status',
       label: 'Status',
-      render: (row: InventorySnapshotLine) => <StockStatusBadge qty={toNum(row.quantity)} />,
+      render: (row: InventorySnapshotLine) =>
+        <StockStatusBadge quantity={toNum(row.quantity)} />,
     },
   ];
 
@@ -453,10 +470,37 @@ export function InventoryPage() {
       {/* ── KPI Cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 16 }}>
         {[
-          { label: 'Total Stock Value', value: isLoading ? '…' : formatCurrency(totalValue),                                    sub: `Across ${branches.length} branch${branches.length !== 1 ? 'es' : ''}`, accent: C.indigo,  icon: Package       },
-          { label: 'Total Lines',       value: isLoading ? '…' : formatNumber(linesData?.count ?? 0),                           sub: 'Product × branch combinations',                                        accent: C.cyan,    icon: TrendingUp    },
-          { label: 'Total Units',       value: isLoading ? '…' : formatNumber(totalQty),                                        sub: 'Total quantity in stock',                                              accent: C.emerald, icon: Package       },
-          { label: 'Stock Alerts',      value: isLoading ? '…' : String(lowStockLines.length + outOfStockLines.length),         sub: `${outOfStockLines.length} out of stock · ${lowStockLines.length} low`,  accent: C.rose,    icon: AlertTriangle },
+          {
+            label: 'Total Stock Value',
+            value: isLoading ? '…' : formatCurrency(totalValue),
+            sub: `Across ${branches.length} branch${branches.length !== 1 ? 'es' : ''}`,
+            accent: C.indigo,
+            icon: Package,
+          },
+          {
+            label: 'Total Products',
+            value: isLoading ? '…' : formatNumber((linesData?.count ?? 0) / (branches.length || 1)),
+            sub: branches.length > 0
+              ? `Across ${branches.length} branch${branches.length !== 1 ? 'es' : ''} · ${formatNumber(linesData?.count ?? 0)} total lines`
+              : 'Unique products in stock',
+            accent: C.cyan,
+            icon: TrendingUp,
+          },
+          {
+            label: 'Total Units',
+            value: isLoading ? '…' : formatNumber(totalQty),
+            sub: 'Total quantity in stock',
+            accent: C.emerald,
+            icon: Package,
+          },
+          {
+            label: 'Stock Alerts',
+            // FIX: uses backend status field counts
+            value: isLoading ? '…' : String(lowStockLines.length + outOfStockLines.length + criticalLines.length),
+            sub: `${outOfStockLines.length} out · ${criticalLines.length} critical · ${lowStockLines.length} low`,
+            accent: C.rose,
+            icon: AlertTriangle,
+          },
         ].map((kpi, i) => (
           <div key={i} style={{ ...cardStyle, position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', top: -24, right: -24, width: 80, height: 80, borderRadius: '50%', background: kpi.accent, opacity: 0.08, filter: 'blur(20px)', pointerEvents: 'none' }} />

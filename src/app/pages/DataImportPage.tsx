@@ -287,7 +287,7 @@ export function DataImportPage() {
               <AlertDescription className="text-green-800 dark:text-green-200">
                 <p className="font-semibold">{uploadResult.message}</p>
                 <p className="mt-1">
-                  Imported rows: {uploadResult.result.created + uploadResult.result.updated}
+                  Imported rows: {uploadResult.result.total_rows}
                   {uploadResult.result.errors.length > 0 && (
                     <> • Errors: {uploadResult.result.errors.length}</>
                   )}

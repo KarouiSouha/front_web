@@ -345,7 +345,7 @@ export function StockKPISection() {
           )}
 
           {/* ── Low Rotation + Coverage at Risk ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '550px 1fr', gap: 16, marginBottom: 16 }}>
 
             {lowRotation.length > 0 && (
               <Panel
