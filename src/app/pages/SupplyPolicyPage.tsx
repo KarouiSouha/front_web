@@ -1,9 +1,9 @@
 // src/app/pages/SupplyPolicyPage.tsx
 // ═══════════════════════════════════════════════════════════════
-// Supply Policy Report  —  v4 (Source Breakdown removed)
+// Supply Policy Report  —  v6 (print matches display)
 // ═══════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import {
@@ -40,12 +40,18 @@ const card: React.CSSProperties = {
   border: `1px solid ${css.border}`,
 };
 const ax = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' };
-const BRANCH_COLORS: Record<string, string> = {
-  'Al-Karimia': C.indigo, 'Dahmani': C.teal, 'Janzour': C.emerald,
-  'Al-Mazraa': C.cyan, 'Misrata': C.amber, 'Benghazi': C.rose,
-  'Integrated (Karimia)': C.violet,
-};
-const PAL = [C.indigo, C.teal, C.emerald, C.cyan, C.amber, C.rose, C.violet, C.orange];
+
+const PAL = [
+  '#6366f1','#0ea5e9','#14b8a6','#10b981',
+  '#f59e0b','#f43f5e','#8b5cf6','#f97316',
+  '#0284c7','#db2777','#84cc16','#06b6d4',
+];
+
+function buildBranchColorMap(branches: string[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  [...branches].sort().forEach((b, i) => { map[b] = PAL[i % PAL.length]; });
+  return map;
+}
 
 interface SupplyMeta {
   total_value: number; total_qty: number; unique_suppliers: number;
@@ -78,7 +84,6 @@ interface StockSummary {
   avg_rotation_rate: number;
 }
 
-// ── Dropdown ──────────────────────────────────────────────────────
 function Dropdown({ label, options, value, onChange, isOpen, onToggle, onClose }: {
   label: string; options: { key: string; label: string }[];
   value: string; onChange: (v: string) => void;
@@ -199,12 +204,12 @@ export function SupplyPolicyPage() {
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState<string | null>(null);
 
-  const [yearFilter,   setYearFilter]   = useState('2025');
-  const [branchFilter, setBranchFilter] = useState('all');
-  const [catFilter,    setCatFilter]    = useState('all');
-  const [openDD,       setOpenDD]       = useState<string | null>(null);
-  const [reorderPage,  setReorderPage]  = useState(1);
-  const [reorderStatus,setReorderStatus]= useState('all');
+  const [yearFilter,    setYearFilter]    = useState('2025');
+  const [branchFilter,  setBranchFilter]  = useState('all');
+  const [catFilter,     setCatFilter]     = useState('all');
+  const [openDD,        setOpenDD]        = useState<string | null>(null);
+  const [reorderPage,   setReorderPage]   = useState(1);
+  const [reorderStatus, setReorderStatus] = useState('all');
   const REORDER_PAGE_SIZE = 20;
 
   const fetchAll = useCallback(async () => {
@@ -247,8 +252,22 @@ export function SupplyPolicyPage() {
   const supplierSKUs = supply?.supplier_skus ?? [];
   const leadTimes    = supply?.lead_times    ?? [];
 
+  const branchColorMap = useMemo(() => {
+    const allBranchNames = [
+      ...new Set([
+        ...(meta?.branches ?? []),
+        ...byBranch.map(b => b.branch),
+        ...branchMonth.map(r => r.branch),
+      ])
+    ].filter(Boolean);
+    return buildBranchColorMap(allBranchNames);
+  }, [meta?.branches, byBranch, branchMonth]);
+
+  const branchColor = (name: string) => branchColorMap[name] ?? PAL[0];
+
   const allMonths   = [...new Set(branchMonth.map(r => r.month))].sort();
   const allBranches = [...new Set(branchMonth.map(r => r.branch))].sort();
+
   const bxmPivot: Record<string, Record<string, number>> = {};
   branchMonth.forEach(r => {
     if (!bxmPivot[r.branch]) bxmPivot[r.branch] = {};
@@ -286,254 +305,316 @@ export function SupplyPolicyPage() {
   const printReport = () => {
     const fC = formatCurrency;
     const fN = formatNumber;
+    const today = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'long', year:'numeric' });
 
+    // ── Shared CSS ────────────────────────────────────────────
+    const sharedCSS = `
+      @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=DM+Sans:wght@300;400;500;600;700;800&display=swap');
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'DM Sans',sans-serif;background:#fff;color:#0f172a;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      @page{size:A4 landscape;margin:0}
+      .cover{width:100%;height:210mm;background:#fff;break-after:page!important;page-break-after:always!important;position:relative;overflow:hidden;}
+      .cover-stripe{position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#0ea5e9,#14b8a6,#10b981);}
+      .cover-bg{position:absolute;top:0;right:0;width:48%;height:100%;background:linear-gradient(148deg,#ecfeff,#cffafe,#a5f3fc,#67e8f9);clip-path:polygon(12% 0,100% 0,100% 100%,0% 100%);}
+      .cover-inner{position:relative;z-index:2;display:grid;grid-template-rows:auto 1fr auto;height:100%;padding:28px 48px 24px;}
+      .cover-top{display:flex;align-items:center;justify-content:space-between;padding-bottom:18px;border-bottom:1px solid #e2e8f0;}
+      .cover-main{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center;padding:20px 0;}
+      .cover-title{font-family:'Playfair Display',serif;font-size:52px;font-weight:900;color:#0f172a;line-height:1.0;}
+      .cover-title em{color:#0ea5e9;font-style:italic;}
+      .cover-kc{background:rgba(255,255,255,.85);border:1px solid rgba(255,255,255,.95);border-radius:12px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+      .kc-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#94a3b8;}
+      .kc-val{font-family:'Playfair Display',serif;font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.1;}
+      .kc-note{font-size:10px;color:#94a3b8;margin-top:2px;}
+      .badge{font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;}
+      .cover-footer{border-top:1px solid #e2e8f0;padding-top:14px;display:flex;justify-content:space-between;align-items:center;}
+      .page{width:297mm;min-height:210mm;padding:30px 42px 24px;page-break-after:always;break-after:page}
+      .page:last-child{page-break-after:auto;break-after:auto}
+      .page-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #f59e0b}
+      .sec-num{width:26px;height:26px;border-radius:8px;background:#f59e0b;color:#0f172a;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;margin-right:10px;flex-shrink:0}
+      .sec-title{font-size:15px;font-weight:800;color:#0f172a;display:inline}
+      .sec-sub{font-size:11px;color:#94a3b8;margin-top:2px;margin-left:36px}
+      .page-ref{font-size:9px;color:#cbd5e1;letter-spacing:.06em}
+      .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+      .kc{background:#f8fafc;border-radius:12px;padding:15px 17px;border:1px solid #e2e8f0;border-top:3px solid #f59e0b;break-inside:avoid;page-break-inside:avoid}
+      .kc .l{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#64748b}
+      .kc .v{font-size:17px;font-weight:800;color:#0f172a;margin-top:5px;letter-spacing:-.03em}
+      .kc .s{font-size:10px;color:#94a3b8;margin-top:2px}
+      table{width:100%;border-collapse:collapse;font-size:11.5px}
+      thead tr{background:#f1f5f9}
+      th{padding:8px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#64748b;border-bottom:2px solid #e2e8f0;white-space:nowrap}
+      th.l{text-align:left} th.r{text-align:right}
+      tr{break-inside:avoid;page-break-inside:avoid}
+      .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;break-inside:avoid;page-break-inside:avoid}
+      .three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+      .cd{background:#f8fafc;border-radius:12px;padding:16px;border:1px solid #e2e8f0;break-inside:avoid;page-break-inside:avoid}
+      .cd h3{font-size:12px;font-weight:700;color:#0f172a;margin-bottom:12px;padding-bottom:7px;border-bottom:1px solid #e2e8f0}
+      .insights{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px;background:#fffbeb;border-radius:12px;padding:14px;border:1px solid #fde68a;break-inside:avoid;page-break-inside:avoid}
+      .ic{background:#fff;border-radius:10px;padding:11px 13px;border:1px solid #fde68a}
+      .ic .l{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#92400e;margin-bottom:3px}
+      .ic .v{font-size:13px;font-weight:800;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .ic .s{font-size:10px;color:#92400e;margin-top:1px}
+      .status-out{color:#ef4444;background:#fef2f2;border:1px solid #fecaca;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+      .status-critical{color:#f97316;background:#fff7ed;border:1px solid #fed7aa;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+      .status-low{color:#f59e0b;background:#fffbeb;border:1px solid #fde68a;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+      .status-ok{color:#10b981;background:#f0fdf4;border:1px solid #bbf7d0;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+      *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+    `;
+
+    // ── PAGE HEADER helper ────────────────────────────────────
+    const pageHdr = (num: number, title: string, sub: string, pageLabel: string) => `
+      <div class="page-hdr">
+        <div>
+          <div><span class="sec-num">${num}</span><span class="sec-title">${title}</span></div>
+          <div class="sec-sub">${sub}</div>
+        </div>
+        <div class="page-ref">SUPPLY REPORT · ${yearFilter==='all'?'ALL YEARS':yearFilter} · ${pageLabel}</div>
+      </div>`;
+
+    // ── Row builders ──────────────────────────────────────────
+
+    // Supplier rows
     const supplierRows = bySupplier.slice(0, 15).map((s, i) => {
       const share = totalValue > 0 ? (s.value / totalValue * 100).toFixed(1) : '0';
       const col = PAL[i % PAL.length];
-      return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f8fafc'}">
-        <td style="padding:7px 10px;text-align:center;color:#64748b;font-weight:700">${i+1}</td>
-        <td style="padding:7px 10px;font-weight:600;color:#0f172a;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.name}">
-          ${s.name.length > 48 ? s.name.slice(0,48)+'…' : s.name}
-        </td>
-        <td style="padding:7px 10px;text-align:right;color:#64748b">${s.sku_count}</td>
-        <td style="padding:7px 10px;text-align:right;color:#64748b">${s.count}</td>
-        <td style="padding:7px 10px;text-align:right;font-weight:800;color:#0f172a">${fC(s.value)}</td>
-        <td style="padding:7px 10px;text-align:right">
-          <span style="font-weight:700;color:${col};background:${col}18;padding:2px 8px;border-radius:20px;font-size:11px">${share}%</span>
+      return `<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
+        <td style="padding:6px 8px;text-align:center;color:#64748b;font-weight:700;font-size:11px">${i+1}</td>
+        <td style="padding:6px 8px;font-weight:600;color:#0f172a;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.name.length>46?s.name.slice(0,46)+'…':s.name}</td>
+        <td style="padding:6px 8px;text-align:right;color:#64748b">${s.sku_count}</td>
+        <td style="padding:6px 8px;text-align:right;color:#64748b">${s.count}</td>
+        <td style="padding:6px 8px;text-align:right;font-weight:800;color:#0f172a">${fC(s.value)}</td>
+        <td style="padding:6px 8px;text-align:right">
+          <span style="font-weight:700;color:${col};background:${col}18;padding:2px 8px;border-radius:20px;font-size:10px">${share}%</span>
         </td>
       </tr>`;
     }).join('');
 
+    // Branch rows
     const branchRows = byBranch.map((b, i) => {
       const share = totalValue > 0 ? (b.value / totalValue * 100).toFixed(1) : '0';
-      return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f8fafc'}">
-        <td style="padding:7px 10px;font-weight:600;color:#0f172a">${b.branch}</td>
-        <td style="padding:7px 10px;text-align:right;color:#64748b">${b.count}</td>
-        <td style="padding:7px 10px;text-align:right;font-weight:800;color:#0f172a">${fC(b.value)}</td>
-        <td style="padding:7px 10px;text-align:right">
-          <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">
-            <div style="width:50px;height:4px;background:#e2e8f0;border-radius:999px">
-              <div style="height:100%;width:${Math.min(100,parseFloat(share))}%;background:#f59e0b;border-radius:999px"></div>
+      const col = branchColor(b.branch);
+      return `<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
+        <td style="padding:6px 8px;font-weight:600;color:#0f172a">
+          <span style="display:inline-flex;align-items:center;gap:6px">
+            <span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>${b.branch}
+          </span>
+        </td>
+        <td style="padding:6px 8px;text-align:right;color:#64748b">${b.count}</td>
+        <td style="padding:6px 8px;text-align:right;font-weight:800;color:#0f172a">${fC(b.value)}</td>
+        <td style="padding:6px 8px;text-align:right">
+          <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end">
+            <div style="width:44px;height:4px;background:#e2e8f0;border-radius:999px">
+              <div style="height:100%;width:${Math.min(100,parseFloat(share))}%;background:${col};border-radius:999px"></div>
             </div>
-            <span style="font-weight:700;color:#f59e0b;font-size:11px">${share}%</span>
+            <span style="font-weight:700;color:${col};font-size:10px">${share}%</span>
           </div>
         </td>
       </tr>`;
     }).join('');
 
-    const leadRows = leadTimes.map((s, i) => {
-      const freq = s.avg_days<=14 ? {lbl:'Weekly',col:'#10b981'} : s.avg_days<=30 ? {lbl:'Bi-weekly',col:'#14b8a6'}
-                 : s.avg_days<=60 ? {lbl:'Monthly',col:'#f59e0b'} : {lbl:'Quarterly',col:'#f43f5e'};
-      return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f8fafc'}">
-        <td style="padding:7px 12px;font-weight:600;color:#0f172a;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-          ${s.supplier.length>58?s.supplier.slice(0,58)+'…':s.supplier}
-        </td>
-        <td style="padding:7px 12px;text-align:right;color:#64748b">${s.orders}</td>
-        <td style="padding:7px 12px;text-align:right">
-          <span style="font-size:15px;font-weight:800;color:#6366f1">${s.avg_days}</span>
-          <span style="font-size:11px;color:#94a3b8;margin-left:3px">days</span>
-        </td>
-        <td style="padding:7px 12px;text-align:right">
-          <span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;background:${freq.col}18;color:${freq.col};border:1px solid ${freq.col}35">
-            ${freq.lbl}
-          </span>
-        </td>
-      </tr>`;
-    }).join('');
-
-    const catRows = byCategory.slice(0,10).map((c,i) => {
-      const share = totalValue > 0 ? (c.value/totalValue*100).toFixed(1) : '0';
-      const col = PAL[i%PAL.length];
+    // Category rows
+    const catRows = byCategory.slice(0, 10).map((c, i) => {
+      const share = totalValue > 0 ? (c.value / totalValue * 100).toFixed(1) : '0';
+      const col = PAL[i % PAL.length];
       return `<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
-        <td style="padding:7px 10px">
-          <span style="display:inline-flex;align-items:center;gap:7px">
+        <td style="padding:6px 8px">
+          <span style="display:inline-flex;align-items:center;gap:6px">
             <span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>
             <span style="font-weight:600;color:#0f172a">${c.name||'Other'}</span>
           </span>
         </td>
-        <td style="padding:7px 10px;text-align:right;color:#64748b">${c.count}</td>
-        <td style="padding:7px 10px;text-align:right;font-weight:800;color:#0f172a">${fC(c.value)}</td>
-        <td style="padding:7px 10px;text-align:right;font-weight:700;color:${col}">${share}%</td>
+        <td style="padding:6px 8px;text-align:right;color:#64748b">${c.count}</td>
+        <td style="padding:6px 8px;text-align:right;font-weight:800;color:#0f172a">${fC(c.value)}</td>
+        <td style="padding:6px 8px;text-align:right;font-weight:700;color:${col}">${share}%</td>
       </tr>`;
     }).join('');
 
-    const today = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'long', year:'numeric' });
+    // Branch × Month
+    const bxmHeaderCells = allMonths.slice(-6).map(m =>
+      `<th style="padding:6px 8px;text-align:right;font-size:9px;font-weight:700;text-transform:uppercase;color:#64748b;border-bottom:2px solid #e2e8f0;white-space:nowrap">${m}</th>`
+    ).join('');
+    const bxmBodyRows = allBranches.map((branch, bi) => {
+      const col = branchColor(branch);
+      const cells = allMonths.slice(-6).map(m => {
+        const d = branchMonth.find(r => r.branch === branch && r.month === m);
+        return `<td style="padding:6px 8px;text-align:right;font-size:10px;color:#6366f1;font-weight:${d?'700':'400'}">${d ? fC(d.value) : '—'}</td>`;
+      }).join('');
+      return `<tr style="background:${bi%2===0?'#fff':'#f8fafc'}">
+        <td style="padding:6px 8px;white-space:nowrap">
+          <span style="display:inline-flex;align-items:center;gap:6px">
+            <span style="width:8px;height:8px;border-radius:50%;background:${col}"></span>
+            <span style="font-weight:600;color:#0f172a">${branch}</span>
+          </span>
+        </td>${cells}
+      </tr>`;
+    }).join('');
 
+    // Supplier SKUs cards
+    const skuCards = supplierSKUs.map((s, si) => {
+      const col = PAL[si % PAL.length];
+      const itemRows = s.items.map((item, ii) =>
+        `<tr style="border-top:1px solid #e2e8f0">
+          <td style="padding:4px 0;color:#0f172a;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px">${item.name.length>28?item.name.slice(0,28)+'…':item.name}</td>
+          <td style="padding:4px 0;text-align:right;color:#64748b;font-size:10px">${fN(Math.round(item.qty))}</td>
+          <td style="padding:4px 0;text-align:right;font-weight:700;color:#6366f1;font-size:10px">${fC(item.value)}</td>
+        </tr>`
+      ).join('');
+      return `<div style="background:#f8fafc;border-radius:10px;padding:12px 14px;border:1px solid #e2e8f0;break-inside:avoid">
+        <p style="font-size:11px;font-weight:700;color:#0f172a;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          <span style="width:8px;height:8px;border-radius:50%;background:${col};display:inline-block;margin-right:6px"></span>
+          ${s.supplier.length>38?s.supplier.slice(0,38)+'…':s.supplier}
+        </p>
+        <table style="font-size:10px">
+          <thead><tr>
+            <th style="text-align:left;color:#94a3b8;padding:2px 0;font-size:9px;font-weight:600;border-bottom:1px solid #e2e8f0">Item</th>
+            <th style="text-align:right;color:#94a3b8;padding:2px 0;font-size:9px;font-weight:600;border-bottom:1px solid #e2e8f0">Qty</th>
+            <th style="text-align:right;color:#94a3b8;padding:2px 0;font-size:9px;font-weight:600;border-bottom:1px solid #e2e8f0">Value</th>
+          </tr></thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+      </div>`;
+    }).join('');
+
+    // Lead time rows — filter 0 days
+    const validLeadTimes = leadTimes.filter(s => s.avg_days > 0);
+    const leadRows = validLeadTimes.map((s, i) => {
+      const freq = s.avg_days<=7  ? {lbl:'Weekly',    col:'#10b981'}
+                 : s.avg_days<=14 ? {lbl:'Bi-weekly', col:'#14b8a6'}
+                 : s.avg_days<=31 ? {lbl:'Monthly',   col:'#f59e0b'}
+                 : s.avg_days<=90 ? {lbl:'Quarterly', col:'#f97316'}
+                 :                  {lbl:'Rare',       col:'#f43f5e'};
+      return `<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
+        <td style="padding:6px 10px;font-weight:600;color:#0f172a;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.supplier.length>52?s.supplier.slice(0,52)+'…':s.supplier}</td>
+        <td style="padding:6px 10px;text-align:right;color:#64748b">${s.orders}</td>
+        <td style="padding:6px 10px;text-align:right">
+          <span style="font-size:14px;font-weight:800;color:#6366f1">${s.avg_days}</span>
+          <span style="font-size:10px;color:#94a3b8;margin-left:3px">days</span>
+        </td>
+        <td style="padding:6px 10px;text-align:right">
+          <span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;background:${freq.col}18;color:${freq.col};border:1px solid ${freq.col}35">${freq.lbl}</span>
+        </td>
+      </tr>`;
+    }).join('');
+
+    // Reorder rows — top 30 urgent items (out + critical + low)
+    const urgentItems = [...reorderList]
+      .filter(i => i.status !== 'ok')
+      .sort((a,b) => { const o: Record<string,number>={out:0,critical:1,low:2,ok:3}; return o[a.status]-o[b.status]; })
+      .slice(0, 30);
+
+    const reorderRows = urgentItems.map((item, i) => {
+      const statusCls = item.status === 'out' ? 'status-out' : item.status === 'critical' ? 'status-critical' : 'status-low';
+      const statusLbl = item.status === 'out' ? '🔴 Out' : item.status === 'critical' ? '🟠 Critical' : '🟡 Low';
+      const hasUsage = item.monthly_usage > 0;
+      return `<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
+        <td style="padding:6px 8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          <div style="font-weight:600;color:#0f172a;font-size:11px">${item.product_name.length>30?item.product_name.slice(0,30)+'…':item.product_name}</div>
+          <div style="font-size:9px;color:#94a3b8;font-family:monospace">${item.material_code}</div>
+        </td>
+        <td style="padding:6px 8px;font-size:10px;color:#64748b">${item.category||'—'}</td>
+        <td style="padding:6px 8px;text-align:right;font-weight:800;color:${item.stock_qty===0?'#ef4444':item.stock_qty<=item.min_stock?'#f97316':'#0f172a'}">${fN(Math.round(item.stock_qty))}</td>
+        <td style="padding:6px 8px;text-align:right;color:#64748b">${hasUsage?fN(item.min_stock):'—'}</td>
+        <td style="padding:6px 8px;text-align:right;color:#64748b">${hasUsage?fN(item.monthly_usage):'—'}</td>
+        <td style="padding:6px 8px;text-align:right">
+          ${item.days_of_stock!==null?`<span style="font-weight:700;color:${item.days_of_stock<=14?'#ef4444':item.days_of_stock<=30?'#f59e0b':'#10b981'}">${item.days_of_stock}d</span>`:'—'}
+        </td>
+        <td style="padding:6px 8px;text-align:right;font-weight:800;color:#6366f1">${item.reorder_qty>0?fN(item.reorder_qty):'—'}</td>
+        <td style="padding:6px 8px;text-align:right"><span class="${statusCls}">${statusLbl}</span></td>
+      </tr>`;
+    }).join('');
+
+    // ── FULL HTML ─────────────────────────────────────────────
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <title>Supply Policy Report — ${yearFilter === 'all' ? 'All Years' : yearFilter}</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=DM+Sans:wght@300;400;500;600;700;800&display=swap');
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'DM Sans',sans-serif;background:#fff;color:#0f172a;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    @page{size:A4 landscape;margin:0}
-
-    .cover{width:297mm;height:210mm;display:grid;grid-template-columns:42% 58%;page-break-after:always}
-    .cover-left{background:#0f172a;padding:52px 48px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
-    .cover-left::before{content:'';position:absolute;top:-100px;right:-100px;width:350px;height:350px;border-radius:50%;background:radial-gradient(circle,#f59e0b25 0%,transparent 65%)}
-    .cover-left::after{content:'';position:absolute;bottom:-80px;left:-80px;width:250px;height:250px;border-radius:50%;background:radial-gradient(circle,#6366f120 0%,transparent 65%)}
-    .brand{font-size:10px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:#f59e0b}
-    .badge{display:inline-block;margin-top:12px;padding:4px 12px;border-radius:20px;background:#f59e0b18;border:1px solid #f59e0b40;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#f59e0b}
-    .title{font-family:'Playfair Display',serif;font-size:56px;font-weight:900;line-height:1.0;color:#fff;margin-top:28px}
-    .title em{color:#f59e0b;font-style:italic}
-    .desc{font-size:12px;color:#94a3b8;line-height:1.7;margin-top:18px}
-    .meta{display:flex;gap:14px;margin-top:18px;flex-wrap:wrap}
-    .meta-item{font-size:10px;color:#475569;display:flex;align-items:center;gap:5px}
-    .meta-item span{color:#f59e0b;font-weight:700}
-    .footer-small{font-size:9px;color:#334155;letter-spacing:.08em;text-transform:uppercase}
-    .cover-right{background:linear-gradient(160deg,#1e293b 0%,#0f172a 60%,#1a1035 100%);padding:52px 48px;display:flex;flex-direction:column;position:relative;overflow:hidden}
-    .cover-right::before{content:'';position:absolute;top:40px;right:40px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,#6366f115,transparent 70%)}
-    .cr-title{font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#475569;margin-bottom:20px}
-    .kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1}
-    .kpi-box{background:#0f172a;border-radius:14px;padding:18px 20px;border:1px solid #1e293b;border-left:3px solid #f59e0b}
-    .kpi-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#64748b;margin-bottom:8px}
-    .kpi-val{font-size:20px;font-weight:800;color:#fff;letter-spacing:-.03em;line-height:1.1}
-    .kpi-sub{font-size:10px;color:#475569;margin-top:5px}
-    .cr-footer{margin-top:18px;padding-top:14px;border-top:1px solid #1e293b;font-size:9px;color:#334155;display:flex;justify-content:space-between;letter-spacing:.06em}
-    .page{width:297mm;min-height:210mm;padding:30px 42px 24px;page-break-after:always}
-    .page:last-child{page-break-after:auto}
-    .page-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #f59e0b}
-    .sec-num{width:26px;height:26px;border-radius:8px;background:#f59e0b;color:#0f172a;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;margin-right:10px;flex-shrink:0}
-    .sec-title{font-size:15px;font-weight:800;color:#0f172a;display:inline}
-    .sec-sub{font-size:11px;color:#94a3b8;margin-top:2px;margin-left:36px}
-    .page-ref{font-size:9px;color:#cbd5e1;letter-spacing:.06em}
-    .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
-    .kc{background:#f8fafc;border-radius:12px;padding:15px 17px;border:1px solid #e2e8f0;border-top:3px solid #f59e0b}
-    .kc .l{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#64748b}
-    .kc .v{font-size:17px;font-weight:800;color:#0f172a;margin-top:5px;letter-spacing:-.03em}
-    .kc .s{font-size:10px;color:#94a3b8;margin-top:2px}
-    table{width:100%;border-collapse:collapse;font-size:11.5px}
-    thead tr{background:#f1f5f9}
-    th{padding:8px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#64748b;border-bottom:2px solid #e2e8f0;white-space:nowrap}
-    th.l{text-align:left}
-    th.r{text-align:right}
-    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-    .cd{background:#f8fafc;border-radius:12px;padding:16px;border:1px solid #e2e8f0}
-    .cd h3{font-size:12px;font-weight:700;color:#0f172a;margin-bottom:12px;padding-bottom:7px;border-bottom:1px solid #e2e8f0}
-    .insights{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px;background:#fffbeb;border-radius:12px;padding:14px;border:1px solid #fde68a}
-    .ic{background:#fff;border-radius:10px;padding:11px 13px;border:1px solid #fde68a}
-    .ic .l{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#92400e;margin-bottom:3px}
-    .ic .v{font-size:13px;font-weight:800;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .ic .s{font-size:10px;color:#92400e;margin-top:1px}
-  </style>
+  <style>${sharedCSS}</style>
 </head>
 <body>
 
 <!-- ══ COVER ══ -->
 <div class="cover">
-  <div class="cover-left">
-    <div style="position:relative;z-index:1">
-      <div class="brand">Weeg Financial · Supply Division</div>
-      <div class="badge">Financial Report</div>
-      <div class="title">Supply<br/><em>Policy</em><br/>Report</div>
-      <div class="desc">
-        Purchases (ف شراء) · Supplier performance<br/>
-        Stock levels · Reorder recommendations
+  <div class="cover-stripe"></div>
+  <div class="cover-bg"></div>
+  <div class="cover-inner">
+    <div class="cover-top">
+      <span style="font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:#374151;">WEEG Financial · Supply Division</span>
+      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#0ea5e9;background:#ecfeff;border:1.5px solid #a5f3fc;padding:4px 13px;border-radius:20px;">Financial Report</span>
+    </div>
+    <div class="cover-main">
+      <div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:#94a3b8;margin-bottom:14px;">Supply Chain Management</div>
+        <h1 class="cover-title">Supply<br/><em>Policy</em><br/>Report</h1>
+        <p style="font-size:14px;color:#64748b;margin:14px 0 18px;">
+          ${yearFilter==='all'?'All Years':yearFilter}${branchFilter!=='all'?' · '+branchFilter:''}${catFilter!=='all'?' · '+catFilter:''}
+        </p>
+        <p style="font-size:12px;color:#94a3b8;line-height:1.85;border-left:3px solid #a5f3fc;padding-left:16px;">
+          Purchases (ف شراء) · Supplier performance &amp; lead times · Stock levels · Reorder recommendations across ${meta?.branches?.length??0} branches.
+        </p>
+        <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;">
+          <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;background:#ecfeff;color:#0ea5e9;border:1px solid #a5f3fc;">${meta?.total_transactions??0} invoices</span>
+          <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;background:#f0fdf4;color:#059669;border:1px solid #bbf7d0;">${fN(meta?.unique_suppliers??0)} suppliers</span>
+          <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;background:#fef3c7;color:#d97706;border:1px solid #fde68a;">${outCount+criticalCount+lowCount} stock alerts</span>
+        </div>
       </div>
-      <div class="meta">
-        <div class="meta-item">Period: <span>${yearFilter === 'all' ? 'All Years' : yearFilter}</span></div>
-        <div class="meta-item">Branch: <span>${branchFilter === 'all' ? 'All' : branchFilter}</span></div>
-        <div class="meta-item">Category: <span>${catFilter === 'all' ? 'All' : catFilter}</span></div>
+      <div style="padding-left:16px;">
+        <div class="cover-kc">
+          <div><div class="kc-lbl">Total Purchase Value</div><div class="kc-val" style="color:#0ea5e9;">${fC(meta?.total_value??0)}</div><div class="kc-note">${meta?.total_transactions??0} invoices · ${meta?.unique_skus??0} SKUs</div></div>
+          <span class="badge" style="background:#ecfeff;color:#0ea5e9;border:1px solid #a5f3fc;">Purchases</span>
+        </div>
+        <div class="cover-kc">
+          <div><div class="kc-lbl">Active Suppliers</div><div class="kc-val" style="color:#14b8a6;">${fN(meta?.unique_suppliers??0)}</div><div class="kc-note">Unique vendor names</div></div>
+          <span class="badge" style="background:#f0fdfa;color:#0d9488;border:1px solid #99f6e4;">Vendors</span>
+        </div>
+        <div class="cover-kc">
+          <div><div class="kc-lbl">Most Active Month</div><div class="kc-val" style="color:#10b981;font-size:22px;">${mostActiveMonth}</div><div class="kc-note">Highest purchase value</div></div>
+          <span class="badge" style="background:#f0fdf4;color:#059669;border:1px solid #bbf7d0;">Peak</span>
+        </div>
+        <div class="cover-kc">
+          <div><div class="kc-lbl">Stock Alerts</div><div class="kc-val" style="color:${outCount+criticalCount>0?'#f97316':'#10b981'};">${outCount+criticalCount+lowCount}</div><div class="kc-note">${outCount} out · ${criticalCount} critical · ${lowCount} low</div></div>
+          <span class="badge" style="background:${outCount+criticalCount>0?'#fff7ed':'#f0fdf4'};color:${outCount+criticalCount>0?'#f97316':'#059669'};border:1px solid ${outCount+criticalCount>0?'#fed7aa':'#bbf7d0'};">${outCount+criticalCount>0?'⚠ Action':'✓ OK'}</span>
+        </div>
       </div>
     </div>
-    <div style="position:relative;z-index:1">
-      <div class="footer-small">Generated ${today} · ${meta?.branches?.length ?? 0} branches · CONFIDENTIAL</div>
-    </div>
-  </div>
-
-  <div class="cover-right">
-    <div class="cr-title" style="position:relative;z-index:1">Key Performance Indicators</div>
-    <div class="kpi-grid" style="position:relative;z-index:1">
-      <div class="kpi-box">
-        <div class="kpi-lbl">Total Purchase Value</div>
-        <div class="kpi-val">${fC(meta?.total_value ?? 0)}</div>
-        <div class="kpi-sub">${meta?.total_transactions ?? 0} invoices</div>
+    <div class="cover-footer">
+      <div style="display:flex;align-items:center;gap:12px;font-size:10px;color:#94a3b8;">
+        <span>Generated ${today}</span>
+        <span style="width:3px;height:3px;border-radius:50%;background:#cbd5e1;display:inline-block;"></span>
+        <span>${meta?.branches?.length??0} branches · ${fN(meta?.unique_suppliers??0)} suppliers</span>
+        <span style="width:3px;height:3px;border-radius:50%;background:#cbd5e1;display:inline-block;"></span>
+        <span>Period: ${yearFilter==='all'?'All Years':yearFilter}</span>
       </div>
-      <div class="kpi-box">
-        <div class="kpi-lbl">Total Qty Received</div>
-        <div class="kpi-val">${fN(Math.round(meta?.total_qty ?? 0))}</div>
-        <div class="kpi-sub">${meta?.unique_skus ?? 0} distinct SKUs</div>
-      </div>
-      <div class="kpi-box">
-        <div class="kpi-lbl">Active Suppliers</div>
-        <div class="kpi-val">${fN(meta?.unique_suppliers ?? 0)}</div>
-        <div class="kpi-sub">Unique vendor names</div>
-      </div>
-      <div class="kpi-box">
-        <div class="kpi-lbl">Stock Alerts</div>
-        <div class="kpi-val">${outCount + criticalCount + lowCount}</div>
-        <div class="kpi-sub">${outCount} out · ${criticalCount} crit · ${lowCount} low</div>
-      </div>
-      <div class="kpi-box">
-        <div class="kpi-lbl">Most Active Month</div>
-        <div class="kpi-val" style="font-size:17px">${mostActiveMonth}</div>
-        <div class="kpi-sub">Highest purchase value</div>
-      </div>
-      <div class="kpi-box">
-        <div class="kpi-lbl">Top Supplier Share</div>
-        <div class="kpi-val">${bySupplier[0] ? (bySupplier[0].value/totalValue*100).toFixed(0)+'%' : '—'}</div>
-        <div class="kpi-sub">${bySupplier[0]?.name?.slice(0,28) ?? '—'}</div>
-      </div>
-    </div>
-    <div class="cr-footer" style="position:relative;z-index:1">
-      <span>SUPPLY POLICY REPORT · ${yearFilter==='all'?'ALL YEARS':yearFilter}</span>
-      <span>CONFIDENTIAL · Weeg Financial</span>
+      <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#0ea5e9;border:1.5px solid #a5f3fc;padding:3px 10px;border-radius:20px;background:#ecfeff;">Confidential</span>
     </div>
   </div>
 </div>
 
-<!-- ══ PAGE 1 — Overview + Suppliers ══ -->
+<!-- ══ PAGE 1 — KPIs + Suppliers ══ -->
 <div class="page">
-  <div class="page-hdr">
-    <div>
-      <div><span class="sec-num">1</span><span class="sec-title">Purchase Overview & Supplier Performance</span></div>
-      <div class="sec-sub">${meta?.total_transactions ?? 0} transactions · top 15 suppliers ranked by value</div>
-    </div>
-    <div class="page-ref">SUPPLY REPORT · ${yearFilter==='all'?'ALL YEARS':yearFilter} · PAGE 1</div>
-  </div>
-
+  ${pageHdr(1,'Purchase Overview & Supplier Performance',`${meta?.total_transactions??0} transactions · top 15 suppliers ranked by value`,'PAGE 1')}
   <div class="kpi-row">
     <div class="kc"><div class="l">Total Purchase Value</div><div class="v">${fC(meta?.total_value??0)}</div><div class="s">${meta?.total_transactions??0} invoices</div></div>
     <div class="kc"><div class="l">Total Qty Received</div><div class="v">${fN(Math.round(meta?.total_qty??0))}</div><div class="s">${meta?.unique_skus??0} SKUs</div></div>
     <div class="kc"><div class="l">Active Suppliers</div><div class="v">${fN(meta?.unique_suppliers??0)}</div><div class="s">Unique vendors</div></div>
-    <div class="kc"><div class="l">Stock Alerts</div><div class="v">${outCount+criticalCount+lowCount}</div><div class="s">${outCount} out · ${criticalCount} crit</div></div>
+    <div class="kc"><div class="l">Stock Alerts</div><div class="v">${outCount+criticalCount+lowCount}</div><div class="s">${outCount} out · ${criticalCount} crit · ${lowCount} low</div></div>
   </div>
-
   <table>
-    <thead>
-      <tr>
-        <th class="l" style="width:32px">#</th>
-        <th class="l">Supplier</th>
-        <th class="r">SKUs</th>
-        <th class="r">Orders</th>
-        <th class="r">Total Value</th>
-        <th class="r">% Share</th>
-      </tr>
-    </thead>
+    <thead><tr>
+      <th class="l" style="width:28px">#</th>
+      <th class="l">Supplier</th>
+      <th class="r">SKUs</th>
+      <th class="r">Orders</th>
+      <th class="r">Total Value</th>
+      <th class="r">% Share</th>
+    </tr></thead>
     <tbody>${supplierRows}</tbody>
   </table>
 </div>
 
-<!-- ══ PAGE 2 — Branch + Categories ══ -->
+<!-- ══ PAGE 2 — Categories + Branch Analysis ══ -->
 <div class="page">
-  <div class="page-hdr">
-    <div>
-      <div><span class="sec-num">2</span><span class="sec-title">Branch Analysis & Top Categories</span></div>
-      <div class="sec-sub">${byBranch.length} branches · top categories</div>
-    </div>
-    <div class="page-ref">SUPPLY REPORT · ${yearFilter==='all'?'ALL YEARS':yearFilter} · PAGE 2</div>
-  </div>
-
-  <div class="two-col" style="margin-bottom:16px">
-    <div class="cd">
-      <h3>Purchase Value by Branch</h3>
-      <table>
-        <thead><tr><th class="l">Branch</th><th class="r">Orders</th><th class="r">Value</th><th class="r">Share</th></tr></thead>
-        <tbody>${branchRows}</tbody>
-      </table>
-    </div>
+  ${pageHdr(2,'Purchase Value by Category & Branch Analysis',`${byCategory.length} categories · ${byBranch.length} branches`,'PAGE 2')}
+  <div class="two-col" style="margin-bottom:14px">
     <div class="cd">
       <h3>Top Categories</h3>
       <table>
@@ -541,31 +622,43 @@ export function SupplyPolicyPage() {
         <tbody>${catRows}</tbody>
       </table>
     </div>
+    <div class="cd">
+      <h3>Purchase Value by Branch</h3>
+      <table>
+        <thead><tr><th class="l">Branch</th><th class="r">Orders</th><th class="r">Value</th><th class="r">Share</th></tr></thead>
+        <tbody>${branchRows}</tbody>
+      </table>
+    </div>
   </div>
-
+  <div class="cd">
+    <h3>Purchase by Branch — Last 6 Months</h3>
+    <table>
+      <thead><tr><th class="l">Branch</th>${bxmHeaderCells}</tr></thead>
+      <tbody>${bxmBodyRows}</tbody>
+    </table>
+  </div>
   <div class="insights">
-    ${[
-      { l:'Top Supplier',           v:bySupplier[0]?.name?.slice(0,36)??'—', s:bySupplier[0]?fC(bySupplier[0].value):'' },
-      { l:'Critical Reorders',      v:`${outCount+criticalCount} products`,   s:'Need immediate replenishment' },
-      { l:'Most Active Month',      v:mostActiveMonth,                         s:'Highest purchase value' },
-    ].map(i=>`<div class="ic"><div class="l">${i.l}</div><div class="v">${i.v}</div>${i.s?`<div class="s">${i.s}</div>`:''}</div>`).join('')}
+    <div class="ic"><div class="l">Top Supplier</div><div class="v">${bySupplier[0]?.name?.slice(0,36)??'—'}</div>${bySupplier[0]?`<div class="s">${fC(bySupplier[0].value)}</div>`:''}</div>
+    <div class="ic"><div class="l">Critical Reorders</div><div class="v">${outCount+criticalCount} products</div><div class="s">Need immediate replenishment</div></div>
+    <div class="ic"><div class="l">Most Active Month</div><div class="v">${mostActiveMonth}</div><div class="s">Highest purchase value</div></div>
   </div>
 </div>
 
-<!-- ══ PAGE 3 — Lead Times + Inventory ══ -->
+<!-- ══ PAGE 3 — Supplier SKUs ══ -->
 <div class="page">
-  <div class="page-hdr">
-    <div>
-      <div><span class="sec-num">3</span><span class="sec-title">Lead Times & Inventory Status</span></div>
-      <div class="sec-sub">${leadTimes.length} suppliers with lead time data · current stock alerts</div>
-    </div>
-    <div class="page-ref">SUPPLY REPORT · ${yearFilter==='all'?'ALL YEARS':yearFilter} · PAGE 3</div>
+  ${pageHdr(3,'Supplier × Top SKUs','Top 5 items per top 10 suppliers','PAGE 3')}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    ${skuCards}
   </div>
+</div>
 
+<!-- ══ PAGE 4 — Lead Times + Inventory ══ -->
+<div class="page">
+  ${pageHdr(4,'Lead Times & Inventory Status',`${validLeadTimes.length} suppliers with lead time data · current stock alerts`,'PAGE 4')}
   <div class="two-col">
     <div class="cd">
       <h3>Supplier Lead Times — avg days between orders</h3>
-      ${leadTimes.length===0
+      ${validLeadTimes.length===0
         ? '<p style="color:#94a3b8;font-size:12px">Not enough order history to calculate lead times.</p>'
         : `<table>
             <thead><tr><th class="l">Supplier</th><th class="r">Orders</th><th class="r">Avg Days</th><th class="r">Frequency</th></tr></thead>
@@ -573,30 +666,55 @@ export function SupplyPolicyPage() {
           </table>`
       }
     </div>
-
     <div class="cd">
       <h3>Current Inventory Status</h3>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
         ${[
-          {lbl:'Out of Stock',  val:outCount,      col:'#ef4444', sub:'Zero quantity'},
-          {lbl:'Critical',      val:criticalCount, col:'#f97316', sub:'Below min level'},
-          {lbl:'Low Stock',     val:lowCount,      col:'#f59e0b', sub:'Below safety'},
-          {lbl:'Total SKUs',    val:stockSummary?.total_products??0, col:'#10b981', sub:'Tracked'},
+          {lbl:'Out of Stock', val:outCount,      col:'#ef4444', sub:'Zero quantity'},
+          {lbl:'Critical',     val:criticalCount, col:'#f97316', sub:'Below min level'},
+          {lbl:'Low Stock',    val:lowCount,       col:'#f59e0b', sub:'Below safety'},
+          {lbl:'Total SKUs',   val:stockSummary?.total_products??0, col:'#10b981', sub:'Tracked'},
         ].map(k=>`
           <div style="background:#f8fafc;border-radius:10px;padding:12px 14px;border:1px solid #e2e8f0;border-top:3px solid ${k.col}">
             <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#64748b">${k.lbl}</div>
             <div style="font-size:18px;font-weight:800;color:${k.col};margin-top:5px">${k.val}</div>
             <div style="font-size:10px;color:#94a3b8;margin-top:2px">${k.sub}</div>
-          </div>
-        `).join('')}
+          </div>`).join('')}
       </div>
-      <div style="margin-top:12px;padding:11px 14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0">
+      <div style="padding:11px 14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0">
         <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:5px">Total Stock Value</div>
         <div style="font-size:20px;font-weight:800;color:#0f172a">${fC(stockSummary?.total_stock_value??0)}</div>
         <div style="font-size:10px;color:#94a3b8;margin-top:2px">${stockSummary?.total_products??0} products tracked</div>
       </div>
     </div>
   </div>
+</div>
+
+<!-- ══ PAGE 5 — Replenishment & Reorder ══ -->
+<div class="page">
+  ${pageHdr(5,'Replenishment & Reorder Analysis',`${urgentItems.length} urgent products · ${outCount} out · ${criticalCount} critical · ${lowCount} low`,'PAGE 5')}
+  <div class="kpi-row" style="margin-bottom:14px">
+    <div class="kc" style="border-top-color:#ef4444"><div class="l">Out of Stock</div><div class="v" style="color:#ef4444">${outCount}</div><div class="s">Reorder immediately</div></div>
+    <div class="kc" style="border-top-color:#f97316"><div class="l">Critical</div><div class="v" style="color:#f97316">${criticalCount}</div><div class="s">Below minimum level</div></div>
+    <div class="kc" style="border-top-color:#f59e0b"><div class="l">Low Stock</div><div class="v" style="color:#f59e0b">${lowCount}</div><div class="s">Below safety threshold</div></div>
+    <div class="kc" style="border-top-color:#10b981"><div class="l">Total Stock Value</div><div class="v" style="color:#10b981;font-size:13px">${fC(stockSummary?.total_stock_value??0)}</div><div class="s">${stockSummary?.total_products??0} SKUs tracked</div></div>
+  </div>
+  ${urgentItems.length === 0
+    ? '<p style="color:#94a3b8;font-size:12px;text-align:center;padding:40px">No urgent reorder items.</p>'
+    : `<table>
+        <thead><tr>
+          <th class="l">Product</th>
+          <th class="l">Category</th>
+          <th class="r">Stock</th>
+          <th class="r">Min</th>
+          <th class="r">Monthly Usage</th>
+          <th class="r">Days Left</th>
+          <th class="r">Reorder Qty</th>
+          <th class="r">Status</th>
+        </tr></thead>
+        <tbody>${reorderRows}</tbody>
+      </table>`
+  }
 </div>
 
 </body></html>`;
@@ -677,7 +795,7 @@ export function SupplyPolicyPage() {
             </div>
           </div>
 
-          {/* §2 — Categories only (Source Breakdown removed) */}
+          {/* §2 — Categories */}
           <div>
             <SH n={2} title="Purchase Value by Category" sub="Top categories (الفهرس)" color={C.teal} />
             <div style={card}>
@@ -711,8 +829,8 @@ export function SupplyPolicyPage() {
                     <YAxis tick={ax} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/1000).toFixed(0)}k`} />
                     <RTooltip content={<Tip />} />
                     <Legend wrapperStyle={{fontSize:11}} iconType="circle" iconSize={8} />
-                    {allBranches.map((b,i)=>(
-                      <Line key={`line-${b}`} type="monotone" dataKey={b} stroke={BRANCH_COLORS[b]??PAL[i%PAL.length]} strokeWidth={2} dot={false} activeDot={{r:4,strokeWidth:0}} />
+                    {allBranches.map((b)=>(
+                      <Line key={`line-${b}`} type="monotone" dataKey={b} stroke={branchColor(b)} strokeWidth={2} dot={false} activeDot={{r:4,strokeWidth:0}} />
                     ))}
                   </LineChart>
                 </ResponsiveContainer>
@@ -739,7 +857,7 @@ export function SupplyPolicyPage() {
                   </thead>
                   <tbody>
                     {allBranches.map((branch,bi)=>{
-                      const bc = BRANCH_COLORS[branch]??PAL[bi%PAL.length];
+                      const bc = branchColor(branch);
                       return (
                         <tr key={`row-${branch}`} style={{ background:bi%2===0?'transparent':`${css.muted}40` }}>
                           <td style={{ padding:'8px 12px', whiteSpace:'nowrap' }}>
@@ -871,7 +989,7 @@ export function SupplyPolicyPage() {
           <div>
             <SH n={5} title="Supplier Lead Time" sub="Average days between purchase orders per supplier" color={C.violet} />
             <div style={card}>
-              {leadTimes.length===0 ? <Empty text="Not enough orders to calculate lead time" /> : (
+              {leadTimes.filter(s=>s.avg_days>0).length===0 ? <Empty text="Not enough orders to calculate lead time" /> : (
                 <div style={{ overflowX:'auto' }}>
                   <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
                     <thead>
@@ -882,8 +1000,8 @@ export function SupplyPolicyPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {leadTimes.map((s,i)=>{
-                        const freq = s.avg_days<=14?{label:'Weekly',color:C.emerald}:s.avg_days<=30?{label:'Bi-weekly',color:C.teal}:s.avg_days<=60?{label:'Monthly',color:C.amber}:{label:'Quarterly',color:C.rose};
+                      {leadTimes.filter(s=>s.avg_days>0).map((s,i)=>{
+                        const freq = s.avg_days<=7?{label:'Weekly',color:C.emerald}:s.avg_days<=14?{label:'Bi-weekly',color:C.teal}:s.avg_days<=31?{label:'Monthly',color:C.amber}:s.avg_days<=90?{label:'Quarterly',color:C.orange}:{label:'Rare',color:C.rose};
                         return (
                           <tr key={`lt-${i}`} style={{ background:i%2===0?'transparent':`${css.muted}40` }}>
                             <td style={{ padding:'7px 12px', fontWeight:600, color:css.cardFg, maxWidth:300, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={s.supplier}>
