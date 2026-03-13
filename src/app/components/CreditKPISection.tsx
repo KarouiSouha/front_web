@@ -1,4 +1,5 @@
 // src/app/components/CreditKPISection.tsx
+// Design unified with DashboardPage — zero functional changes
 
 import { useState, useEffect, useCallback } from 'react';
 import type { LucideIcon } from 'lucide-react';
@@ -12,6 +13,37 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
 } from 'recharts';
+
+// ── Gradient Bar shape (identical to DashboardPage AgingBarChart) ─────────────
+function GradientBar(props: any) {
+  const { x, y, width, height, fill, index } = props;
+  if (!height || height <= 0) return null;
+  const id = `bucket-grad-${index}`;
+  const r  = Math.min(5, width / 2);
+  return (
+    <g>
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stopColor={fill} stopOpacity={1}   />
+          <stop offset="100%" stopColor={fill} stopOpacity={0.5} />
+        </linearGradient>
+      </defs>
+      <path
+        d={`
+          M${x + r},${y}
+          h${width - 2 * r}
+          a${r},${r} 0 0 1 ${r},${r}
+          v${height - r}
+          h${-width}
+          v${-(height - r)}
+          a${r},${r} 0 0 1 ${r},${-r}
+          z
+        `}
+        fill={`url(#${id})`}
+      />
+    </g>
+  );
+}
 import { api } from '../lib/api';
 import { formatCurrency, formatNumber } from '../lib/utils';
 
@@ -113,7 +145,7 @@ function normalizeBucketLabel(raw: string): string {
     .trim();
 }
 
-// ── Brand palette ─────────────────────────────────────────────────────────────
+// ── Brand palette (identical to DashboardPage) ────────────────────────────────
 const C = {
   indigo:  '#6366f1',
   violet:  '#8b5cf6',
@@ -125,19 +157,18 @@ const C = {
   rose:    '#f43f5e',
 };
 
-// ── CSS variable helpers ──────────────────────────────────────────────────────
+// ── CSS variable helpers (identical to DashboardPage) ─────────────────────────
 const css = {
-  card:      'hsl(var(--card))',
-  cardFg:    'hsl(var(--card-foreground))',
-  border:    'hsl(var(--border))',
-  muted:     'hsl(var(--muted))',
-  mutedFg:   'hsl(var(--muted-foreground))',
-  bg:        'hsl(var(--background))',
-  fg:        'hsl(var(--foreground))',
-  popover:   'hsl(var(--popover))',
-  popoverFg: 'hsl(var(--popover-foreground))',
+  card:    'hsl(var(--card))',
+  cardFg:  'hsl(var(--card-foreground))',
+  border:  'hsl(var(--border))',
+  muted:   'hsl(var(--muted))',
+  mutedFg: 'hsl(var(--muted-foreground))',
+  bg:      'hsl(var(--background))',
+  fg:      'hsl(var(--foreground))',
 };
 
+// ── Shared card style (identical to DashboardPage) ────────────────────────────
 const cardStyle: React.CSSProperties = {
   background:   css.card,
   borderRadius: 16,
@@ -148,7 +179,7 @@ const cardStyle: React.CSSProperties = {
 
 const axisStyle = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' };
 
-// ── Constants (unchanged logic) ───────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 const RISK_CONFIG: Record<string, { label: string; accent: string }> = {
   low:      { label: 'Low',      accent: C.emerald },
   medium:   { label: 'Medium',   accent: C.amber   },
@@ -162,23 +193,34 @@ const BUCKET_COLORS = [
   '#991b1b','#7f1d1d','#6b21a8','#581c87','#3b0764',
 ];
 
-// ── Custom Tooltip ────────────────────────────────────────────────────────────
+// ── Custom Tooltip (identical to DashboardPage CustomTooltip) ────────────────
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   const pct = payload[0]?.payload?.percentage;
   return (
     <div style={{
-      background: css.popover, border: `1px solid ${css.border}`,
-      borderRadius: 10, padding: '10px 14px',
-      boxShadow: '0 8px 24px rgba(0,0,0,0.15)', fontSize: 12,
+      background:   css.card,
+      border:       `1px solid ${css.border}`,
+      borderRadius: 12,
+      padding:      '12px 16px',
+      boxShadow:    '0 8px 32px rgba(0,0,0,0.12)',
+      fontSize:     12,
+      minWidth:     220,
     }}>
-      <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: css.mutedFg, marginBottom: 6 }}>
+      <p style={{
+        fontSize:      12,
+        fontWeight:    700,
+        color:         css.cardFg,
+        paddingBottom: 8,
+        borderBottom:  `1px solid ${css.border}`,
+        margin:        '0 0 8px',
+      }}>
         {label}
       </p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: payload[0].fill, display: 'inline-block' }} />
-        <span style={{ color: css.mutedFg }}>Amount</span>
-        <span style={{ marginLeft: 'auto', paddingLeft: 16, fontWeight: 700, color: css.popoverFg }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 10, height: 10, borderRadius: 3, background: payload[0].fill, display: 'inline-block', flexShrink: 0 }} />
+        <span style={{ color: css.mutedFg, flex: 1 }}>Amount</span>
+        <span style={{ fontWeight: 700, color: css.cardFg }}>
           {formatCurrency(payload[0].value)}{pct != null ? ` (${pct.toFixed(1)}%)` : ''}
         </span>
       </div>
@@ -186,7 +228,38 @@ function CustomTooltip({ active, payload, label }: any) {
   );
 }
 
-// ── Summary ribbon card ───────────────────────────────────────────────────────
+// ── Loader / Empty (same as DashboardPage) ────────────────────────────────────
+function Loader({ label }: { label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120, gap: 8, color: css.mutedFg }}>
+      <Loader2 size={15} className="animate-spin" />
+      <span style={{ fontSize: 13 }}>{label}</span>
+    </div>
+  );
+}
+
+function Empty() {
+  return (
+    <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: css.mutedFg, fontSize: 13 }}>
+      No data available
+    </div>
+  );
+}
+
+// ── Panel wrapper (same as DashboardPage) ─────────────────────────────────────
+function Panel({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+  return (
+    <div style={cardStyle}>
+      <div style={{ marginBottom: 20 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>{title}</h3>
+        {sub && <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>{sub}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ── Summary KPI card (matches DashboardPage KPI card style) ───────────────────
 function SummaryCard({
   label, value, sub, icon: Icon, accent,
 }: {
@@ -194,28 +267,48 @@ function SummaryCard({
   icon: LucideIcon; accent: string;
 }) {
   return (
-    <div style={{ ...cardStyle, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div style={{
+      ...cardStyle,
+      position:    'relative',
+      overflow:    'hidden',
+      borderTop:   `3px solid ${accent}`,
+      paddingTop:  20,
+      padding:     '20px 16px 16px',
+    }}>
+      {/* Background watermark */}
       <div style={{
-        width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-        background: `${accent}18`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <Icon size={15} style={{ color: accent }} />
+        position:     'absolute', bottom: -20, right: -20,
+        width: 90, height: 90, borderRadius: '50%',
+        background: accent, opacity: 0.06, pointerEvents: 'none',
+      }} />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+        <div style={{
+          width: 38, height: 38, borderRadius: 11,
+          background: `${accent}15`, border: `1px solid ${accent}25`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icon size={16} style={{ color: accent }} />
+        </div>
       </div>
-      <div style={{ minWidth: 0 }}>
-        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: css.mutedFg, margin: 0 }}>
-          {label}
-        </p>
-        <p style={{ fontSize: 13, fontWeight: 800, color: css.cardFg, margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {value}
-        </p>
-        {sub && <p style={{ fontSize: 10, color: css.mutedFg, margin: 0 }}>{sub}</p>}
+
+      <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: css.mutedFg, margin: 0 }}>
+        {label}
+      </p>
+      <p style={{ fontSize: 18, fontWeight: 800, color: css.cardFg, marginTop: 5, marginBottom: sub ? 2 : 14, letterSpacing: '-0.03em', lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {value}
+      </p>
+      {sub && <p style={{ fontSize: 10, color: css.mutedFg, margin: '0 0 12px' }}>{sub}</p>}
+
+      {/* Mini progress bar */}
+      <div style={{ height: 3, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
+        <div style={{ height: '100%', borderRadius: 999, width: '64%', background: `linear-gradient(90deg, ${accent}60, ${accent})` }} />
       </div>
     </div>
   );
 }
 
-// ── KPI Metric Card ───────────────────────────────────────────────────────────
+// ── KPI Metric Card (redesigned to match DashboardPage KPI style) ─────────────
 function KPIMetricCard({
   kpi, kpiKey, icon: Icon, accent, isGood, subline,
 }: {
@@ -233,49 +326,54 @@ function KPIMetricCard({
   const displayVal  = en.unit === 'days' ? kpi.value.toFixed(0) : kpi.value.toFixed(1);
 
   return (
-    <div style={{ ...cardStyle, position: 'relative', overflow: 'hidden' }}>
-      {/* soft glow */}
+    <div style={{ ...cardStyle, position: 'relative', overflow: 'hidden', borderTop: `3px solid ${accent}` }}>
+      {/* Background watermark */}
       <div style={{
-        position: 'absolute', top: -24, right: -24, width: 80, height: 80,
-        borderRadius: '50%', background: accent, opacity: 0.08,
-        filter: 'blur(20px)', pointerEvents: 'none',
+        position: 'absolute', bottom: -20, right: -20,
+        width: 90, height: 90, borderRadius: '50%',
+        background: accent, opacity: 0.06, pointerEvents: 'none',
       }} />
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
         <div style={{
-          width: 40, height: 40, borderRadius: 12,
-          background: `${accent}18`,
+          width: 38, height: 38, borderRadius: 11,
+          background: `${accent}15`, border: `1px solid ${accent}25`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <Icon size={17} style={{ color: accent }} />
+          <Icon size={16} style={{ color: accent }} />
         </div>
         <span style={{
           display: 'inline-flex', alignItems: 'center', gap: 3,
-          fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20,
-          background: `${trendAccent}18`, color: trendAccent,
-          border: `1px solid ${trendAccent}35`,
+          fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 20,
+          background: `${trendAccent}12`, color: trendAccent,
+          border: `1px solid ${trendAccent}25`,
         }}>
-          <TrendIcon size={11} />
+          <TrendIcon size={10} />
           {good ? 'Good' : 'Alert'}
         </span>
       </div>
 
-      <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: css.mutedFg }}>
+      <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: css.mutedFg, margin: 0 }}>
         {en.label}
       </p>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '4px 0 6px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '5px 0 4px' }}>
         <span style={{ fontSize: 28, fontWeight: 800, color: css.cardFg, letterSpacing: '-0.03em' }}>{displayVal}</span>
         <span style={{ fontSize: 15, fontWeight: 700, color: accent }}>{en.unit}</span>
       </div>
-      <p style={{ fontSize: 12, color: css.mutedFg, lineHeight: 1.5, marginBottom: subline ? 0 : 0 }}>
+      <p style={{ fontSize: 12, color: css.mutedFg, lineHeight: 1.5, margin: '0 0 4px' }}>
         {en.description}
       </p>
 
       {subline && (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px dashed ${css.border}` }}>
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${css.border}` }}>
           {subline}
         </div>
       )}
+
+      {/* Mini progress bar */}
+      <div style={{ height: 3, borderRadius: 999, background: css.muted, overflow: 'hidden', marginTop: 14 }}>
+        <div style={{ height: '100%', borderRadius: 999, width: `${Math.min(100, kpi.value)}%`, background: `linear-gradient(90deg, ${accent}60, ${accent})` }} />
+      </div>
     </div>
   );
 }
@@ -291,7 +389,8 @@ function SectionHeader({
       <div>
         <h1 style={{ fontSize: 24, fontWeight: 800, color: css.fg, letterSpacing: '-0.03em', margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{
-            width: 36, height: 36, borderRadius: 10, background: `${C.indigo}18`,
+            width: 36, height: 36, borderRadius: 10, background: `${C.indigo}15`,
+            border: `1px solid ${C.indigo}25`,
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           }}>
             <CreditCard size={18} style={{ color: C.indigo }} />
@@ -303,7 +402,7 @@ function SectionHeader({
           {reportDate && (
             <span style={{
               fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20,
-              background: `${C.indigo}18`, color: C.indigo, border: `1px solid ${C.indigo}35`,
+              background: `${C.indigo}12`, color: C.indigo, border: `1px solid ${C.indigo}25`,
             }}>
               Report: {reportDate}
             </span>
@@ -348,24 +447,26 @@ export function CreditKPISection() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // ── Loading skeleton (matches DashboardPage skeleton style) ──
   if (loading) {
     return (
       <div style={{ background: css.bg, minHeight: '100vh', padding: '32px 28px' }}>
         <SectionHeader loading onRefresh={fetchData} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 12, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 16, marginBottom: 24 }}>
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} style={{ height: 72, borderRadius: 16, background: css.muted, opacity: 0.4 }} />
+            <div key={i} style={{ height: 110, borderRadius: 16, background: css.muted, opacity: 0.5 }} />
           ))}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} style={{ height: 160, borderRadius: 16, background: css.muted, opacity: 0.4 }} />
+            <div key={i} style={{ height: 170, borderRadius: 16, background: css.muted, opacity: 0.5 }} />
           ))}
         </div>
       </div>
     );
   }
 
+  // ── Error state ──
   if (error || !data) {
     return (
       <div style={{ background: css.bg, minHeight: '100vh', padding: '32px 28px' }}>
@@ -406,8 +507,8 @@ export function CreditKPISection() {
     : '0';
 
   const summaryCards: { label: string; value: string; sub?: string; icon: LucideIcon; accent: string }[] = [
-    { label: 'Total Accounts',    value: formatNumber(summary.total_customers),                              sub: 'All accounts in imported file',      icon: Users,         accent: C.indigo  },
-    { label: 'Active Clients',    value: formatNumber(summary.credit_customers),                             sub: `${pctActive}% of total · balance > 0`, icon: UserCheck,   accent: C.emerald },
+    { label: 'Total Accounts',    value: formatNumber(summary.total_customers),                              sub: 'All accounts in imported file',        icon: Users,         accent: C.indigo  },
+    { label: 'Active Clients',    value: formatNumber(summary.credit_customers),                             sub: `${pctActive}% of total · balance > 0`, icon: UserCheck,     accent: C.emerald },
     { label: 'Total Receivables', value: formatCurrency(summary.grand_total_receivables),                    icon: BarChart3,      accent: C.cyan    },
     { label: 'Overdue >60d',      value: formatCurrency(summary.overdue_amount),                             icon: AlertTriangle,  accent: C.amber   },
     { label: 'Credit Revenue',    value: formatCurrency(summary.ca_total - summary.grand_total_receivables), icon: TrendingUp,     accent: C.emerald },
@@ -419,12 +520,12 @@ export function CreditKPISection() {
 
       <SectionHeader onRefresh={fetchData} reportDate={data.report_date} />
 
-      {/* ── Summary ribbon ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 12, marginBottom: 24 }}>
+      {/* ── Summary ribbon (6 KPI cards matching DashboardPage style) ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 16, marginBottom: 24 }}>
         {summaryCards.map((card, i) => <SummaryCard key={i} {...card} />)}
       </div>
 
-      {/* ── 5 KPI Cards ── */}
+      {/* ── 5 KPI Metric Cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 16 }}>
 
         <KPIMetricCard
@@ -488,9 +589,9 @@ export function CreditKPISection() {
               ].map(s => (
                 <span key={s.range} style={{
                   fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
-                  background: s.match ? `${s.accent}18` : css.muted,
+                  background: s.match ? `${s.accent}12` : css.muted,
                   color: s.match ? s.accent : css.mutedFg,
-                  border: `1px solid ${s.match ? s.accent + '35' : 'transparent'}`,
+                  border: `1px solid ${s.match ? s.accent + '25' : 'transparent'}`,
                 }}>
                   {s.range}
                 </span>
@@ -514,16 +615,17 @@ export function CreditKPISection() {
           }
         />
 
-        {/* Reference thresholds card */}
-        <div style={{ ...cardStyle, background: `hsl(var(--muted)/0.4)` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+        {/* Reference thresholds card — styled as a Panel */}
+        <div style={{ ...cardStyle, borderTop: `3px solid ${css.border}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
             <div style={{
-              width: 36, height: 36, borderRadius: 10, background: css.muted,
+              width: 38, height: 38, borderRadius: 11,
+              background: css.muted, border: `1px solid ${css.border}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
               <Receipt size={15} style={{ color: css.mutedFg }} />
             </div>
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: css.mutedFg, margin: 0 }}>
+            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: css.mutedFg, margin: 0 }}>
               Reference Thresholds
             </p>
           </div>
@@ -549,148 +651,159 @@ export function CreditKPISection() {
         </div>
       </div>
 
-      {/* ── Bucket Distribution Chart ── */}
-      <div style={{ ...cardStyle, marginBottom: 16 }}>
-        <div style={{ marginBottom: 20 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <BarChart3 size={16} style={{ color: C.indigo }} />
-            Receivables Breakdown by Age Bucket
-          </h3>
-          <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 4 }}>
-            Amounts distributed by aging period (LYD) ·{' '}
-            <span style={{ color: C.emerald, fontWeight: 600 }}>{formatNumber(summary.credit_customers)} active</span>
-            {' '}/ {formatNumber(summary.total_customers)} total accounts
-          </p>
-        </div>
-        {chartData.length === 0 ? (
-          <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: css.mutedFg, fontSize: 13 }}>
-            No data available
-          </div>
-        ) : (
+      {/* ── Bucket Distribution Chart (identical structure to DashboardPage AgingBarChart) ── */}
+      <Panel
+        title="Receivables Breakdown by Age Bucket"
+        sub={`Amounts distributed by aging period (LYD) · ${formatNumber(summary.credit_customers)} active / ${formatNumber(summary.total_customers)} total accounts`}
+      >
+        {chartData.length === 0 ? <Empty /> : (
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={chartData} margin={{ left: 10, right: 10, top: 10, bottom: 30 }} barCategoryGap="22%">
-              <CartesianGrid strokeDasharray="4 4" stroke={css.border} vertical={false} />
-              <XAxis dataKey="name" tick={axisStyle} axisLine={false} tickLine={false} angle={-35} textAnchor="end" interval={0} />
-              <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="amount" radius={[5, 5, 0, 0]}>
-                {chartData.map((_, i) => <Cell key={i} fill={chartData[i].fill} />)}
+            <BarChart
+              data={chartData}
+              margin={{ top: 8, right: 4, left: 0, bottom: 44 }}
+              barCategoryGap="24%"
+            >
+              <CartesianGrid stroke={css.border} strokeWidth={1} vertical={false} />
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                axisLine={false}
+                tickLine={false}
+                angle={-40}
+                textAnchor="end"
+                interval={0}
+                dy={4}
+              />
+              <YAxis
+                tick={axisStyle}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={v => `${(v / 1000).toFixed(0)}k`}
+                tickCount={5}
+                width={36}
+              />
+              <Tooltip
+                content={<CustomTooltip />}
+                cursor={{ fill: 'rgba(0,0,0,0.03)' }}
+              />
+              <Bar dataKey="amount" name="Amount" shape={<GradientBar />} isAnimationActive>
+                {chartData.map((entry, i) => (
+                  <Cell key={i} fill={entry.fill} />
+                ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         )}
-      </div>
+      </Panel>
 
-      {/* ── Top 5 At-Risk Customers ── */}
-      <div style={cardStyle}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
-          <div>
-            <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <ShieldAlert size={16} style={{ color: C.rose }} />
-              Top 5 At-Risk Customers
-            </h3>
-            <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 4 }}>
-              Customers with the highest receivables, ranked by risk level
-            </p>
+      {/* ── Top 5 At-Risk Customers (wrapped in Panel) ── */}
+      <div style={{ marginTop: 16 }}>
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+            <div>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ShieldAlert size={16} style={{ color: C.rose }} />
+                Top 5 At-Risk Customers
+              </h3>
+              <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>
+                Customers with the highest receivables, ranked by risk level
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {Object.entries(RISK_CONFIG).map(([key, cfg]) => (
+                <span key={key} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20,
+                  background: `${cfg.accent}12`, color: cfg.accent, border: `1px solid ${cfg.accent}25`,
+                }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: cfg.accent }} />
+                  {cfg.label}
+                </span>
+              ))}
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {Object.entries(RISK_CONFIG).map(([key, cfg]) => (
-              <span key={key} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20,
-                background: `${cfg.accent}18`, color: cfg.accent, border: `1px solid ${cfg.accent}35`,
-              }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: cfg.accent }} />
-                {cfg.label}
-              </span>
-            ))}
-          </div>
-        </div>
 
-        {top5_risky_customers.length === 0 ? (
-          <div style={{ height: 96, display: 'flex', alignItems: 'center', justifyContent: 'center', color: css.mutedFg, fontSize: 13 }}>
-            No at-risk customers found
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {top5_risky_customers.map((customer, index) => {
-              const cfg        = RISK_CONFIG[customer.risk_score] ?? RISK_CONFIG.medium;
-              const rankAccent = index === 0 ? C.rose : index === 1 ? C.orange : css.mutedFg;
-              return (
-                <div key={customer.id} style={{ padding: 16, borderRadius: 12, border: `1px solid ${css.border}` }}>
-                  {/* top row */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                    <div style={{
-                      width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-                      background: `${rankAccent}18`, border: `1px solid ${rankAccent}35`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 14, fontWeight: 800, color: rankAccent,
-                    }}>
-                      {index + 1}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: css.cardFg, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {customer.customer_name || customer.account_code}
-                      </p>
-                      <p style={{ fontSize: 11, color: css.mutedFg, fontFamily: 'monospace', margin: 0 }}>#{customer.account_code}</p>
-                    </div>
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <p style={{ fontSize: 15, fontWeight: 800, color: C.rose, margin: 0 }}>{formatCurrency(customer.total)}</p>
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-                        background: `${cfg.accent}18`, color: cfg.accent, border: `1px solid ${cfg.accent}35`,
-                        textTransform: 'uppercase',
+          {top5_risky_customers.length === 0 ? <Empty /> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {top5_risky_customers.map((customer, index) => {
+                const cfg        = RISK_CONFIG[customer.risk_score] ?? RISK_CONFIG.medium;
+                const rankAccent = index === 0 ? C.rose : index === 1 ? C.orange : css.mutedFg;
+                return (
+                  <div key={customer.id} style={{ padding: 16, borderRadius: 12, border: `1px solid ${css.border}` }}>
+                    {/* top row */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                      <div style={{
+                        width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                        background: `${rankAccent}12`, border: `1px solid ${rankAccent}25`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 14, fontWeight: 800, color: rankAccent,
                       }}>
-                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.accent }} />
-                        {cfg.label}
+                        {index + 1}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: css.cardFg, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {customer.customer_name || customer.account_code}
+                        </p>
+                        <p style={{ fontSize: 11, color: css.mutedFg, fontFamily: 'monospace', margin: 0 }}>#{customer.account_code}</p>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <p style={{ fontSize: 15, fontWeight: 800, color: C.rose, margin: 0 }}>{formatCurrency(customer.total)}</p>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                          background: `${cfg.accent}12`, color: cfg.accent, border: `1px solid ${cfg.accent}25`,
+                          textTransform: 'uppercase',
+                        }}>
+                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.accent }} />
+                          {cfg.label}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* stat chips */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 10 }}>
+                      {[
+                        { label: 'Current', value: formatCurrency(customer.current),       accent: C.emerald },
+                        { label: 'Overdue', value: formatCurrency(customer.overdue_total),  accent: C.rose    },
+                        {
+                          label: 'DSO',
+                          value: `${customer.dmp_days.toFixed(0)} days`,
+                          accent: customer.dmp_days > 90 ? C.rose : customer.dmp_days > 30 ? C.amber : C.emerald,
+                        },
+                      ].map(stat => (
+                        <div key={stat.label} style={{
+                          padding: 8, borderRadius: 8, textAlign: 'center',
+                          background: `${stat.accent}08`, border: `1px solid ${stat.accent}20`,
+                        }}>
+                          <p style={{ fontSize: 10, color: css.mutedFg, margin: '0 0 2px' }}>{stat.label}</p>
+                          <p style={{ fontSize: 12, fontWeight: 800, color: stat.accent, margin: 0 }}>{stat.value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* progress bar */}
+                    <div style={{ height: 5, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', borderRadius: 999,
+                        width: `${Math.min(100, customer.overdue_percentage)}%`,
+                        background: `linear-gradient(90deg, ${cfg.accent}55, ${cfg.accent})`,
+                        transition: 'width 0.5s ease',
+                      }} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
+                      <span style={{ fontSize: 10, color: css.mutedFg }}>
+                        Overdue: <span style={{ fontWeight: 700, color: C.rose }}>{customer.overdue_percentage.toFixed(1)}%</span>
+                      </span>
+                      <span style={{ fontSize: 10, color: css.mutedFg }}>
+                        Current: <span style={{ fontWeight: 700, color: C.emerald }}>{(100 - customer.overdue_percentage).toFixed(1)}%</span>
                       </span>
                     </div>
                   </div>
-
-                  {/* stat chips — unchanged data, new style */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 10 }}>
-                    {[
-                      { label: 'Current', value: formatCurrency(customer.current),       accent: C.emerald },
-                      { label: 'Overdue', value: formatCurrency(customer.overdue_total),  accent: C.rose    },
-                      {
-                        label: 'DSO',
-                        value: `${customer.dmp_days.toFixed(0)} days`,
-                        accent: customer.dmp_days > 90 ? C.rose : customer.dmp_days > 30 ? C.amber : C.emerald,
-                      },
-                    ].map(stat => (
-                      <div key={stat.label} style={{
-                        padding: 8, borderRadius: 8, textAlign: 'center',
-                        background: `${stat.accent}08`, border: `1px solid ${stat.accent}20`,
-                      }}>
-                        <p style={{ fontSize: 10, color: css.mutedFg, margin: '0 0 2px' }}>{stat.label}</p>
-                        <p style={{ fontSize: 12, fontWeight: 800, color: stat.accent, margin: 0 }}>{stat.value}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* progress bar */}
-                  <div style={{ height: 5, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
-                    <div style={{
-                      height: '100%', borderRadius: 999,
-                      width: `${Math.min(100, customer.overdue_percentage)}%`,
-                      background: `linear-gradient(90deg, ${cfg.accent}55, ${cfg.accent})`,
-                      transition: 'width 0.5s ease',
-                    }} />
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
-                    <span style={{ fontSize: 10, color: css.mutedFg }}>
-                      Overdue: <span style={{ fontWeight: 700, color: C.rose }}>{customer.overdue_percentage.toFixed(1)}%</span>
-                    </span>
-                    <span style={{ fontSize: 10, color: css.mutedFg }}>
-                      Current: <span style={{ fontWeight: 700, color: C.emerald }}>{(100 - customer.overdue_percentage).toFixed(1)}%</span>
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
     </div>

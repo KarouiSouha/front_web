@@ -12,14 +12,8 @@ import {
   isPurchaseType,
 } from '../lib/dataApi';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper — Django DecimalField → string ("1.0000"). Toujours parser avant usage.
-// ─────────────────────────────────────────────────────────────────────────────
 const toNum = (val: unknown): number => parseFloat(String(val ?? 0)) || 0;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Catégories UI
-// ─────────────────────────────────────────────────────────────────────────────
 type MovementCategory = 'sale' | 'purchase' | 'transfer' | 'adjustment' | 'other';
 
 function getCategory(movementType: string): MovementCategory {
@@ -30,9 +24,7 @@ function getCategory(movementType: string): MovementCategory {
   return 'other';
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Brand palette & CSS vars
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Brand palette ─────────────────────────────────────────────────────────────
 const C = {
   indigo:  '#6366f1',
   violet:  '#8b5cf6',
@@ -61,9 +53,7 @@ const cardStyle: React.CSSProperties = {
   border:       `1px solid ${css.border}`,
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Badge colors
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Badge colors ──────────────────────────────────────────────────────────────
 const BADGE_ACCENT: Record<MovementCategory, string> = {
   sale:       C.emerald,
   purchase:   C.cyan,
@@ -80,9 +70,7 @@ const CATEGORY_LABEL: Record<MovementCategory, string> = {
   other:      'Other',
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
 interface Movement {
   id: string;
   movement_date: string;
@@ -110,9 +98,7 @@ interface PaginatedMovements {
 
 type TransactionWithType = Movement & { category: MovementCategory };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// StyledDropdown — portal-based, same as KPIEnginePage
-// ─────────────────────────────────────────────────────────────────────────────
+// ── StyledDropdown — portal-based, UNCHANGED ──────────────────────────────────
 function StyledDropdown({
   label, options, value, onChange, isOpen, onToggle, onClose,
 }: {
@@ -170,18 +156,18 @@ function StyledDropdown({
           onMouseDown={e => e.stopPropagation()}
           onClick={() => { onChange(opt.key); onClose(); }}
           style={{
-            width:      '100%',
-            textAlign:  'left',
-            padding:    '8px 12px',
-            borderRadius: 8,
-            border:     'none',
-            cursor:     'pointer',
-            fontSize:   13,
-            background: value === opt.key ? `${C.indigo}15` : 'transparent',
-            color:      value === opt.key ? C.indigo : '#111827',
-            fontWeight: value === opt.key ? 600 : 400,
-            display:    'flex',
-            alignItems: 'center',
+            width:          '100%',
+            textAlign:      'left',
+            padding:        '8px 12px',
+            borderRadius:   8,
+            border:         'none',
+            cursor:         'pointer',
+            fontSize:       13,
+            background:     value === opt.key ? `${C.indigo}15` : 'transparent',
+            color:          value === opt.key ? C.indigo : '#111827',
+            fontWeight:     value === opt.key ? 600 : 400,
+            display:        'flex',
+            alignItems:     'center',
             justifyContent: 'space-between',
           }}
         >
@@ -205,19 +191,19 @@ function StyledDropdown({
         ref={btnRef}
         onClick={onToggle}
         style={{
-          width:      '100%',
-          height:     38,
-          display:    'flex',
-          alignItems: 'center',
+          width:          '100%',
+          height:         38,
+          display:        'flex',
+          alignItems:     'center',
           justifyContent: 'space-between',
-          padding:    '0 12px',
-          borderRadius: 10,
-          border:     `1px solid ${css.border}`,
-          background: css.card,
-          color:      css.cardFg,
-          fontSize:   13,
-          cursor:     'pointer',
-          boxShadow:  '0 1px 3px rgba(0,0,0,0.06)',
+          padding:        '0 12px',
+          borderRadius:   10,
+          border:         `1px solid ${css.border}`,
+          background:     css.card,
+          color:          css.cardFg,
+          fontSize:       13,
+          cursor:         'pointer',
+          boxShadow:      '0 1px 3px rgba(0,0,0,0.06)',
         }}
       >
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -236,9 +222,56 @@ function StyledDropdown({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Page
-// ─────────────────────────────────────────────────────────────────────────────
+// ── KPI Card — Dashboard style ────────────────────────────────────────────────
+function KpiCard({
+  label, value, sub, icon: Icon, accent,
+}: {
+  label: string; value: string; sub?: string;
+  icon: React.ElementType; accent: string;
+}) {
+  return (
+    <div style={{ ...cardStyle, position: 'relative', overflow: 'hidden', borderTop: `3px solid ${accent}`, paddingTop: 20 }}>
+      {/* Background watermark */}
+      <div style={{
+        position: 'absolute', bottom: -20, right: -20,
+        width: 90, height: 90, borderRadius: '50%',
+        background: accent, opacity: 0.06, pointerEvents: 'none',
+      }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
+        <div style={{
+          width: 38, height: 38, borderRadius: 11,
+          background: `${accent}15`, border: `1px solid ${accent}25`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icon size={16} style={{ color: accent }} />
+        </div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 3,
+          fontSize: 10, fontWeight: 700,
+          color: C.emerald, background: `${C.emerald}12`,
+          border: `1px solid ${C.emerald}25`,
+          padding: '3px 8px', borderRadius: 20,
+        }}>
+          <ArrowUpRight size={10} />
+          live
+        </div>
+      </div>
+      <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: css.mutedFg, margin: 0 }}>
+        {label}
+      </p>
+      <p style={{ fontSize: 22, fontWeight: 800, color: css.cardFg, marginTop: 5, marginBottom: 4, letterSpacing: '-0.03em', lineHeight: 1 }}>
+        {value}
+      </p>
+      {sub && <p style={{ fontSize: 11, color: css.mutedFg, marginBottom: 14 }}>{sub}</p>}
+      {!sub && <div style={{ marginBottom: 14 }} />}
+      <div style={{ height: 3, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
+        <div style={{ height: '100%', borderRadius: 999, width: '64%', background: `linear-gradient(90deg, ${accent}60, ${accent})` }} />
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 export function TransactionsPage() {
   const [transactions, setTransactions]           = useState<TransactionWithType[]>([]);
   const [loading, setLoading]                     = useState(true);
@@ -250,15 +283,12 @@ export function TransactionsPage() {
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [selectedType,   setSelectedType]   = useState('all');
 
-  // Dropdown open state — only one at a time
   const [openDropdown, setOpenDropdown] = useState<'period' | 'type' | 'branch' | null>(null);
 
   const [page, setPage]             = useState(1);
   const pageSize                    = 20;
   const [totalCount, setTotalCount] = useState(0);
 
-  // ── KPI — totaux globaux via data.totals (calculés backend sur TOUT) ────
-  // /api/transactions/?page=1&page_size=1 → totals.total_in_value / total_out_value
   const [grandTotalOut, setGrandTotalOut] = useState(0);
   const [grandTotalIn,  setGrandTotalIn]  = useState(0);
   const [kpiLoading,    setKpiLoading]    = useState(true);
@@ -271,11 +301,8 @@ export function TransactionsPage() {
         params:  { page: 1, page_size: 1 },
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      const tOut = toNum(data.totals?.total_out_value);
-      const tIn  = toNum(data.totals?.total_in_value);
-      console.log('[KPI] totals from backend → OUT:', tOut, '| IN:', tIn);
-      setGrandTotalOut(tOut);
-      setGrandTotalIn(tIn);
+      setGrandTotalOut(toNum(data.totals?.total_out_value));
+      setGrandTotalIn(toNum(data.totals?.total_in_value));
     } catch (e) {
       console.error('[KPI] fetch error', e);
     } finally {
@@ -285,32 +312,22 @@ export function TransactionsPage() {
 
   useEffect(() => { fetchKPIs(); }, [fetchKPIs]);
 
-  const refetchKPIs = fetchKPIs;
   const netFlow = grandTotalIn - grandTotalOut;
 
-  // Fetch movement types
   useEffect(() => {
     const token = localStorage.getItem('fasi_access_token');
-    axios
-      .get<{ movement_types: string[] }>('/api/transactions/movement-types/', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
-      .then(res => setAvailableTypes(res.data.movement_types))
-      .catch(() => setAvailableTypes([]));
+    axios.get<{ movement_types: string[] }>('/api/transactions/movement-types/', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }).then(res => setAvailableTypes(res.data.movement_types)).catch(() => setAvailableTypes([]));
   }, []);
 
-  // Fetch branches
   useEffect(() => {
     const token = localStorage.getItem('fasi_access_token');
-    axios
-      .get<{ branches: string[] }>('/api/transactions/branches/', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
-      .then(res => setAvailableBranches(res.data.branches))
-      .catch(() => setAvailableBranches([]));
+    axios.get<{ branches: string[] }>('/api/transactions/branches/', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }).then(res => setAvailableBranches(res.data.branches)).catch(() => setAvailableBranches([]));
   }, []);
 
-  // Fetch transactions
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -326,14 +343,9 @@ export function TransactionsPage() {
       });
 
       const mapped: TransactionWithType[] = data.movements.map(m => ({
-        ...m,
-        category: getCategory(m.movement_type),
+        ...m, category: getCategory(m.movement_type),
       }));
-
-      mapped.sort(
-        (a, b) => new Date(b.movement_date).getTime() - new Date(a.movement_date).getTime()
-      );
-
+      mapped.sort((a, b) => new Date(b.movement_date).getTime() - new Date(a.movement_date).getTime());
       setTransactions(mapped);
       setTotalCount(data.count);
     } catch (err: any) {
@@ -343,38 +355,26 @@ export function TransactionsPage() {
     }
   }, [page, selectedPeriod, selectedBranch, selectedType]);
 
-  useEffect(() => {
-    fetchTransactions();
-  }, [fetchTransactions]);
+  useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
 
-  // ── Refresh handler — reloads both KPIs and transactions ─────────────────
   const handleRefresh = useCallback(() => {
-    refetchKPIs?.();
+    fetchKPIs();
     fetchTransactions();
-  }, [refetchKPIs, fetchTransactions]);
+  }, [fetchKPIs, fetchTransactions]);
 
   const totalPages = Math.ceil(totalCount / pageSize);
 
-  // Dropdown options
   const periodOptions = [
-    { key: '1m',  label: 'Last Month' },
-    { key: '3m',  label: 'Last 3 Months' },
-    { key: '6m',  label: 'Last 6 Months' },
+    { key: '1m',  label: 'Last Month'     },
+    { key: '3m',  label: 'Last 3 Months'  },
+    { key: '6m',  label: 'Last 6 Months'  },
     { key: '12m', label: 'Last 12 Months' },
-    { key: 'ytd', label: 'Year to Date' },
+    { key: 'ytd', label: 'Year to Date'   },
   ];
+  const typeOptions   = [{ key: 'all', label: 'All Types'     }, ...availableTypes.map(t => ({ key: t, label: t }))];
+  const branchOptions = [{ key: 'all', label: 'All Branches'  }, ...availableBranches.map(b => ({ key: b, label: b }))];
 
-  const typeOptions = [
-    { key: 'all', label: 'All Types' },
-    ...availableTypes.map(t => ({ key: t, label: t })),
-  ];
-
-  const branchOptions = [
-    { key: 'all', label: 'All Branches' },
-    ...availableBranches.map(b => ({ key: b, label: b })),
-  ];
-
-  // ── Colonnes du tableau ───────────────────────────────────────────────────
+  // ── Table columns — UNCHANGED ─────────────────────────────────────────────
   const columns = [
     {
       key: 'movement_type',
@@ -407,8 +407,7 @@ export function TransactionsPage() {
       label: 'Product / Material',
       render: (row: TransactionWithType) => (
         <div style={{ maxWidth: 240 }}>
-          <p style={{ fontWeight: 600, fontSize: 13, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: css.cardFg }}
-             title={row.material_name}>
+          <p style={{ fontWeight: 600, fontSize: 13, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: css.cardFg }} title={row.material_name}>
             {row.material_name || '—'}
           </p>
           <p style={{ fontSize: 11, color: css.mutedFg, fontFamily: 'monospace', margin: 0 }}>{row.material_code || '—'}</p>
@@ -477,7 +476,6 @@ export function TransactionsPage() {
     },
   ];
 
-  // ── Rendu ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ background: css.bg, minHeight: '100vh', padding: '32px 28px' }}>
 
@@ -491,7 +489,6 @@ export function TransactionsPage() {
             Complete movement history across all branches
           </p>
         </div>
-        {/* ── Refresh button — same style as KPIEnginePage ── */}
         <button
           onClick={handleRefresh}
           disabled={loading || kpiLoading}
@@ -499,7 +496,8 @@ export function TransactionsPage() {
             display: 'flex', alignItems: 'center', gap: 8,
             height: 36, padding: '0 16px', borderRadius: 10,
             border: `1px solid ${css.border}`, background: css.card,
-            color: css.cardFg, fontSize: 13, cursor: loading || kpiLoading ? 'not-allowed' : 'pointer',
+            color: css.cardFg, fontSize: 13,
+            cursor: loading || kpiLoading ? 'not-allowed' : 'pointer',
             opacity: loading || kpiLoading ? 0.6 : 1,
             boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
           }}
@@ -511,98 +509,30 @@ export function TransactionsPage() {
         </button>
       </div>
 
-      {/* ── KPI Cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 16 }}>
-
-        {/* Total Value Out — of Purchases (فاتورة شراء → total_out) */}
-        <div style={{ ...cardStyle, position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: -24, right: -24, width: 80, height: 80, borderRadius: '50%', background: C.rose, opacity: 0.08, filter: 'blur(20px)', pointerEvents: 'none' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: `${C.rose}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ArrowUpRight size={16} style={{ color: C.rose }} />
-            </div>
-          </div>
-          <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: css.mutedFg, margin: 0 }}>Total Value Out</p>
-          <p style={{ fontSize: 22, fontWeight: 800, color: C.rose, margin: '4px 0 0', letterSpacing: '-0.03em' }}>{formatCurrency(grandTotalOut)}</p>
-          <p style={{ fontSize: 11, color: css.mutedFg, marginTop: 4 }}>of Sales</p>
-        </div>
-
-        {/* Total Value In — of Sales (فاتورة بيع → total_in) */}
-        <div style={{ ...cardStyle, position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: -24, right: -24, width: 80, height: 80, borderRadius: '50%', background: C.emerald, opacity: 0.08, filter: 'blur(20px)', pointerEvents: 'none' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: `${C.emerald}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ArrowDownLeft size={16} style={{ color: C.emerald }} />
-            </div>
-          </div>
-          <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: css.mutedFg, margin: 0 }}>Total Value In</p>
-          <p style={{ fontSize: 22, fontWeight: 800, color: C.emerald, margin: '4px 0 0', letterSpacing: '-0.03em' }}>{formatCurrency(grandTotalIn)}</p>
-          <p style={{ fontSize: 11, color: css.mutedFg, marginTop: 4 }}>All movement types</p>
-        </div>
-
-        {/* Total Movements */}
-        <div style={{ ...cardStyle, position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: -24, right: -24, width: 80, height: 80, borderRadius: '50%', background: C.indigo, opacity: 0.08, filter: 'blur(20px)', pointerEvents: 'none' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: `${C.indigo}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ArrowLeftRight size={16} style={{ color: C.indigo }} />
-            </div>
-          </div>
-          <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: css.mutedFg, margin: 0 }}>Total Movements</p>
-          <p style={{ fontSize: 22, fontWeight: 800, color: css.cardFg, margin: '4px 0 0', letterSpacing: '-0.03em' }}>{formatNumber(totalCount)}</p>
-          <p style={{ fontSize: 11, color: css.mutedFg, marginTop: 4 }}>Across all types</p>
-        </div>
-
-        {/* Net Flow */}
-        <div style={{ ...cardStyle, position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: -24, right: -24, width: 80, height: 80, borderRadius: '50%', background: netFlow >= 0 ? C.emerald : C.rose, opacity: 0.08, filter: 'blur(20px)', pointerEvents: 'none' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: `${netFlow >= 0 ? C.emerald : C.rose}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ArrowLeftRight size={16} style={{ color: netFlow >= 0 ? C.emerald : C.rose }} />
-            </div>
-          </div>
-          <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: css.mutedFg, margin: 0 }}>Net Flow</p>
-          <p style={{ fontSize: 22, fontWeight: 800, color: netFlow >= 0 ? C.emerald : C.rose, margin: '4px 0 0', letterSpacing: '-0.03em' }}>
-            {netFlow >= 0 ? '+' : '-'}{formatCurrency(Math.abs(netFlow))}
-          </p>
-          <p style={{ fontSize: 11, color: css.mutedFg, marginTop: 4 }}>{netFlow >= 0 ? 'Net positive' : 'Net negative'}</p>
-        </div>
+      {/* ── KPI Cards — Dashboard style ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 24 }}>
+        <KpiCard label="Total Value Out" value={formatCurrency(grandTotalOut)} sub="of Sales"           icon={ArrowUpRight}   accent={C.rose}    />
+        <KpiCard label="Total Value In"  value={formatCurrency(grandTotalIn)}  sub="All movement types" icon={ArrowDownLeft}  accent={C.emerald} />
+        <KpiCard label="Total Movements" value={formatNumber(totalCount)}       sub="Across all types"  icon={ArrowLeftRight} accent={C.indigo}  />
+        <KpiCard
+          label="Net Flow"
+          value={`${netFlow >= 0 ? '+' : '-'}${formatCurrency(Math.abs(netFlow))}`}
+          sub={netFlow >= 0 ? 'Net positive' : 'Net negative'}
+          icon={ArrowLeftRight}
+          accent={netFlow >= 0 ? C.emerald : C.rose}
+        />
       </div>
 
-      {/* ── Filters ── */}
+      {/* ── Filters — UNCHANGED ── */}
       <div style={{ ...cardStyle, marginBottom: 16 }}>
         <div style={{ marginBottom: 16 }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>Filters</h3>
           <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>Customize your transaction view</p>
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <StyledDropdown
-            label="Period"
-            options={periodOptions}
-            value={selectedPeriod}
-            onChange={v => { setSelectedPeriod(v); setPage(1); }}
-            isOpen={openDropdown === 'period'}
-            onToggle={() => setOpenDropdown(o => o === 'period' ? null : 'period')}
-            onClose={() => setOpenDropdown(null)}
-          />
-          <StyledDropdown
-            label="Movement Type"
-            options={typeOptions}
-            value={selectedType}
-            onChange={v => { setSelectedType(v); setPage(1); }}
-            isOpen={openDropdown === 'type'}
-            onToggle={() => setOpenDropdown(o => o === 'type' ? null : 'type')}
-            onClose={() => setOpenDropdown(null)}
-          />
-          <StyledDropdown
-            label="Branch"
-            options={branchOptions}
-            value={selectedBranch}
-            onChange={v => { setSelectedBranch(v); setPage(1); }}
-            isOpen={openDropdown === 'branch'}
-            onToggle={() => setOpenDropdown(o => o === 'branch' ? null : 'branch')}
-            onClose={() => setOpenDropdown(null)}
-          />
+          <StyledDropdown label="Period"        options={periodOptions} value={selectedPeriod} onChange={v => { setSelectedPeriod(v); setPage(1); }} isOpen={openDropdown === 'period'} onToggle={() => setOpenDropdown(o => o === 'period' ? null : 'period')} onClose={() => setOpenDropdown(null)} />
+          <StyledDropdown label="Movement Type" options={typeOptions}   value={selectedType}   onChange={v => { setSelectedType(v);   setPage(1); }} isOpen={openDropdown === 'type'}   onToggle={() => setOpenDropdown(o => o === 'type'   ? null : 'type')}   onClose={() => setOpenDropdown(null)} />
+          <StyledDropdown label="Branch"        options={branchOptions} value={selectedBranch} onChange={v => { setSelectedBranch(v); setPage(1); }} isOpen={openDropdown === 'branch'} onToggle={() => setOpenDropdown(o => o === 'branch' ? null : 'branch')} onClose={() => setOpenDropdown(null)} />
         </div>
       </div>
 
@@ -624,7 +554,7 @@ export function TransactionsPage() {
         })}
       </div>
 
-      {/* ── Table — même style que InventoryPage ── */}
+      {/* ── Table ── */}
       <div style={cardStyle}>
         <div style={{ marginBottom: 20 }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>Transaction Details</h3>
@@ -644,53 +574,27 @@ export function TransactionsPage() {
           </div>
         ) : loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120, gap: 10, color: css.mutedFg }}>
-            <Loader2 size={22} className="animate-spin" />
+            <Loader2 size={22} className="animate-spin" style={{ color: C.indigo }} />
             <span style={{ fontSize: 14 }}>Loading transactions...</span>
           </div>
         ) : (
-          <DataTable
-            data={transactions}
-            columns={columns}
-            searchable
-            exportable
-            pageSize={pageSize}
-          />
+          <DataTable data={transactions} columns={columns} searchable exportable pageSize={pageSize} />
         )}
 
-        {/* Pagination — style identique à InventoryPage */}
+        {/* Pagination — UNCHANGED */}
         {!loading && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 16, borderTop: `1px solid ${css.border}` }}>
             <p style={{ fontSize: 13, color: css.mutedFg, margin: 0 }}>
               Showing {formatNumber((page - 1) * pageSize + 1)} to {formatNumber(Math.min(page * pageSize, totalCount))} of {formatNumber(totalCount)} results
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                style={{
-                  width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  borderRadius: 8, border: `1px solid ${css.border}`, background: css.card,
-                  color: page === 1 ? css.mutedFg : css.cardFg,
-                  cursor: page === 1 ? 'not-allowed' : 'pointer',
-                  opacity: page === 1 ? 0.4 : 1,
-                }}
-              >
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: `1px solid ${css.border}`, background: css.card, color: page === 1 ? css.mutedFg : css.cardFg, cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.4 : 1 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
-              <span style={{ fontSize: 13, color: css.mutedFg, padding: '0 6px', whiteSpace: 'nowrap' }}>
-                Page {page} of {totalPages}
-              </span>
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-                style={{
-                  width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  borderRadius: 8, border: `1px solid ${css.border}`, background: css.card,
-                  color: page >= totalPages ? css.mutedFg : css.cardFg,
-                  cursor: page >= totalPages ? 'not-allowed' : 'pointer',
-                  opacity: page >= totalPages ? 0.4 : 1,
-                }}
-              >
+              <span style={{ fontSize: 13, color: css.mutedFg, padding: '0 6px', whiteSpace: 'nowrap' }}>Page {page} of {totalPages}</span>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+                style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: `1px solid ${css.border}`, background: css.card, color: page >= totalPages ? css.mutedFg : css.cardFg, cursor: page >= totalPages ? 'not-allowed' : 'pointer', opacity: page >= totalPages ? 0.4 : 1 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
               </button>
             </div>

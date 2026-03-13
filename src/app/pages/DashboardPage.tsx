@@ -75,12 +75,6 @@ const cardStyle: React.CSSProperties = {
 const axisStyle = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' };
 
 // ── Branch name normalizer ────────────────────────────────────────────────
-// Strips common Arabic prefixes to produce a match key.
-// Works for ANY company — no hardcoded names.
-// "فرع الكريمية"            → "الكريمية"
-// "مخزن صالة عرض الكريمية" → "الكريمية"
-// "مخزن بنغازي"             → "بنغازي"
-// "بنغازي"                  → "بنغازي"
 const normalizeBranch = (name: string): string =>
   name
     .trim()
@@ -97,11 +91,11 @@ function CustomTooltip({ active, payload, label }: any) {
   const isRtl = /[\u0600-\u06FF]/.test(String(label));
   return (
     <div style={{
-      background:   '#ffffff',
-      border:       '1px solid #e5e7eb',
+      background:   css.card,
+      border:       `1px solid ${css.border}`,
       borderRadius: 12,
       padding:      '12px 16px',
-      boxShadow:    '0 8px 32px rgba(0,0,0,0.18)',
+      boxShadow:    '0 8px 32px rgba(0,0,0,0.12)',
       fontSize:     12,
       minWidth:     220,
       maxWidth:     300,
@@ -109,9 +103,9 @@ function CustomTooltip({ active, payload, label }: any) {
       <p style={{
         fontSize:      12,
         fontWeight:    700,
-        color:         '#111827',
+        color:         css.cardFg,
         paddingBottom: 8,
-        borderBottom:  '1px solid #f3f4f6',
+        borderBottom:  `1px solid ${css.border}`,
         direction:     isRtl ? 'rtl' : 'ltr',
         textAlign:     isRtl ? 'right' : 'left',
         wordBreak:     'break-word',
@@ -136,8 +130,8 @@ function CustomTooltip({ active, payload, label }: any) {
               display:      'inline-block',
               flexShrink:   0,
             }} />
-            <span style={{ color: '#6b7280', flex: 1 }}>{p.name}</span>
-            <span style={{ fontWeight: 700, color: '#111827' }}>
+            <span style={{ color: css.mutedFg, flex: 1 }}>{p.name}</span>
+            <span style={{ fontWeight: 700, color: css.cardFg }}>
               {formatCurrency(p.value)}
             </span>
           </div>
@@ -188,56 +182,104 @@ function KPI({
   title: string; value: string; icon: React.ElementType; accent: string;
 }) {
   return (
-    <div style={{ ...cardStyle, position: 'relative', overflow: 'hidden' }}>
+    <div style={{
+      ...cardStyle,
+      position:    'relative',
+      overflow:    'hidden',
+      borderTop:   `3px solid ${accent}`,
+      paddingTop:  20,
+      transition:  'box-shadow 0.2s, transform 0.2s',
+    }}>
+      {/* Background watermark circle */}
       <div style={{
-        position:      'absolute',
-        top:           -24,
-        right:         -24,
-        width:          80,
-        height:         80,
-        borderRadius:  '50%',
-        background:     accent,
-        opacity:        0.08,
-        filter:        'blur(20px)',
-        pointerEvents: 'none',
+        position:     'absolute',
+        bottom:       -20,
+        right:        -20,
+        width:         90,
+        height:        90,
+        borderRadius: '50%',
+        background:    accent,
+        opacity:       0.06,
+        pointerEvents:'none',
       }} />
+
+      {/* Top row: icon + trend badge */}
       <div style={{
         display:        'flex',
         justifyContent: 'space-between',
-        alignItems:     'center',
-        marginBottom:    16,
+        alignItems:     'flex-start',
+        marginBottom:   18,
       }}>
         <div style={{
-          width:          40,
-          height:         40,
-          borderRadius:   12,
-          background:     `${accent}18`,
+          width:          38,
+          height:         38,
+          borderRadius:   11,
+          background:     `${accent}15`,
+          border:         `1px solid ${accent}25`,
           display:        'flex',
           alignItems:     'center',
           justifyContent: 'center',
         }}>
-          <Icon size={17} style={{ color: accent }} />
+          <Icon size={16} style={{ color: accent }} />
         </div>
-        <ArrowUpRight size={13} style={{ color: C.emerald }} />
+
+        {/* Trend pill */}
+        <div style={{
+          display:      'flex',
+          alignItems:   'center',
+          gap:           3,
+          fontSize:      10,
+          fontWeight:    700,
+          color:          C.emerald,
+          background:    `${C.emerald}12`,
+          border:        `1px solid ${C.emerald}25`,
+          padding:       '3px 8px',
+          borderRadius:   20,
+        }}>
+          <ArrowUpRight size={10} />
+          2.4%
+        </div>
       </div>
+
+      {/* Label */}
       <p style={{
-        fontSize:      11,
-        fontWeight:    600,
-        letterSpacing: '0.06em',
+        fontSize:      10,
+        fontWeight:    700,
+        letterSpacing: '0.09em',
         textTransform: 'uppercase',
         color:          css.mutedFg,
+        margin:         0,
       }}>
         {title}
       </p>
+
+      {/* Value */}
       <p style={{
-        fontSize:      20,
+        fontSize:      22,
         fontWeight:    800,
         color:          css.cardFg,
-        marginTop:      4,
+        marginTop:      5,
+        marginBottom:   16,
         letterSpacing: '-0.03em',
+        lineHeight:     1,
       }}>
         {value}
       </p>
+
+      {/* Mini progress bar */}
+      <div style={{
+        height:       3,
+        borderRadius: 999,
+        background:   css.muted,
+        overflow:     'hidden',
+      }}>
+        <div style={{
+          height:       '100%',
+          borderRadius: 999,
+          width:        '64%',
+          background:   `linear-gradient(90deg, ${accent}60, ${accent})`,
+        }} />
+      </div>
     </div>
   );
 }
@@ -264,6 +306,39 @@ function Panel({
   );
 }
 
+// ── Gradient Bar shape (Aging chart) ─────────────────────────────────────
+// Each bar gets its own top→bottom gradient derived from its fill color
+
+function GradientBar(props: any) {
+  const { x, y, width, height, fill, index } = props;
+  if (!height || height <= 0) return null;
+  const id = `aging-grad-${index}`;
+  const r  = Math.min(5, width / 2);
+  return (
+    <g>
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stopColor={fill} stopOpacity={1}   />
+          <stop offset="100%" stopColor={fill} stopOpacity={0.5} />
+        </linearGradient>
+      </defs>
+      <path
+        d={`
+          M${x + r},${y}
+          h${width - 2 * r}
+          a${r},${r} 0 0 1 ${r},${r}
+          v${height - r}
+          h${-width}
+          v${-(height - r)}
+          a${r},${r} 0 0 1 ${r},${-r}
+          z
+        `}
+        fill={`url(#${id})`}
+      />
+    </g>
+  );
+}
+
 // ── Aging Bar Chart ───────────────────────────────────────────────────────
 
 function AgingBarChart({
@@ -277,10 +352,10 @@ function AgingBarChart({
     <ResponsiveContainer width="100%" height={260}>
       <BarChart
         data={chartData}
-        margin={{ top: 4, right: 4, left: 0, bottom: 40 }}
-        barCategoryGap="22%"
+        margin={{ top: 8, right: 4, left: 0, bottom: 44 }}
+        barCategoryGap="24%"
       >
-        <CartesianGrid strokeDasharray="4 4" stroke={css.border} vertical={false} />
+        <CartesianGrid stroke={css.border} strokeWidth={1} vertical={false} />
         <XAxis
           dataKey="label"
           tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
@@ -289,15 +364,21 @@ function AgingBarChart({
           angle={-40}
           textAnchor="end"
           interval={0}
+          dy={4}
         />
         <YAxis
           tick={axisStyle}
           axisLine={false}
           tickLine={false}
           tickFormatter={v => `${(v / 1000).toFixed(0)}k`}
+          tickCount={5}
+          width={36}
         />
-        <Tooltip content={<CustomTooltip />} />
-        <Bar dataKey="value" name="Amount" radius={[5, 5, 0, 0]}>
+        <Tooltip
+          content={<CustomTooltip />}
+          cursor={{ fill: 'rgba(0,0,0,0.03)' }}
+        />
+        <Bar dataKey="value" name="Amount" shape={<GradientBar />} isAnimationActive>
           {chartData.map((entry, i) => (
             <Cell key={i} fill={entry.fill} />
           ))}
@@ -316,33 +397,69 @@ function CategoryBars({
 }) {
   const max = Math.max(...data.map(d => d.value), 1);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-      {data.map((d, i) => (
-        <div key={i}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-            <span style={{ fontSize: 12, color: css.mutedFg, fontWeight: 500 }}>
-              {d.category}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {data.map((d, i) => {
+        const pct = (d.value / max) * 100;
+        return (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Rank number */}
+            <span style={{
+              fontSize:   9,
+              fontWeight: 700,
+              color:       d.fill,
+              minWidth:    14,
+              textAlign:  'right',
+              opacity:     0.85,
+              flexShrink:  0,
+            }}>
+              {i + 1}
             </span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: css.cardFg }}>
-              {formatCurrency(d.value)}
-            </span>
+            <div style={{ flex: 1 }}>
+              <div style={{
+                display:        'flex',
+                justifyContent: 'space-between',
+                alignItems:     'baseline',
+                marginBottom:    5,
+              }}>
+                <span style={{
+                  fontSize:     12,
+                  color:         css.mutedFg,
+                  fontWeight:    500,
+                  whiteSpace:   'nowrap',
+                  overflow:     'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth:      160,
+                }}>
+                  {d.category}
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <span style={{ fontSize: 10, color: css.mutedFg, opacity: 0.6 }}>
+                    {pct.toFixed(0)}%
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: css.cardFg }}>
+                    {formatCurrency(d.value)}
+                  </span>
+                </div>
+              </div>
+              <div style={{
+                height:       7,
+                borderRadius: 999,
+                background:   css.muted,
+                overflow:     'hidden',
+                boxShadow:    'inset 0 1px 2px rgba(0,0,0,0.06)',
+              }}>
+                <div style={{
+                  height:       '100%',
+                  borderRadius: 999,
+                  width:        `${pct}%`,
+                  background:   `linear-gradient(90deg, ${d.fill}65, ${d.fill})`,
+                  transition:   'width 0.6s cubic-bezier(0.4,0,0.2,1)',
+                }} />
+              </div>
+            </div>
           </div>
-          <div style={{
-            height:       6,
-            borderRadius: 999,
-            background:   css.muted,
-            overflow:     'hidden',
-          }}>
-            <div style={{
-              height:       '100%',
-              borderRadius: 999,
-              width:        `${(d.value / max) * 100}%`,
-              background:   `linear-gradient(90deg, ${d.fill}70, ${d.fill})`,
-              transition:   'width 0.5s cubic-bezier(0.4,0,0.2,1)',
-            }} />
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -381,24 +498,12 @@ export function DashboardPage() {
     [agingDist.data]
   );
 
-  // ── Branch Performance : fusion Transactions (sales) + Inventory (stock) ──
-  //
-  // PROBLÈME : les deux APIs peuvent retourner des noms différents
-  // pour la même branche physique :
-  //   Transactions → "فرع الكريمية"
-  //   Inventory    → "مخزن صالة عرض الكريمية"
-  //
-  // SOLUTION : normaliser les deux noms → clé commune → fusionner
-  // normalizeBranch() supprime les préfixes arabes courants.
-  // Aucun nom hardcodé → fonctionne pour n'importe quelle société.
   const branchPerfData = useMemo(() => {
     const salesBranches = branchSales.data?.branches  ?? [];
     const stockBranches = branchStockSummary.data?.branches ?? [];
 
     if (!salesBranches.length && !stockBranches.length) return [];
 
-    // ── Index ventes par clé normalisée ──────────────────────────────────
-    // Si deux noms normalisent vers la même clé → additionner les totaux
     const salesMap = new Map<string, { displayName: string; total: number }>();
     for (const b of salesBranches) {
       const key = normalizeBranch(b.branch);
@@ -412,8 +517,6 @@ export function DashboardPage() {
       }
     }
 
-    // ── Index stock par clé normalisée ────────────────────────────────────
-    // Nom affiché = nom inventaire (source de vérité — plus descriptif)
     const stockMap = new Map<string, { displayName: string; total_value: number }>();
     for (const b of stockBranches) {
       const key = normalizeBranch(b.branch);
@@ -427,7 +530,6 @@ export function DashboardPage() {
       }
     }
 
-    // ── Fusionner : union des deux sources ────────────────────────────────
     const allKeys = new Set([...salesMap.keys(), ...stockMap.keys()]);
 
     return Array.from(allKeys)
@@ -436,7 +538,6 @@ export function DashboardPage() {
         const s = salesMap.get(k);
         const t = stockMap.get(k);
         return {
-          // Nom affiché : préférer inventaire (plus complet), sinon transactions
           branch: t?.displayName ?? s?.displayName ?? k,
           sales:  s?.total       ?? 0,
           stock:  t?.total_value ?? 0,
@@ -529,40 +630,75 @@ export function DashboardPage() {
         marginBottom:         16,
       }}>
 
-        {/* Sales vs Purchases */}
+        {/* ── Sales vs Purchases ── */}
         <Panel title="Sales vs Purchases" sub="Monthly comparison — last 12 months">
           {summary.loading ? <Loader label="Loading…" /> :
            trendData.length === 0 ? <Empty /> : (
             <ResponsiveContainer width="100%" height={260}>
-              <AreaChart data={trendData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+              <AreaChart data={trendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <defs>
+                  {/* 3-stop gradients: rich fill at top, fades to transparent */}
                   <linearGradient id="gS" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={C.indigo} stopOpacity={0.2} />
-                    <stop offset="95%" stopColor={C.indigo} stopOpacity={0}   />
+                    <stop offset="0%"   stopColor={C.indigo} stopOpacity={0.28} />
+                    <stop offset="55%"  stopColor={C.indigo} stopOpacity={0.08} />
+                    <stop offset="100%" stopColor={C.indigo} stopOpacity={0}    />
                   </linearGradient>
                   <linearGradient id="gP" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={C.amber} stopOpacity={0.2} />
-                    <stop offset="95%" stopColor={C.amber} stopOpacity={0}   />
+                    <stop offset="0%"   stopColor={C.amber} stopOpacity={0.28} />
+                    <stop offset="55%"  stopColor={C.amber} stopOpacity={0.08} />
+                    <stop offset="100%" stopColor={C.amber} stopOpacity={0}    />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="4 4" stroke={css.border} vertical={false} />
-                <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
-                <YAxis tick={axisStyle} axisLine={false} tickLine={false}
-                  tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={legendStyle} iconType="circle" iconSize={8} />
-                <Area type="monotone" dataKey="sales"
-                  stroke={C.indigo} strokeWidth={2.5} fill="url(#gS)"
-                  name="Sales" dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
-                <Area type="monotone" dataKey="purchases"
-                  stroke={C.amber} strokeWidth={2.5} fill="url(#gP)"
-                  name="Purchases" dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+                {/* Solid single-pixel grid line — cleaner than dashes */}
+                <CartesianGrid stroke={css.border} strokeWidth={1} vertical={false} />
+                <XAxis
+                  dataKey="month"
+                  tick={axisStyle}
+                  axisLine={false}
+                  tickLine={false}
+                  dy={6}
+                />
+                <YAxis
+                  tick={axisStyle}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={v => `${(v / 1000).toFixed(0)}k`}
+                  tickCount={5}
+                  width={36}
+                />
+                <Tooltip
+                  content={<CustomTooltip />}
+                  cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 3' }}
+                />
+                <Legend wrapperStyle={legendStyle} iconType="plainline" iconSize={18} />
+                {/* natural curve → smoother than monotone */}
+                {/* activeDot: white center + colored ring */}
+                <Area
+                  type="natural"
+                  dataKey="sales"
+                  stroke={C.indigo}
+                  strokeWidth={2.5}
+                  fill="url(#gS)"
+                  name="Sales"
+                  dot={false}
+                  activeDot={{ r: 5, fill: css.card, stroke: C.indigo, strokeWidth: 2.5 }}
+                />
+                <Area
+                  type="natural"
+                  dataKey="purchases"
+                  stroke={C.amber}
+                  strokeWidth={2.5}
+                  fill="url(#gP)"
+                  name="Purchases"
+                  dot={false}
+                  activeDot={{ r: 5, fill: css.card, stroke: C.amber, strokeWidth: 2.5 }}
+                />
               </AreaChart>
             </ResponsiveContainer>
           )}
         </Panel>
 
-        {/* Branch Performance */}
+        {/* ── Branch Performance ── */}
         <Panel
           title="Branch Performance"
           sub={
@@ -579,50 +715,63 @@ export function DashboardPage() {
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart
                     data={indexed}
-                    barCategoryGap="28%"
-                    barGap={3}
-                    margin={{ top: 4, right: 8, left: 0, bottom: 8 }}
+                    barCategoryGap="30%"
+                    barGap={4}
+                    margin={{ top: 8, right: 8, left: 0, bottom: 8 }}
                   >
-                    <CartesianGrid strokeDasharray="4 4" stroke={css.border} vertical={false} />
+                    <defs>
+                      {/* Per-series top→bottom gradients */}
+                      <linearGradient id="bSales" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor={C.indigo} stopOpacity={1}    />
+                        <stop offset="100%" stopColor={C.indigo} stopOpacity={0.55} />
+                      </linearGradient>
+                      <linearGradient id="bStock" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor={C.cyan} stopOpacity={1}    />
+                        <stop offset="100%" stopColor={C.cyan} stopOpacity={0.55} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke={css.border} strokeWidth={1} vertical={false} />
                     <XAxis
                       dataKey="_idx"
                       axisLine={false}
                       tickLine={false}
                       tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))', fontWeight: 600 }}
+                      dy={4}
                     />
                     <YAxis
                       tick={axisStyle}
                       axisLine={false}
                       tickLine={false}
                       tickFormatter={v => `${(v / 1_000_000).toFixed(1)}M`}
+                      tickCount={5}
+                      width={36}
                     />
                     <Tooltip
-                      cursor={{ fill: 'rgba(99,102,241,0.06)' }}
+                      cursor={{ fill: 'rgba(99,102,241,0.05)' }}
                       content={({ active, payload }) => {
                         if (!active || !payload?.length) return null;
                         const row = payload[0]?.payload as typeof indexed[number];
                         const isRtl = /[\u0600-\u06FF]/.test(row.branch);
                         return (
                           <div style={{
-                            background:   '#ffffff',
-                            border:       '1px solid #e5e7eb',
+                            background:   css.card,
+                            border:       `1px solid ${css.border}`,
                             borderRadius: 12,
                             padding:      '12px 16px',
-                            boxShadow:    '0 8px 32px rgba(0,0,0,0.18)',
+                            boxShadow:    '0 8px 32px rgba(0,0,0,0.12)',
                             fontSize:     12,
                             minWidth:     220,
                           }}>
                             <p style={{
                               fontWeight:    700,
-                              color:         '#111827',
+                              color:         css.cardFg,
                               direction:     isRtl ? 'rtl' : 'ltr',
                               textAlign:     isRtl ? 'right' : 'left',
                               wordBreak:     'break-word',
                               whiteSpace:    'normal',
-                              borderBottom:  '1px solid #f3f4f6',
+                              borderBottom:  `1px solid ${css.border}`,
                               paddingBottom: 8,
-                              marginBottom:  8,
-                              margin:        0,
+                              margin:        '0 0 8px',
                             }}>
                               {row._idx}. {row.branch}
                             </p>
@@ -631,15 +780,15 @@ export function DashboardPage() {
                                 display:    'flex',
                                 alignItems: 'center',
                                 gap:         8,
-                                marginTop:   i > 0 ? 6 : 10,
+                                marginTop:   i > 0 ? 6 : 0,
                               }}>
                                 <span style={{
                                   width: 10, height: 10, borderRadius: 3,
                                   background: p.fill ?? p.color,
                                   display: 'inline-block', flexShrink: 0,
                                 }} />
-                                <span style={{ color: '#6b7280', flex: 1 }}>{p.name}</span>
-                                <span style={{ fontWeight: 700, color: '#111827' }}>
+                                <span style={{ color: css.mutedFg, flex: 1 }}>{p.name}</span>
+                                <span style={{ fontWeight: 700, color: css.cardFg }}>
                                   {formatCurrency(p.value)}
                                 </span>
                               </div>
@@ -650,15 +799,15 @@ export function DashboardPage() {
                     />
                     <Legend
                       wrapperStyle={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', paddingTop: 8 }}
-                      iconType="circle"
-                      iconSize={8}
+                      iconType="plainline"
+                      iconSize={18}
                     />
-                    <Bar dataKey="sales" fill={C.indigo} name="Sales"       radius={[4,4,0,0]} maxBarSize={22} />
-                    <Bar dataKey="stock" fill={C.cyan}   name="Stock Value" radius={[4,4,0,0]} maxBarSize={22} fillOpacity={0.85} />
+                    <Bar dataKey="sales" fill="url(#bSales)" name="Sales"       radius={[5, 5, 0, 0]} maxBarSize={22} />
+                    <Bar dataKey="stock" fill="url(#bStock)" name="Stock Value" radius={[5, 5, 0, 0]} maxBarSize={22} />
                   </BarChart>
                 </ResponsiveContainer>
 
-                {/* Numbered legend — auto-adapts to any number of branches */}
+                {/* Numbered legend */}
                 <div style={{
                   marginTop:  16,
                   paddingTop: 14,
@@ -824,26 +973,42 @@ export function DashboardPage() {
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart
               data={branchMonthly.data.monthly_data}
-              margin={{ top: 10, right: 4, left: 0, bottom: 0 }}
+              margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
             >
               <defs>
                 {branchMonthly.data.branches.map((branch, i) => (
                   <linearGradient key={branch} id={`gb-${i}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={BRANCH_COLORS[i % BRANCH_COLORS.length]} stopOpacity={0.18} />
-                    <stop offset="95%" stopColor={BRANCH_COLORS[i % BRANCH_COLORS.length]} stopOpacity={0}    />
+                    <stop offset="0%"   stopColor={BRANCH_COLORS[i % BRANCH_COLORS.length]} stopOpacity={0.22} />
+                    <stop offset="55%"  stopColor={BRANCH_COLORS[i % BRANCH_COLORS.length]} stopOpacity={0.06} />
+                    <stop offset="100%" stopColor={BRANCH_COLORS[i % BRANCH_COLORS.length]} stopOpacity={0}    />
                   </linearGradient>
                 ))}
               </defs>
-              <CartesianGrid strokeDasharray="4 4" stroke={css.border} vertical={false} />
-              <XAxis dataKey="month"  tick={axisStyle} axisLine={false} tickLine={false} />
-              <YAxis tick={axisStyle} axisLine={false} tickLine={false}
-                tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend wrapperStyle={legendStyle} iconType="circle" iconSize={8} />
+              <CartesianGrid stroke={css.border} strokeWidth={1} vertical={false} />
+              <XAxis
+                dataKey="month"
+                tick={axisStyle}
+                axisLine={false}
+                tickLine={false}
+                dy={6}
+              />
+              <YAxis
+                tick={axisStyle}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={v => `${(v / 1000).toFixed(0)}k`}
+                tickCount={5}
+                width={36}
+              />
+              <Tooltip
+                content={<CustomTooltip />}
+                cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 3' }}
+              />
+              <Legend wrapperStyle={legendStyle} iconType="plainline" iconSize={18} />
               {branchMonthly.data.branches.map((branch, i) => (
                 <Area
                   key={branch}
-                  type="monotone"
+                  type="natural"
                   dataKey={branch}
                   stroke={BRANCH_COLORS[i % BRANCH_COLORS.length]}
                   strokeWidth={2}
@@ -851,8 +1016,9 @@ export function DashboardPage() {
                   dot={false}
                   activeDot={{
                     r:           5,
-                    strokeWidth: 0,
-                    fill:        BRANCH_COLORS[i % BRANCH_COLORS.length],
+                    fill:        css.card,
+                    stroke:      BRANCH_COLORS[i % BRANCH_COLORS.length],
+                    strokeWidth: 2,
                   }}
                   name={branch}
                 />

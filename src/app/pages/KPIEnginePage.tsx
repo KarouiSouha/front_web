@@ -9,7 +9,7 @@ import {
 import {
   BarChart, Bar, AreaChart, Area, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
-  Legend, ResponsiveContainer,
+  Legend, ResponsiveContainer, Cell,
 } from 'recharts';
 import { CreditKPISection } from '../components/CreditKPISection';
 import { SalesKPISection } from '../components/SalesKPISection';
@@ -65,33 +65,61 @@ const cardStyle: React.CSSProperties = {
 
 const axisStyle = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' };
 
-const legendStyle = { fontSize: 12, color: 'hsl(var(--muted-foreground))', paddingTop: 8 };
+const legendStyle = {
+  fontSize:   12,
+  color:      'hsl(var(--muted-foreground))',
+  paddingTop: 8,
+};
 
-// ── Custom Tooltip ─────────────────────────────────────────────────────────
+// ── Custom Tooltip — Dashboard style ──────────────────────────────────────
 
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
     <div style={{
-      background:   css.popover,
+      background:   css.card,
       border:       `1px solid ${css.border}`,
-      borderRadius: 10,
-      padding:      '10px 14px',
-      boxShadow:    '0 8px 24px rgba(0,0,0,0.15)',
+      borderRadius: 12,
+      padding:      '12px 16px',
+      boxShadow:    '0 8px 32px rgba(0,0,0,0.12)',
       fontSize:     12,
+      minWidth:     220,
+      maxWidth:     300,
     }}>
-      <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: css.mutedFg, marginBottom: 6 }}>
+      <p style={{
+        fontSize:      12,
+        fontWeight:    700,
+        color:         css.cardFg,
+        paddingBottom: 8,
+        borderBottom:  `1px solid ${css.border}`,
+        margin:        '0 0 8px 0',
+        letterSpacing: '0.01em',
+      }}>
         {label}
       </p>
-      {payload.map((p: any, i: number) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} />
-          <span style={{ color: css.mutedFg }}>{p.name}</span>
-          <span style={{ marginLeft: 'auto', paddingLeft: 16, fontWeight: 700, color: css.popoverFg }}>
-            {typeof p.value === 'number' ? formatCurrency(p.value) : p.value}
-          </span>
-        </div>
-      ))}
+      <div style={{ marginTop: 10 }}>
+        {payload.map((p: any, i: number) => (
+          <div key={i} style={{
+            display:    'flex',
+            alignItems: 'center',
+            gap:         8,
+            marginTop:   i > 0 ? 8 : 0,
+          }}>
+            <span style={{
+              width:        10,
+              height:       10,
+              borderRadius: 3,
+              background:   p.fill ?? p.color,
+              display:      'inline-block',
+              flexShrink:   0,
+            }} />
+            <span style={{ color: css.mutedFg, flex: 1 }}>{p.name}</span>
+            <span style={{ fontWeight: 700, color: css.cardFg }}>
+              {typeof p.value === 'number' ? formatCurrency(p.value) : p.value}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -115,7 +143,7 @@ function Empty({ height = 120 }: { height?: number }) {
   );
 }
 
-// ── KPI Card ───────────────────────────────────────────────────────────────
+// ── KPI Card — Dashboard style ─────────────────────────────────────────────
 
 function KPI({
   title, value, icon: Icon, accent, sub, trend,
@@ -128,30 +156,81 @@ function KPI({
   trend?: { value: number; isPositive: boolean };
 }) {
   return (
-    <div style={{ ...cardStyle, position: 'relative', overflow: 'hidden' }}>
-      {/* soft glow */}
+    <div style={{
+      ...cardStyle,
+      position:   'relative',
+      overflow:   'hidden',
+      borderTop:  `3px solid ${accent}`,
+      paddingTop: 20,
+    }}>
+      {/* Background watermark circle */}
       <div style={{
-        position: 'absolute', top: -24, right: -24, width: 80, height: 80,
-        borderRadius: '50%', background: accent, opacity: 0.08,
-        filter: 'blur(20px)', pointerEvents: 'none',
+        position:     'absolute',
+        bottom:       -20,
+        right:        -20,
+        width:        90,
+        height:       90,
+        borderRadius: '50%',
+        background:   accent,
+        opacity:      0.06,
+        pointerEvents:'none',
       }} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+
+      {/* Top row: icon + trend badge */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
         <div style={{
-          width: 40, height: 40, borderRadius: 12,
-          background: `${accent}18`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width:          38,
+          height:         38,
+          borderRadius:   11,
+          background:     `${accent}15`,
+          border:         `1px solid ${accent}25`,
+          display:        'flex',
+          alignItems:     'center',
+          justifyContent: 'center',
         }}>
-          <Icon size={17} style={{ color: accent }} />
+          <Icon size={16} style={{ color: accent }} />
         </div>
-        <ArrowUpRight size={13} style={{ color: trend?.isPositive === false ? C.rose : C.emerald }} />
+
+        {/* Trend pill */}
+        <div style={{
+          display:      'flex',
+          alignItems:   'center',
+          gap:           3,
+          fontSize:      10,
+          fontWeight:    700,
+          color:          trend?.isPositive === false ? C.rose : C.emerald,
+          background:    trend?.isPositive === false ? `${C.rose}12` : `${C.emerald}12`,
+          border:        `1px solid ${trend?.isPositive === false ? C.rose : C.emerald}25`,
+          padding:       '3px 8px',
+          borderRadius:   20,
+        }}>
+          <ArrowUpRight size={10} />
+          {trend ? `${trend.value.toFixed(1)}%` : '—'}
+        </div>
       </div>
-      <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: css.mutedFg }}>
+
+      {/* Label */}
+      <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: css.mutedFg, margin: 0 }}>
         {title}
       </p>
-      <p style={{ fontSize: 20, fontWeight: 800, color: css.cardFg, marginTop: 4, letterSpacing: '-0.03em' }}>
+
+      {/* Value */}
+      <p style={{ fontSize: 22, fontWeight: 800, color: css.cardFg, marginTop: 5, marginBottom: 4, letterSpacing: '-0.03em', lineHeight: 1 }}>
         {value}
       </p>
-      {sub && <p style={{ fontSize: 11, color: css.mutedFg, marginTop: 4 }}>{sub}</p>}
+
+      {sub && <p style={{ fontSize: 11, color: css.mutedFg, marginBottom: 14 }}>{sub}</p>}
+      {!sub && <div style={{ marginBottom: 14 }} />}
+
+      {/* Mini progress bar */}
+      <div style={{ height: 3, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
+        <div style={{
+          height:       '100%',
+          borderRadius: 999,
+          width:        '64%',
+          background:   `linear-gradient(90deg, ${accent}60, ${accent})`,
+        }} />
+      </div>
     </div>
   );
 }
@@ -221,7 +300,7 @@ function periodToDates(key: PeriodKey): { dateFrom: string; dateTo: string } {
   return { dateFrom: `${today.getFullYear()}-01-01`, dateTo };
 }
 
-// ── StyledDropdown (controlled) ────────────────────────────────────────────
+// ── StyledDropdown (controlled) — UNCHANGED ────────────────────────────────
 
 function StyledDropdown({
   label, options, value, onChange, isOpen, onToggle, onClose,
@@ -239,7 +318,6 @@ function StyledDropdown({
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 0 });
   const current = options.find(o => o.key === value)?.label ?? label;
 
-  // Calcule la position du menu au moment de l'ouverture
   useEffect(() => {
     if (isOpen && btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect();
@@ -251,7 +329,6 @@ function StyledDropdown({
     }
   }, [isOpen]);
 
-  // Fermeture au clic extérieur
   useEffect(() => {
     if (!isOpen) return;
     function handleClick(e: MouseEvent) {
@@ -263,44 +340,45 @@ function StyledDropdown({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [isOpen, onClose]);
 
-const menu = isOpen ? createPortal(
-  <div
-    style={{
-      position:     'absolute',
-      top:          menuPos.top,
-      left:         menuPos.left,
-      width:        menuPos.width,
-      zIndex:       9999,
-      background:   '#ffffff',          // ← blanc pur hardcodé
-      border:       '1px solid #e5e7eb',
-      borderRadius: 12,
-      boxShadow:    '0 8px 32px rgba(0,0,0,0.18)',
-      maxHeight:    280,
-      overflowY:    'auto',
-      padding:      6,
-    }}
-  >
-    {options.map(opt => (
-      <button
-        key={opt.key}
-        onMouseDown={e => e.stopPropagation()}
-        onClick={() => { onChange(opt.key); onClose(); }}
-        style={{
-          width: '100%', textAlign: 'left', padding: '8px 12px',
-          borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13,
-          background: value === opt.key ? `${C.indigo}15` : 'transparent',
-          color:      value === opt.key ? C.indigo : '#111827',  // ← hardcodé
-          fontWeight: value === opt.key ? 600 : 400,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}
-      >
-        {opt.label}
-        {value === opt.key && <span style={{ color: C.indigo, fontSize: 12 }}>✓</span>}
-      </button>
-    ))}
-  </div>,
-  document.body,
-) : null;
+  const menu = isOpen ? createPortal(
+    <div
+      style={{
+        position:     'absolute',
+        top:          menuPos.top,
+        left:         menuPos.left,
+        width:        menuPos.width,
+        zIndex:       9999,
+        background:   '#ffffff',
+        border:       '1px solid #e5e7eb',
+        borderRadius: 12,
+        boxShadow:    '0 8px 32px rgba(0,0,0,0.18)',
+        maxHeight:    280,
+        overflowY:    'auto',
+        padding:      6,
+      }}
+    >
+      {options.map(opt => (
+        <button
+          key={opt.key}
+          onMouseDown={e => e.stopPropagation()}
+          onClick={() => { onChange(opt.key); onClose(); }}
+          style={{
+            width: '100%', textAlign: 'left', padding: '8px 12px',
+            borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13,
+            background: value === opt.key ? `${C.indigo}15` : 'transparent',
+            color:      value === opt.key ? C.indigo : '#111827',
+            fontWeight: value === opt.key ? 600 : 400,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}
+        >
+          {opt.label}
+          {value === opt.key && <span style={{ color: C.indigo, fontSize: 12 }}>✓</span>}
+        </button>
+      ))}
+    </div>,
+    document.body,
+  ) : null;
+
   return (
     <div ref={ref} style={{ position: 'relative', flex: 1, minWidth: 160 }}>
       <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: css.mutedFg, marginBottom: 6 }}>
@@ -330,7 +408,8 @@ const menu = isOpen ? createPortal(
     </div>
   );
 }
-// ── FilterBar ──────────────────────────────────────────────────────────────
+
+// ── FilterBar — UNCHANGED ──────────────────────────────────────────────────
 
 function FilterBar({
   period, onPeriodChange, branch, onBranchChange, branches,
@@ -391,7 +470,7 @@ function FilterBar({
   );
 }
 
-// ── BranchMonthlyChart ─────────────────────────────────────────────────────
+// ── BranchMonthlyChart — Dashboard style (AreaChart + gradients) ───────────
 
 function BranchMonthlyChart({ branchFilter, dateFrom, dateTo }: { branchFilter: string; dateFrom: string; dateTo: string }) {
   const { data, loading } = useBranchMonthly({
@@ -402,14 +481,14 @@ function BranchMonthlyChart({ branchFilter, dateFrom, dateTo }: { branchFilter: 
 
   if (loading) {
     return (
-      <Panel title="Monthly Sales by Branch" sub="Revenue trend — one line per branch">
+      <Panel title="Revenue Trend by Branch" sub="Monthly sales revenue — one line per branch">
         <Loader label="Loading…" />
       </Panel>
     );
   }
   if (!data || data.monthly_data.length === 0) {
     return (
-      <Panel title="Monthly Sales by Branch" sub="Revenue trend — one line per branch">
+      <Panel title="Revenue Trend by Branch" sub="Monthly sales revenue — one line per branch">
         <Empty height={200} />
       </Panel>
     );
@@ -420,34 +499,62 @@ function BranchMonthlyChart({ branchFilter, dateFrom, dateTo }: { branchFilter: 
     : data.branches;
 
   return (
-    <Panel title="Monthly Sales by Branch" sub="Revenue trend — one line per branch">
+    <Panel title="Revenue Trend by Branch" sub="Monthly sales revenue — one line per branch">
       <ResponsiveContainer width="100%" height={300}>
-        <LineChart data={data.monthly_data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="4 4" stroke={css.border} vertical={false} />
+        <AreaChart data={data.monthly_data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <defs>
+            {visibleBranches.map((branch, i) => (
+              <linearGradient key={branch} id={`kpi-gb-${i}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stopColor={BRANCH_COLORS[i % BRANCH_COLORS.length]} stopOpacity={0.22} />
+                <stop offset="55%"  stopColor={BRANCH_COLORS[i % BRANCH_COLORS.length]} stopOpacity={0.06} />
+                <stop offset="100%" stopColor={BRANCH_COLORS[i % BRANCH_COLORS.length]} stopOpacity={0}    />
+              </linearGradient>
+            ))}
+          </defs>
+          <CartesianGrid stroke={css.border} strokeWidth={1} vertical={false} />
           <XAxis
             dataKey="month"
-            tick={axisStyle} axisLine={false} tickLine={false}
+            tick={axisStyle}
+            axisLine={false}
+            tickLine={false}
+            dy={6}
             tickFormatter={(v, i) => {
               const row = data.monthly_data[i];
               return row ? `${v} ${row.year}` : String(v);
             }}
           />
-          <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-          <RechartsTooltip content={<CustomTooltip />} />
-          <Legend wrapperStyle={legendStyle} iconType="circle" iconSize={8} />
+          <YAxis
+            tick={axisStyle}
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={v => `${(v / 1000).toFixed(0)}k`}
+            tickCount={5}
+            width={36}
+          />
+          <RechartsTooltip
+            content={<CustomTooltip />}
+            cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 3' }}
+          />
+          <Legend wrapperStyle={legendStyle} iconType="plainline" iconSize={18} />
           {visibleBranches.map((branch, i) => (
-            <Line
+            <Area
               key={branch}
-              type="monotone"
+              type="natural"
               dataKey={branch}
               stroke={BRANCH_COLORS[i % BRANCH_COLORS.length]}
-              strokeWidth={2.5}
+              strokeWidth={2}
+              fill={`url(#kpi-gb-${i})`}
               dot={false}
-              activeDot={{ r: 5, strokeWidth: 0, fill: BRANCH_COLORS[i % BRANCH_COLORS.length] }}
+              activeDot={{
+                r:           5,
+                fill:        css.card,
+                stroke:      BRANCH_COLORS[i % BRANCH_COLORS.length],
+                strokeWidth: 2,
+              }}
               name={branch}
             />
           ))}
-        </LineChart>
+        </AreaChart>
       </ResponsiveContainer>
     </Panel>
   );
@@ -465,10 +572,10 @@ export function KPIEnginePage() {
 
   const { data: summaryRes, loading: summaryLoading } = useTransactionSummary({ date_from: dateFrom, date_to: dateTo });
 
-  const { data: branchSalesRes } = useBranchBreakdown({ movement_type: MOVEMENT_TYPES.SALE,     date_from: dateFrom, date_to: dateTo });
+  const { data: branchSalesRes }     = useBranchBreakdown({ movement_type: MOVEMENT_TYPES.SALE,     date_from: dateFrom, date_to: dateTo });
   const { data: branchPurchasesRes } = useBranchBreakdown({ movement_type: MOVEMENT_TYPES.PURCHASE, date_from: dateFrom, date_to: dateTo });
-  const { data: typeBreakdownRes } = useTypeBreakdown({ date_from: dateFrom, date_to: dateTo });
-  const { data: _agingRiskRes } = useAgingRisk({ limit: 5 });
+  const { data: typeBreakdownRes }   = useTypeBreakdown({ date_from: dateFrom, date_to: dateTo });
+  const { data: _agingRiskRes }      = useAgingRisk({ limit: 5 });
 
   const monthlySummary: MonthlySummaryItem[] = summaryRes?.summary ?? [];
 
@@ -488,7 +595,7 @@ export function KPIEnginePage() {
   const branchPerformanceData = useMemo(() =>
     allBranches
       .filter(b => !branchFilter || b === branchFilter)
-      .map((branch, i) => ({
+      .map((branch) => ({
         branch,
         sales:     branchSales.find(b => b.branch === branch)?.total     ?? 0,
         purchases: branchPurchases.find(b => b.branch === branch)?.total ?? 0,
@@ -549,7 +656,7 @@ export function KPIEnginePage() {
         </button>
       </div>
 
-      {/* ── Filters ── */}
+      {/* ── Filters — UNCHANGED ── */}
       <div style={{ marginBottom: 24 }}>
         <FilterBar
           period={period}
@@ -608,82 +715,164 @@ export function KPIEnginePage() {
                 trend={{ value: 0, isPositive: grossMargin > 0 }}
               />
               {/* Sales / Stock Ratio card */}
-              <div style={{ ...cardStyle, position: 'relative', overflow: 'hidden' }}>
+              <div style={{
+                ...cardStyle,
+                position:   'relative',
+                overflow:   'hidden',
+                borderTop:  `3px solid ${C.emerald}`,
+                paddingTop: 20,
+              }}>
                 <div style={{
-                  position: 'absolute', top: -24, right: -24, width: 80, height: 80,
-                  borderRadius: '50%', background: C.emerald, opacity: 0.08,
-                  filter: 'blur(20px)', pointerEvents: 'none',
+                  position:     'absolute',
+                  bottom:       -20,
+                  right:        -20,
+                  width:        90,
+                  height:       90,
+                  borderRadius: '50%',
+                  background:   C.emerald,
+                  opacity:      0.06,
+                  pointerEvents:'none',
                 }} />
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
                   <div style={{
-                    width: 40, height: 40, borderRadius: 12,
-                    background: `${C.emerald}18`,
+                    width: 38, height: 38, borderRadius: 11,
+                    background: `${C.emerald}15`,
+                    border: `1px solid ${C.emerald}25`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <Info size={17} style={{ color: C.emerald }} />
+                    <Info size={16} style={{ color: C.emerald }} />
+                  </div>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 3,
+                    fontSize: 10, fontWeight: 700,
+                    color: C.emerald, background: `${C.emerald}12`,
+                    border: `1px solid ${C.emerald}25`,
+                    padding: '3px 8px', borderRadius: 20,
+                  }}>
+                    <ArrowUpRight size={10} />
+                    ratio
                   </div>
                 </div>
-                <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: css.mutedFg }}>
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: css.mutedFg, margin: 0 }}>
                   Sales / Stock Ratio
                 </p>
-                <p style={{ fontSize: 20, fontWeight: 800, color: css.cardFg, marginTop: 4, letterSpacing: '-0.03em' }}>
+                <p style={{ fontSize: 22, fontWeight: 800, color: css.cardFg, marginTop: 5, marginBottom: 4, letterSpacing: '-0.03em', lineHeight: 1 }}>
                   {stockValue > 0 ? `${(totalSales / stockValue).toFixed(2)}x` : '—'}
                 </p>
-                <p style={{ fontSize: 11, color: css.mutedFg, marginTop: 4 }}>Sales-to-inventory coverage</p>
+                <p style={{ fontSize: 11, color: css.mutedFg, marginBottom: 14 }}>Sales-to-inventory coverage</p>
+                <div style={{ height: 3, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 999, width: '64%', background: `linear-gradient(90deg, ${C.emerald}60, ${C.emerald})` }} />
+                </div>
               </div>
             </div>
           </div>
 
-          {/* ── Sales vs Purchases Monthly ── */}
+          {/* ── Sales vs Purchases Monthly — Dashboard style ── */}
           <div style={{ marginBottom: 16 }}>
             <Panel title="Sales vs Purchases — Monthly Trend" sub="Last 12 months comparison">
               {summaryLoading ? <Loader label="Loading…" /> :
                monthlySalesData.length === 0 ? <Empty height={320} /> : (
                 <ResponsiveContainer width="100%" height={280}>
-                  <AreaChart data={monthlySalesData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                  <AreaChart data={monthlySalesData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                     <defs>
+                      {/* 3-stop gradients matching Dashboard */}
                       <linearGradient id="kpiGS" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor={C.indigo} stopOpacity={0.2} />
-                        <stop offset="95%" stopColor={C.indigo} stopOpacity={0} />
+                        <stop offset="0%"   stopColor={C.indigo} stopOpacity={0.28} />
+                        <stop offset="55%"  stopColor={C.indigo} stopOpacity={0.08} />
+                        <stop offset="100%" stopColor={C.indigo} stopOpacity={0}    />
                       </linearGradient>
                       <linearGradient id="kpiGP" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor={C.amber} stopOpacity={0.2} />
-                        <stop offset="95%" stopColor={C.amber} stopOpacity={0} />
+                        <stop offset="0%"   stopColor={C.amber} stopOpacity={0.28} />
+                        <stop offset="55%"  stopColor={C.amber} stopOpacity={0.08} />
+                        <stop offset="100%" stopColor={C.amber} stopOpacity={0}    />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="4 4" stroke={css.border} vertical={false} />
-                    <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
-                    <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Legend wrapperStyle={legendStyle} iconType="circle" iconSize={8} />
-                    <Area type="monotone" dataKey="sales"     stroke={C.indigo} strokeWidth={2.5} fill="url(#kpiGS)" name="Sales"     dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
-                    <Area type="monotone" dataKey="purchases" stroke={C.amber}  strokeWidth={2.5} fill="url(#kpiGP)" name="Purchases" dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+                    <CartesianGrid stroke={css.border} strokeWidth={1} vertical={false} />
+                    <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} dy={6} />
+                    <YAxis
+                      tick={axisStyle}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={v => `${(v / 1000).toFixed(0)}k`}
+                      tickCount={5}
+                      width={36}
+                    />
+                    <RechartsTooltip
+                      content={<CustomTooltip />}
+                      cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 3' }}
+                    />
+                    <Legend wrapperStyle={legendStyle} iconType="plainline" iconSize={18} />
+                    <Area
+                      type="natural"
+                      dataKey="sales"
+                      stroke={C.indigo}
+                      strokeWidth={2.5}
+                      fill="url(#kpiGS)"
+                      name="Sales"
+                      dot={false}
+                      activeDot={{ r: 5, fill: css.card, stroke: C.indigo, strokeWidth: 2.5 }}
+                    />
+                    <Area
+                      type="natural"
+                      dataKey="purchases"
+                      stroke={C.amber}
+                      strokeWidth={2.5}
+                      fill="url(#kpiGP)"
+                      name="Purchases"
+                      dot={false}
+                      activeDot={{ r: 5, fill: css.card, stroke: C.amber, strokeWidth: 2.5 }}
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               )}
             </Panel>
           </div>
 
-          {/* ── Branch Performance ── */}
+          {/* ── Branch Performance — Dashboard style ── */}
           {branchPerformanceData.length > 0 && (
             <div style={{ marginBottom: 16 }}>
               <Panel title="Branch Performance" sub="Sales and purchases by branch">
                 <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={branchPerformanceData} barCategoryGap="36%" margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="4 4" stroke={css.border} vertical={false} />
-                    <XAxis dataKey="branch" tick={axisStyle} axisLine={false} tickLine={false} />
-                    <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Legend wrapperStyle={legendStyle} iconType="circle" iconSize={8} />
-                    <Bar dataKey="sales"     fill={C.indigo} name="Sales"     radius={[5, 5, 0, 0]} />
-                    <Bar dataKey="purchases" fill={C.amber}  name="Purchases" radius={[5, 5, 0, 0]} fillOpacity={0.8} />
+                  <BarChart
+                    data={branchPerformanceData}
+                    barCategoryGap="30%"
+                    barGap={4}
+                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient id="kpiBSales" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor={C.indigo} stopOpacity={1}    />
+                        <stop offset="100%" stopColor={C.indigo} stopOpacity={0.55} />
+                      </linearGradient>
+                      <linearGradient id="kpiBPurch" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor={C.amber} stopOpacity={1}    />
+                        <stop offset="100%" stopColor={C.amber} stopOpacity={0.55} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke={css.border} strokeWidth={1} vertical={false} />
+                    <XAxis dataKey="branch" tick={axisStyle} axisLine={false} tickLine={false} dy={4} />
+                    <YAxis
+                      tick={axisStyle}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={v => `${(v / 1000).toFixed(0)}k`}
+                      tickCount={5}
+                      width={36}
+                    />
+                    <RechartsTooltip
+                      content={<CustomTooltip />}
+                      cursor={{ fill: 'rgba(99,102,241,0.05)' }}
+                    />
+                    <Legend wrapperStyle={legendStyle} iconType="plainline" iconSize={18} />
+                    <Bar dataKey="sales"     fill="url(#kpiBSales)" name="Sales"     radius={[5, 5, 0, 0]} maxBarSize={22} />
+                    <Bar dataKey="purchases" fill="url(#kpiBPurch)" name="Purchases" radius={[5, 5, 0, 0]} maxBarSize={22} />
                   </BarChart>
                 </ResponsiveContainer>
               </Panel>
             </div>
           )}
 
-          {/* ── Per-Branch Monthly Line Chart ── */}
+          {/* ── Per-Branch Monthly Chart — Dashboard style (AreaChart) ── */}
           <div style={{ marginBottom: 16 }}>
             <BranchMonthlyChart branchFilter={branchFilter} dateFrom={dateFrom} dateTo={dateTo} />
           </div>
@@ -720,11 +909,14 @@ export function KPIEnginePage() {
                             </div>
                           </div>
                         </div>
-                        <div style={{ height: 5, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
+                        {/* Progress bar — Dashboard style (solid, smooth gradient) */}
+                        <div style={{ height: 5, borderRadius: 999, background: css.muted, overflow: 'hidden', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.06)' }}>
                           <div style={{
-                            height: '100%', borderRadius: 999, width: `${pct}%`,
-                            background: `linear-gradient(90deg, ${accent}55, ${accent})`,
-                            transition: 'width 0.5s cubic-bezier(0.4,0,0.2,1)',
+                            height:       '100%',
+                            borderRadius: 999,
+                            width:        `${pct}%`,
+                            background:   `linear-gradient(90deg, ${accent}65, ${accent})`,
+                            transition:   'width 0.6s cubic-bezier(0.4,0,0.2,1)',
                           }} />
                         </div>
                       </div>
