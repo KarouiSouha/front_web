@@ -435,6 +435,8 @@ export interface MonthlySummaryItem {
   month_label: string;
   total_sales: number;
   total_purchases: number;
+  total_profit?: number;
+  total_qty?: number;
   sales_count: number;
   purchases_count: number;
 }
@@ -741,6 +743,7 @@ export interface SalesKPIProduct {
   material_name: string;
   total_revenue: number;
   total_qty: number;
+  total_profit?: number;
   transaction_count: number;
   revenue_share: number; // %
   margin_pct?: number; // only in product_margins array
@@ -751,6 +754,7 @@ export interface SalesKPIProduct {
 export interface SalesKPIClient {
   customer_name: string;
   total_revenue: number;
+  total_profit?: number;
   transaction_count: number;
   revenue_share: number; // %
 }
@@ -779,6 +783,7 @@ interface SalesKPIRawProduct {
   total_revenue?: number | string;
   revenue?: number | string;
   total_qty?: number | string;
+  total_profit?: number | string;
   transaction_count?: number | string;
   revenue_share?: number | string;
   margin_pct?: number | string;
@@ -789,6 +794,7 @@ interface SalesKPIRawProduct {
 interface SalesKPIRawClient {
   customer_name?: string;
   total_revenue?: number | string;
+  total_profit?: number | string;
   transaction_count?: number | string;
   revenue_share?: number | string;
 }
@@ -873,6 +879,10 @@ function normalizeSalesProduct(product: SalesKPIRawProduct): SalesKPIProduct {
     material_name: product.material_name ?? "",
     total_revenue: toFiniteNumber(product.total_revenue ?? product.revenue, 0),
     total_qty: toFiniteNumber(product.total_qty, 0),
+    total_profit:
+      product.total_profit === undefined
+        ? undefined
+        : toFiniteNumber(product.total_profit, 0),
     transaction_count: toFiniteNumber(product.transaction_count, 0),
     revenue_share: toFiniteNumber(product.revenue_share, 0),
     margin_pct:
@@ -922,6 +932,10 @@ function normalizeSalesKPIData(raw: SalesKPIRawData): SalesKPIData {
     top_clients: (raw.top_clients ?? []).map((client) => ({
       customer_name: client.customer_name ?? "",
       total_revenue: toFiniteNumber(client.total_revenue, 0),
+      total_profit:
+        client.total_profit === undefined
+          ? undefined
+          : toFiniteNumber(client.total_profit, 0),
       transaction_count: toFiniteNumber(client.transaction_count, 0),
       revenue_share: toFiniteNumber(client.revenue_share, 0),
     })),

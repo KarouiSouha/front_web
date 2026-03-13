@@ -9,34 +9,34 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import {
-    TrendingUp,
-    DollarSign,
-    Package,
-    Users,
-    BarChart3,
-    RefreshCw,
-    Loader2,
-    AlertCircle,
-    Printer,
-    ChevronDown,
-    Star,
-    AlertTriangle,
-    Target,
+  TrendingUp,
+  DollarSign,
+  Package,
+  Users,
+  BarChart3,
+  RefreshCw,
+  Loader2,
+  AlertCircle,
+  Printer,
+  ChevronDown,
+  Star,
+  AlertTriangle,
+  Target,
 } from 'lucide-react';
 import {
-    BarChart,
-    Bar,
-    Area,
-    LineChart,
-    Line,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip as RTooltip,
-    ResponsiveContainer,
-    Cell,
-    Legend,
-    ComposedChart,
+  BarChart,
+  Bar,
+  Area,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RTooltip,
+  ResponsiveContainer,
+  Cell,
+  Legend,
+  ComposedChart,
 } from 'recharts';
 import { salesKpiApi, MOVEMENT_TYPES } from '../lib/dataApi';
 import { formatCurrency, formatNumber } from '../lib/utils';
@@ -255,7 +255,7 @@ export function PricingProfitabilityReport() {
       const [sales, saleBrRes, salesMonthly, summRes, branchesRes] = await Promise.all([
         salesKpiApi.getAll({ year, top_n: 20 }),
         axios.get('/api/transactions/branch-breakdown/', { headers: auth(), params: { movement_type: MOVEMENT_TYPES.SALE, year } }),
-        axios.get('/api/transactions/branch-monthly/', { headers: auth(), params: { movement_type: MOVEMENT_TYPES.SALE, year } }),
+        axios.get('/api/transactions/branch-monthly/', { headers: auth(), params: { movement_type: MOVEMENT_TYPES.SALE, metric: 'profit', year } }),
         axios.get('/api/transactions/summary/', { headers: auth(), params: { year } }),
         axios.get('/api/transactions/branches/', { headers: auth() }),
       ]);
@@ -276,10 +276,10 @@ export function PricingProfitabilityReport() {
 
   // ── Derived data ─────────────────────────────────────────────────────────
   const totalRevenue   = num(salesKPI?.ca?.total);
-  const totalQty       = num(salesKPI?.qty?.total);
-  
-  // Profit data from sales KPI (if available)
-  const totalProfit    = num(salesKPI?.profit?.total ?? 0);
+  const totalQty       = monthlySummary.reduce((sum, m) => sum + num(m.total_qty ?? 0), 0);
+
+  // Profit computed from monthly summary using (price_out - balance_price) * qty_out
+  const totalProfit    = monthlySummary.reduce((sum, m) => sum + num(m.total_profit ?? 0), 0);
   const profitMargin   = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
   const visibleSalesBranchNames = selectedBranch === 'all'
@@ -295,8 +295,8 @@ export function PricingProfitabilityReport() {
       month: m.month_label,
       qty: num(m.total_qty ?? 0),
       sales: num(m.total_sales),
-      profit: num(m.total_profit ?? (num(m.total_sales) - num(m.total_purchases))),
-      profitRatio: num(m.total_sales) > 0 ? ((num(m.total_profit ?? (num(m.total_sales) - num(m.total_purchases))) / num(m.total_sales)) * 100) : 0,
+      profit: num(m.total_profit ?? 0),
+      profitRatio: num(m.total_sales) > 0 ? ((num(m.total_profit ?? 0) / num(m.total_sales)) * 100) : 0,
     }));
   }, [monthlySummary]);
 
@@ -305,8 +305,8 @@ export function PricingProfitabilityReport() {
     (salesKPI?.product_margins ?? []).map((p: any) => ({
       name: (p.material_name ?? '').slice(0, 32),
       revenue: num(p.total_revenue),
-      profit: num(p.profit ?? (p.total_revenue - num(p.cost ?? 0))),
-      profitRatio: num(p.total_revenue) > 0 ? ((num(p.profit ?? (p.total_revenue - num(p.cost ?? 0))) / num(p.total_revenue)) * 100) : 0,
+      profit: num(p.total_profit ?? p.profit ?? 0),
+      profitRatio: num(p.total_revenue) > 0 ? ((num(p.total_profit ?? p.profit ?? 0) / num(p.total_revenue)) * 100) : 0,
       qty: num(p.total_qty),
     })).sort((a: any, b: any) => b.profitRatio - a.profitRatio),
     [salesKPI]
@@ -316,16 +316,22 @@ export function PricingProfitabilityReport() {
 
   // Top customers by profit
   const topCustomers = useMemo(() =>
-    (salesKPI?.top_clients ?? []).slice(0, 12).map((c: any, i: number) => ({
-      name: (c.customer_name ?? '').slice(0, 32),
-      revenue: num(c.total_revenue),
-      profit: num(c.profit ?? (c.total_revenue * (profitMargin / 100))),
-      profitRatio: num(c.total_revenue) > 0 ? ((num(c.profit ?? (c.total_revenue * (profitMargin / 100))) / num(c.total_revenue)) * 100) : 0,
-      txCount: num(c.transaction_count),
-      share: num(c.revenue_share),
-      color: BRANCH_PAL[i % BRANCH_PAL.length],
-    })),
-    [salesKPI, profitMargin]
+    (salesKPI?.top_clients ?? [])
+      .map((c: any) => ({
+        name: (c.customer_name ?? '').slice(0, 32),
+        revenue: num(c.total_revenue),
+        profit: num(c.total_profit ?? c.profit ?? 0),
+        profitRatio: num(c.total_revenue) > 0 ? ((num(c.total_profit ?? c.profit ?? 0) / num(c.total_revenue)) * 100) : 0,
+        txCount: num(c.transaction_count),
+        share: num(c.revenue_share),
+      }))
+      .sort((a: any, b: any) => b.profit - a.profit)
+      .slice(0, 12)
+      .map((c: any, i: number) => ({
+        ...c,
+        color: BRANCH_PAL[i % BRANCH_PAL.length],
+      })),
+    [salesKPI]
   );
   const maxCustomerProfit = topCustomers[0]?.profit ?? 1;
 
@@ -337,16 +343,16 @@ export function PricingProfitabilityReport() {
       .map((n, i) => {
         const branchData = saleBranches.find(b => b.branch === n);
         const branchRevenue = num(branchData?.total);
-        const branchProfit = branchRevenue * (profitMargin / 100);
+        const branchProfit = num(branchData?.total_profit ?? 0);
         return {
-          branch: n.slice(0, 14),
+          branch: n,
           revenue: branchRevenue,
           profit: branchProfit,
           profitRatio: branchRevenue > 0 ? (branchProfit / branchRevenue) * 100 : 0,
           color: BRANCH_PAL[i % BRANCH_PAL.length],
         };
       }).sort((a, b) => b.revenue - a.revenue);
-  }, [saleBranches, selectedBranch, profitMargin]);
+  }, [saleBranches, selectedBranch]);
 
   const branchOptions = [
     { key: 'all', label: 'All Branches' },
@@ -373,6 +379,35 @@ export function PricingProfitabilityReport() {
       Array.from(el.children).forEach(c => replaceVars(c as HTMLElement));
     };
     replaceVars(clone);
+
+    // Reorder selected blocks for print-only pagination.
+    const monthlyChart = clone.querySelector('[data-print-block="monthly-chart"]') as HTMLElement | null;
+    const salesProfitByBranch = clone.querySelector('[data-print-block="sales-profit-by-branch"]') as HTMLElement | null;
+    const profitRatioDistribution = clone.querySelector('[data-print-block="profit-ratio-distribution"]') as HTMLElement | null;
+    const branchSummaryTable = clone.querySelector('[data-print-block="branch-summary-table"]') as HTMLElement | null;
+
+    if (monthlyChart) {
+      monthlyChart.style.breakBefore = 'page';
+      monthlyChart.style.pageBreakBefore = 'always';
+    }
+
+    // Keep these blocks in their natural order for print:
+    // 1) Sales & Profit by Branch stays under Monthly Sales, Profit & Quantity.
+    // 2) Profit Ratio Distribution stays under product cards.
+    if (salesProfitByBranch) {
+      salesProfitByBranch.style.breakBefore = 'auto';
+      salesProfitByBranch.style.pageBreakBefore = 'auto';
+    }
+
+    if (profitRatioDistribution) {
+      profitRatioDistribution.style.breakBefore = 'page';
+      profitRatioDistribution.style.pageBreakBefore = 'always';
+    }
+
+    if (branchSummaryTable) {
+      branchSummaryTable.style.breakBefore = 'page';
+      branchSummaryTable.style.pageBreakBefore = 'always';
+    }
 
     const iframe = document.createElement('iframe');
     iframe.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:-1;visibility:hidden;';
@@ -535,7 +570,7 @@ ${clone.outerHTML}
           </div>
 
           {/* Monthly trend chart */}
-          <div style={card}>
+          <div style={card} data-print-block="monthly-chart">
             <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Monthly Sales, Profit & Quantity</h3>
             <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Revenue vs profit & sales quantity trend — {selectedYear}</p>
             {combinedMonthly.length === 0 ? <Empty /> : (
@@ -565,13 +600,30 @@ ${clone.outerHTML}
 
           {/* Branch comparison */}
           {branchCompare.length > 0 && (
-            <div style={{ ...card, marginTop: 16 }}>
+            <div style={{ ...card, marginTop: 16 }} data-print-block="sales-profit-by-branch">
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Sales & Profit by Branch</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Branch-level comparison — {selectedYear}</p>
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={branchCompare} barCategoryGap="30%" margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="4 4" stroke={css.border} vertical={false} />
-                  <XAxis dataKey="branch" tick={ax} axisLine={false} tickLine={false} />
+                  <XAxis
+                    dataKey="branch"
+                    tick={ax}
+                    axisLine={false}
+                    tickLine={false}
+                    interval={0}
+                    angle={-18}
+                    textAnchor="end"
+                    tickMargin={8}
+                    height={68}
+                    tickFormatter={(v) => {
+                      const label = String(v ?? '');
+                      if (label.length <= 18) return label;
+                      const start = label.slice(0, 8).trim();
+                      const end = label.slice(-8).trim();
+                      return `${start}...${end}`;
+                    }}
+                  />
                   <YAxis tick={ax} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
                   <RTooltip content={<Tip />} />
                   <Legend wrapperStyle={legendStyle} iconType="circle" iconSize={8} />
@@ -586,7 +638,7 @@ ${clone.outerHTML}
         {/* ════════════════════════════════════════
             SECTION 2 — PRODUCT PROFITABILITY
         ════════════════════════════════════════ */}
-        <div data-print="section" style={{ marginBottom: 52 }}>
+        <div data-print="section" data-print-section="product" style={{ marginBottom: 52 }}>
           <SecHead n={2} title="Product Profitability" sub="Most & least profitable products · profit by product" color={C.violet} />
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 16 }}>
@@ -640,7 +692,7 @@ ${clone.outerHTML}
 
           {/* Product profit distribution */}
           {productProfitability.length > 0 && (
-            <div style={{ ...card, marginTop: 16 }}>
+            <div style={{ ...card, marginTop: 16 }} data-print-block="profit-ratio-distribution">
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Profit Ratio Distribution</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Profit ratio across top products</p>
               <ResponsiveContainer width="100%" height={220}>
@@ -663,7 +715,7 @@ ${clone.outerHTML}
         {/* ════════════════════════════════════════
             SECTION 3 — CUSTOMER PROFITABILITY
         ════════════════════════════════════════ */}
-        <div data-print="section" style={{ marginBottom: 52 }}>
+        <div data-print="section" data-print-section="customer" style={{ marginBottom: 52 }}>
           <SecHead n={3} title="Customer Profitability" sub="Profit by customer · top profitable customers" color={C.rose} />
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 16 }}>
@@ -768,7 +820,7 @@ ${clone.outerHTML}
 
           {/* Branch KPI summary table */}
           {branchCompare.length > 0 && (
-            <div style={{ ...card, marginTop: 16 }}>
+            <div style={{ ...card, marginTop: 16 }} data-print-block="branch-summary-table">
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 16px' }}>Branch Profitability Summary</h3>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>

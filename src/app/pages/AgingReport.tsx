@@ -147,7 +147,7 @@ function PartieHeader({ letter, label, color }: { letter: string; label: string;
         <div style={{ width: 4, height: 20, borderRadius: 2, background: `${color}40`, marginLeft: 3 }} />
       </div>
       <div>
-        <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color, margin: 0 }}>Partie {letter}</p>
+        <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color, margin: 0 }}>Part {letter}</p>
         <h2 style={{ fontSize: 18, fontWeight: 800, color: css.fg, margin: 0, letterSpacing: '-0.025em' }}>{label}</h2>
       </div>
     </div>
@@ -896,7 +896,7 @@ div[style*="border-top:"]{break-inside:avoid;page-break-inside:avoid;}
 
         {/* ══ PARTIE A ══════════════════════════════════════════ */}
         <section style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-          <PartieHeader letter="A" label="Synthèse Générale" color={C.indigo} />
+          <PartieHeader letter="A" label="General Summary" color={C.indigo} />
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 28, breakInside: 'avoid', pageBreakInside: 'avoid' }}>
             <KCard label="Total Receivables" value={formatCurrency(totals.total)} sub={`${rows.length} customers · ${activeDate}`} accent={C.indigo} Icon={TrendingUp} target="Track trend" />
@@ -1017,7 +1017,7 @@ div[style*="border-top:"]{break-inside:avoid;page-break-inside:avoid;}
           </div>
 
           <div style={card}>
-            <h3 style={{ fontSize: 14, fontWeight: 700, color: css.fg, margin: '0 0 3px' }}>KPIs Globaux vs. Objectifs</h3>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: css.fg, margin: '0 0 3px' }}>Overall KPIs vs. Objectives</h3>
             <p style={{ fontSize: 12, color: '#64748b', marginBottom: 18 }}>Collection rate · Overdue rate · DSO · Collected vs Outstanding</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 18, breakInside: 'avoid', pageBreakInside: 'avoid' }}>
               {[
@@ -1071,7 +1071,7 @@ div[style*="border-top:"]{break-inside:avoid;page-break-inside:avoid;}
 
         {/* ══ PARTIE B — ANALYSE PAR AGENCE ══════════════════════ */}
         <section style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-          <PartieHeader letter="B" label="Analyse par Agence" color={C.violet} />
+          <PartieHeader letter="B" label="Analysis by Agency" color={C.violet} />
 
           {/* Monthly area */}
           <div style={{ ...card, marginBottom: 24 }}>
@@ -1140,7 +1140,7 @@ div[style*="border-top:"]{break-inside:avoid;page-break-inside:avoid;}
 
         {/* ══ PARTIE C ══════════════════════════════════════════ */}
         <section style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-          <PartieHeader letter="C" label="Principaux Débiteurs & Risques" color={C.rose} />
+          <PartieHeader letter="C" label="Main Debtors & Risks" color={C.rose} />
 
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24, marginBottom: 24, breakInside: 'avoid', pageBreakInside: 'avoid' }}>
             <div style={card}>
@@ -1235,7 +1235,7 @@ div[style*="border-top:"]{break-inside:avoid;page-break-inside:avoid;}
 
         {/* ══ PARTIE D ══════════════════════════════════════════ */}
         <section style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-          <PartieHeader letter="D" label="Taux de Recouvrement par Agence" color={C.emerald} />
+          <PartieHeader letter="D" label="Recovery Rate per Agency" color={C.emerald} />
 
           <div style={{ ...card, marginBottom: 24 }}>
             <h3 style={{ fontSize: 14, fontWeight: 700, color: css.fg, margin: '0 0 3px' }}>On-track vs. Overdue · Collection Rate % — {activeDate}</h3>
@@ -1258,8 +1258,8 @@ div[style*="border-top:"]{break-inside:avoid;page-break-inside:avoid;}
           </div>
 
           <div style={card}>
-            <h3 style={{ fontSize: 14, fontWeight: 700, color: css.fg, margin: '0 0 3px' }}>Détail par Agence — Outstanding & Clients</h3>
-            <p style={{ fontSize: 12, color: '#64748b', marginBottom: 18 }}>Barre de progression · on-track vs. overdue · top 5 clients par agence</p>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: css.fg, margin: '0 0 3px' }}>Detail by Agency — Outstanding & Clients</h3>
+            <p style={{ fontSize: 12, color: '#64748b', marginBottom: 18 }}>Progress bar · on-track vs. overdue · top 5 clients per agency</p>
             {loadRows || branchKpi.length === 0 ? <Empty h={200} /> : (
               <div>
                 {branchKpi.map((b, bi) => {

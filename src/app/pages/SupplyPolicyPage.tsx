@@ -380,7 +380,6 @@ export function SupplyPolicyPage() {
         <td style="padding:6px 8px;text-align:center;color:#64748b;font-weight:700;font-size:11px">${i+1}</td>
         <td style="padding:6px 8px;font-weight:600;color:#0f172a;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.name.length>46?s.name.slice(0,46)+'…':s.name}</td>
         <td style="padding:6px 8px;text-align:right;color:#64748b">${s.sku_count}</td>
-        <td style="padding:6px 8px;text-align:right;color:#64748b">${s.count}</td>
         <td style="padding:6px 8px;text-align:right;font-weight:800;color:#0f172a">${fC(s.value)}</td>
         <td style="padding:6px 8px;text-align:right">
           <span style="font-weight:700;color:${col};background:${col}18;padding:2px 8px;border-radius:20px;font-size:10px">${share}%</span>
@@ -398,7 +397,6 @@ export function SupplyPolicyPage() {
             <span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>${b.branch}
           </span>
         </td>
-        <td style="padding:6px 8px;text-align:right;color:#64748b">${b.count}</td>
         <td style="padding:6px 8px;text-align:right;font-weight:800;color:#0f172a">${fC(b.value)}</td>
         <td style="padding:6px 8px;text-align:right">
           <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end">
@@ -422,7 +420,6 @@ export function SupplyPolicyPage() {
             <span style="font-weight:600;color:#0f172a">${c.name||'Other'}</span>
           </span>
         </td>
-        <td style="padding:6px 8px;text-align:right;color:#64748b">${c.count}</td>
         <td style="padding:6px 8px;text-align:right;font-weight:800;color:#0f172a">${fC(c.value)}</td>
         <td style="padding:6px 8px;text-align:right;font-weight:700;color:${col}">${share}%</td>
       </tr>`;
@@ -603,7 +600,6 @@ export function SupplyPolicyPage() {
       <th class="l" style="width:28px">#</th>
       <th class="l">Supplier</th>
       <th class="r">SKUs</th>
-      <th class="r">Orders</th>
       <th class="r">Total Value</th>
       <th class="r">% Share</th>
     </tr></thead>
@@ -618,18 +614,23 @@ export function SupplyPolicyPage() {
     <div class="cd">
       <h3>Top Categories</h3>
       <table>
-        <thead><tr><th class="l">Category</th><th class="r">Orders</th><th class="r">Value</th><th class="r">%</th></tr></thead>
+        <thead><tr><th class="l">Category</th><th class="r">Value</th><th class="r">%</th></tr></thead>
         <tbody>${catRows}</tbody>
       </table>
     </div>
     <div class="cd">
       <h3>Purchase Value by Branch</h3>
       <table>
-        <thead><tr><th class="l">Branch</th><th class="r">Orders</th><th class="r">Value</th><th class="r">Share</th></tr></thead>
+        <thead><tr><th class="l">Branch</th><th class="r">Value</th><th class="r">Share</th></tr></thead>
         <tbody>${branchRows}</tbody>
       </table>
     </div>
   </div>
+</div>
+
+<!-- ══ PAGE 3 — Supplier SKUs ══ -->
+<div class="page">
+  ${pageHdr(3,'Supplier × Top SKUs','Top 5 items per top 10 suppliers','PAGE 3')}
   <div class="cd">
     <h3>Purchase by Branch — Last 6 Months</h3>
     <table>
@@ -642,11 +643,6 @@ export function SupplyPolicyPage() {
     <div class="ic"><div class="l">Critical Reorders</div><div class="v">${outCount+criticalCount} products</div><div class="s">Need immediate replenishment</div></div>
     <div class="ic"><div class="l">Most Active Month</div><div class="v">${mostActiveMonth}</div><div class="s">Highest purchase value</div></div>
   </div>
-</div>
-
-<!-- ══ PAGE 3 — Supplier SKUs ══ -->
-<div class="page">
-  ${pageHdr(3,'Supplier × Top SKUs','Top 5 items per top 10 suppliers','PAGE 3')}
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
     ${skuCards}
   </div>
@@ -688,33 +684,6 @@ export function SupplyPolicyPage() {
       </div>
     </div>
   </div>
-</div>
-
-<!-- ══ PAGE 5 — Replenishment & Reorder ══ -->
-<div class="page">
-  ${pageHdr(5,'Replenishment & Reorder Analysis',`${urgentItems.length} urgent products · ${outCount} out · ${criticalCount} critical · ${lowCount} low`,'PAGE 5')}
-  <div class="kpi-row" style="margin-bottom:14px">
-    <div class="kc" style="border-top-color:#ef4444"><div class="l">Out of Stock</div><div class="v" style="color:#ef4444">${outCount}</div><div class="s">Reorder immediately</div></div>
-    <div class="kc" style="border-top-color:#f97316"><div class="l">Critical</div><div class="v" style="color:#f97316">${criticalCount}</div><div class="s">Below minimum level</div></div>
-    <div class="kc" style="border-top-color:#f59e0b"><div class="l">Low Stock</div><div class="v" style="color:#f59e0b">${lowCount}</div><div class="s">Below safety threshold</div></div>
-    <div class="kc" style="border-top-color:#10b981"><div class="l">Total Stock Value</div><div class="v" style="color:#10b981;font-size:13px">${fC(stockSummary?.total_stock_value??0)}</div><div class="s">${stockSummary?.total_products??0} SKUs tracked</div></div>
-  </div>
-  ${urgentItems.length === 0
-    ? '<p style="color:#94a3b8;font-size:12px;text-align:center;padding:40px">No urgent reorder items.</p>'
-    : `<table>
-        <thead><tr>
-          <th class="l">Product</th>
-          <th class="l">Category</th>
-          <th class="r">Stock</th>
-          <th class="r">Min</th>
-          <th class="r">Monthly Usage</th>
-          <th class="r">Days Left</th>
-          <th class="r">Reorder Qty</th>
-          <th class="r">Status</th>
-        </tr></thead>
-        <tbody>${reorderRows}</tbody>
-      </table>`
-  }
 </div>
 
 </body></html>`;
@@ -1059,7 +1028,7 @@ export function SupplyPolicyPage() {
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
                   <thead>
                     <tr style={{ background:css.muted }}>
-                      {['Product','Category','Current Stock','Min Level','Max Level','Monthly Usage','Days of Stock','Reorder Qty','Reorder When','Status'].map(h=>(
+                      {['Product','Category','Current Stock','Min Level','Max Level','Monthly Usage','Days of Stock','Reorder Qty','Status'].map(h=>(
                         <th key={`th-${h}`} style={{ padding:'8px 10px', textAlign:['Product','Category'].includes(h)?'left':'right', fontSize:10, fontWeight:700, color:css.mutedFg, borderBottom:`2px solid ${css.border}`, textTransform:'uppercase', whiteSpace:'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -1067,7 +1036,6 @@ export function SupplyPolicyPage() {
                   <tbody>
                     {reorderPaged.map((item,i)=>{
                       const hasUsage = item.monthly_usage > 0;
-                      const reorderWhen = item.status==='out'?'🔴 Reorder Now':item.status==='critical'?'🟠 Reorder Immediately':item.status==='low'?'🟡 Reorder Soon':item.days_of_stock!==null&&item.days_of_stock<=30?'⚠ Within 30d':'—';
                       return (
                         <tr key={`reorder-${item.material_code}-${i}`} style={{ background:i%2===0?'transparent':`${css.muted}40` }}>
                           <td style={{ padding:'7px 10px', maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
@@ -1085,7 +1053,6 @@ export function SupplyPolicyPage() {
                           <td style={{ padding:'7px 10px', textAlign:'right' }}>
                             {item.reorder_qty>0?<span style={{ fontWeight:800, color:C.indigo }}>{formatNumber(item.reorder_qty)}</span>:<span style={{ color:css.mutedFg }}>—</span>}
                           </td>
-                          <td style={{ padding:'7px 10px', textAlign:'right', fontSize:11, fontWeight:600, whiteSpace:'nowrap', color:item.status!=='ok'?C.rose:css.mutedFg }}>{reorderWhen}</td>
                           <td style={{ padding:'7px 10px', textAlign:'right' }}><StatusBadge status={item.status} /></td>
                         </tr>
                       );

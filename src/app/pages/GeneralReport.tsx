@@ -277,7 +277,10 @@ export function GeneralReport() {
   // ── Derived data ─────────────────────────────────────────────────────────
   const totalRevenue   = num(salesKPI?.ca?.total);
   const totalPurchases = useMemo(() => purchaseBranches.reduce((s, b) => s + num(b.total), 0), [purchaseBranches]);
-  const grossProfit    = totalRevenue - totalPurchases;
+  const grossProfit    = useMemo(
+    () => monthlySummary.reduce((sum, month) => sum + num(month.total_profit ?? 0), 0),
+    [monthlySummary]
+  );
   const grossMarginPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
   // filtered branch data
@@ -302,7 +305,7 @@ export function GeneralReport() {
       month: m.month_label,
       sales: num(m.total_sales),
       purchases: num(m.total_purchases),
-      profit: num(m.total_sales) - num(m.total_purchases),
+      profit: num(m.total_profit ?? 0),
     }));
   }, [monthlySummary]);
 
@@ -407,6 +410,20 @@ export function GeneralReport() {
     };
     replaceVars(clone);
 
+    // Print-only pagination controls for requested blocks.
+    const marginDistributionBlock = clone.querySelector('[data-print-block="margin-distribution"]') as HTMLElement | null;
+    const branchPurchaseSummaryBlock = clone.querySelector('[data-print-block="branch-purchase-summary"]') as HTMLElement | null;
+
+    if (marginDistributionBlock) {
+      marginDistributionBlock.style.breakBefore = 'page';
+      marginDistributionBlock.style.pageBreakBefore = 'always';
+    }
+
+    if (branchPurchaseSummaryBlock) {
+      branchPurchaseSummaryBlock.style.breakBefore = 'page';
+      branchPurchaseSummaryBlock.style.pageBreakBefore = 'always';
+    }
+
     const iframe = document.createElement('iframe');
     iframe.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:-1;visibility:hidden;';
     document.body.appendChild(iframe);
@@ -463,7 +480,7 @@ export function GeneralReport() {
       </div>
       <div>
         <div class="cover-kpi"><div><span class="ck-label">Total Revenue</span><p class="ck-value">${formatCurrency(totalRevenue)}</p><span class="ck-note">${selectedYear} · all branches</span></div><span class="badge-good">Revenue</span></div>
-        <div class="cover-kpi"><div><span class="ck-label">Gross Profit</span><p class="ck-value" style="color:${grossProfit >= 0 ? C.emerald : C.rose}">${formatCurrency(grossProfit)}</p><span class="ck-note">Revenue − Purchases</span></div><span class="${grossMarginPct >= 20 ? 'badge-good' : 'badge-warn'}">${grossMarginPct.toFixed(1)}% margin</span></div>
+        <div class="cover-kpi"><div><span class="ck-label">Gross Profit</span><p class="ck-value" style="color:${grossProfit >= 0 ? C.emerald : C.rose}">${formatCurrency(grossProfit)}</p><span class="ck-note">Σ((Sale Price − Balance Price) × Qty Out)</span></div><span class="${grossMarginPct >= 20 ? 'badge-good' : 'badge-warn'}">${grossMarginPct.toFixed(1)}% margin</span></div>
         <div class="cover-kpi"><div><span class="ck-label">Total Purchases</span><p class="ck-value">${formatCurrency(totalPurchases)}</p><span class="ck-note">All purchase types</span></div></div>
         <div class="cover-kpi"><div><span class="ck-label">Top Product</span><p class="ck-value" style="font-size:16px;color:${C.teal}">${(topProducts[0]?.name ?? '—').slice(0, 22)}</p><span class="ck-note">${formatCurrency(topProducts[0]?.revenue ?? 0)}</span></div></div>
       </div>
@@ -548,7 +565,7 @@ ${clone.outerHTML}
         {/* ── GLOBAL KPIs ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 36 }}>
           <KCard label="Total Revenue" value={formatCurrency(totalRevenue)} sub={`${selectedYear} sales`} accent={C.indigo} Icon={TrendingUp} />
-          <KCard label="Gross Profit" value={formatCurrency(grossProfit)} sub="Revenue − Purchases" accent={grossProfit >= 0 ? C.emerald : C.rose} Icon={DollarSign}
+          <KCard label="Gross Profit" value={formatCurrency(grossProfit)} sub="(Sale Price − Balance Price) × Qty Out" accent={grossProfit >= 0 ? C.emerald : C.rose} Icon={DollarSign}
             badge={{ text: `${grossMarginPct.toFixed(1)}% margin`, good: grossMarginPct >= 20 }} />
           <KCard label="Total Purchases" value={formatCurrency(totalPurchases)} sub="All purchase types" accent={C.amber} Icon={ShoppingCart} />
           <KCard label="Best Margin Product" value={(topMarginProducts[0]?.name ?? '—').slice(0, 20)} sub={topMarginProducts[0] ? `${topMarginProducts[0].margin.toFixed(1)}% margin` : ''} accent={C.teal} Icon={Star} />
@@ -571,7 +588,7 @@ ${clone.outerHTML}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
             <div style={card}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Monthly Sales & Purchases</h3>
-              <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Revenue vs. purchase cost & gross profit — {selectedYear}</p>
+              <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Revenue, purchases, and backend profit formula by month — {selectedYear}</p>
               {combinedMonthly.length === 0 ? <Empty /> : (
                 <ResponsiveContainer width="100%" height={260}>
                   <ComposedChart data={combinedMonthly} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
@@ -643,7 +660,7 @@ ${clone.outerHTML}
           <SecHead n={2} title="Profit Analysis" sub="Gross profit per product · margin percentage · profitability ranking" color={C.emerald} />
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 16 }}>
-            <KCard label="Gross Profit" value={formatCurrency(grossProfit)} sub="Total revenue − purchases" accent={C.emerald} Icon={DollarSign} badge={{ text: `${grossMarginPct.toFixed(1)}%`, good: grossMarginPct >= 20 }} />
+            <KCard label="Gross Profit" value={formatCurrency(grossProfit)} sub="Σ((Sale Price − Balance Price) × Qty Out)" accent={C.emerald} Icon={DollarSign} badge={{ text: `${grossMarginPct.toFixed(1)}%`, good: grossMarginPct >= 20 }} />
             <KCard label="Avg Product Margin" value={`${productMargins.length > 0 ? (productMargins.reduce((s: number, p: any) => s + p.margin, 0) / productMargins.length).toFixed(1) : 0}%`} sub={`Across ${productMargins.length} products`} accent={C.teal} Icon={Target} />
             <KCard label="High Margin Products" value={String(productMargins.filter((p: any) => p.margin >= 30).length)} sub="Margin ≥ 30%" accent={C.violet} Icon={Star} />
           </div>
@@ -744,7 +761,7 @@ ${clone.outerHTML}
 
           {/* Margin distribution scatter-like bar */}
           {productMargins.length > 0 && (
-            <div style={card}>
+            <div style={card} data-print-block="margin-distribution">
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Margin Distribution — All Products</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 4 }}>Margin % vs. revenue contribution (bubble size = revenue)</p>
               <div style={{ display: 'flex', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -1047,7 +1064,7 @@ ${clone.outerHTML}
 
           {/* Summary table — branch purchase KPIs */}
           {purchBranchChart.length > 0 && (
-            <div style={card}>
+            <div style={card} data-print-block="branch-purchase-summary">
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 16px' }}>Branch Purchase Summary</h3>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>

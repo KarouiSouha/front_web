@@ -13,18 +13,18 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
-    Package, TrendingUp, DollarSign, BarChart3, RefreshCw,
-    Loader2, AlertCircle, Printer, ChevronDown,
-    AlertTriangle, Layers, RotateCcw, Archive,
+  Package, TrendingUp, DollarSign, BarChart3, RefreshCw,
+  Loader2, AlertCircle, Printer, ChevronDown,
+  AlertTriangle, Layers, RotateCcw, Archive,
 } from 'lucide-react';
 import {
-    BarChart, Bar, PieChart, Pie, Cell,
-    XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
-    ResponsiveContainer, Legend,
+  BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
+  ResponsiveContainer, Legend,
 } from 'recharts';
 import {
-    inventoryApi, stockKpiApi,
-    type BranchSummary, type CategoryBreakdown, type StockKPIData,
+  inventoryApi, stockKpiApi,
+  type BranchSummary, type CategoryBreakdown, type StockKPIData,
 } from '../lib/dataApi';
 import { formatCurrency, formatNumber } from '../lib/utils';
 
@@ -185,7 +185,8 @@ function StyledDropdown({ label, options, value, onChange, isOpen, onToggle, onC
 export function InventoryTurnoverReport() {
   const currentYear = new Date().getFullYear();
 
-  const [snapDates, setSnapDates] = useState<string[]>([]);
+  const [snapshots, setSnapshots] = useState<{ id: string; display: string }[]>([]);
+  const [activeSnapshotId, setActiveSnapshotId] = useState('');
   const [activeDate, setActiveDate] = useState('');
   const [selectedYear, setSelectedYear] = useState(String(currentYear));
   const [openDropdown, setOpenDropdown] = useState<'date' | 'year' | null>(null);
@@ -199,12 +200,18 @@ export function InventoryTurnoverReport() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // ── Load snapshot dates on mount ─────────────────────────────────────────
+  // ── Load snapshots on mount ─────────────────────────────────────────────
   useEffect(() => {
-    inventoryApi.dates().then(r => {
-      const d = r.dates ?? [];
-      setSnapDates(d);
-      if (d.length) setActiveDate(d[0]);
+    inventoryApi.listSnapshots({ page_size: 100 }).then(r => {
+      const snaps = (r.items ?? []).map(s => ({
+        id: s.id,
+        display: s.snapshot_date || s.uploaded_at.slice(0, 10),
+      }));
+      setSnapshots(snaps);
+      if (snaps.length) {
+        setActiveSnapshotId(snaps[0].id);
+        setActiveDate(snaps[0].display);
+      }
     }).catch(() => {});
   }, []);
 
@@ -213,14 +220,16 @@ export function InventoryTurnoverReport() {
     setLoading(true); setError('');
     const year = Number(selectedYear);
     try {
-      const [invRes, branchRes, catRes, stockRes] = await Promise.all([
-        inventoryApi.list({ snapshot_date: activeDate || undefined, page_size: 1 }),
-        inventoryApi.branchSummary({ snapshot_date: activeDate || undefined }),
-        inventoryApi.categoryBreakdown({ snapshot_date: activeDate || undefined }),
+      const [linesRes, branchRes, catRes, stockRes] = await Promise.all([
+        activeSnapshotId
+          ? inventoryApi.getLines(activeSnapshotId, { page_size: 1 })
+          : Promise.resolve(null),
+        inventoryApi.branchSummary({ snapshot_id: activeSnapshotId || undefined }),
+        inventoryApi.categoryBreakdown({ snapshot_id: activeSnapshotId || undefined }),
         stockKpiApi.getAll({ year, snapshot_date: activeDate || undefined }),
       ]);
-      setTotalQty(num(invRes.totals?.grand_total_qty));
-      setTotalValue(num(invRes.totals?.grand_total_value));
+      setTotalQty(num(linesRes?.totals?.grand_total_qty));
+      setTotalValue(num(linesRes?.totals?.grand_total_value));
       setBranches(branchRes.branches ?? []);
       setCategories(catRes.categories ?? []);
       setStockKpi(stockRes);
@@ -229,12 +238,12 @@ export function InventoryTurnoverReport() {
     } finally {
       setLoading(false);
     }
-  }, [activeDate, selectedYear]);
+  }, [activeSnapshotId, activeDate, selectedYear]);
 
   useEffect(() => {
-    // Fetch once dates are loaded (or immediately if no dates needed)
-    if (activeDate || snapDates.length === 0) fetchAll();
-  }, [fetchAll, activeDate, snapDates.length]);
+    // Fetch once snapshots are loaded (or immediately if none available)
+    if (activeSnapshotId || snapshots.length === 0) fetchAll();
+  }, [fetchAll, activeSnapshotId, snapshots.length]);
 
   // ── Derived data ──────────────────────────────────────────────────────────
   const sortedBranches = useMemo(() =>
@@ -257,100 +266,454 @@ export function InventoryTurnoverReport() {
   const lowRotation  = stockKpi?.low_rotation_products?.slice(0, 10) ?? [];
 
   const yearOptions = [currentYear, currentYear - 1, currentYear - 2].map(y => ({ key: String(y), label: String(y) }));
-  const dateOptions = snapDates.map(d => ({ key: d, label: d }));
+  const dateOptions = snapshots.map(s => ({ key: s.id, label: s.display }));
 
   // ── Print ─────────────────────────────────────────────────────────────────
   const handlePrint = () => {
-    const printable = document.getElementById('itr-printable');
-    if (!printable) return;
-    const clone = printable.cloneNode(true) as HTMLElement;
+    const genDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
 
-    const replaceVars = (el: HTMLElement) => {
-      if (el.style?.cssText) {
-        el.style.cssText = el.style.cssText
-          .replace(/hsl\(var\(--card\)\)/g, '#fff')
-          .replace(/hsl\(var\(--card-foreground\)\)/g, '#111827')
-          .replace(/hsl\(var\(--border\)\)/g, '#e5e7eb')
-          .replace(/hsl\(var\(--muted\)\)/g, '#f3f4f6')
-          .replace(/hsl\(var\(--muted-foreground\)\)/g, '#6b7280')
-          .replace(/hsl\(var\(--background\)\)/g, '#fff')
-          .replace(/hsl\(var\(--foreground\)\)/g, '#111827');
-      }
-      Array.from(el.children).forEach(c => replaceVars(c as HTMLElement));
-    };
-    replaceVars(clone);
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    const esc = (s: string) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const fc  = (v: unknown) => formatCurrency(v as number);
+    const fn  = (v: unknown) => formatNumber(v as number);
+    const p   = (a: number, b: number) => b > 0 ? +((a / b) * 100).toFixed(1) : 0;
 
+    const PAL  = ['#6366f1','#0ea5e9','#14b8a6','#10b981','#f59e0b','#f43f5e','#8b5cf6','#f97316'];
+    const CPAL = ['#6366f1','#0ea5e9','#14b8a6','#10b981','#f59e0b','#f43f5e','#8b5cf6','#f97316','#38bdf8','#ec4899'];
+
+    // ── Reusable print-safe components ───────────────────────────────────────
+    const secHead = (n: number, title: string, sub: string, color: string) => `
+      <div class="sec-head">
+        <span class="sec-num" style="background:${color}18;color:${color};border:1px solid ${color}30">${n}</span>
+        <div>
+          <h2 class="sec-title">${esc(title)}</h2>
+          ${sub ? `<p class="sec-sub">${esc(sub)}</p>` : ''}
+        </div>
+      </div>`;
+
+    const kcard = (label: string, value: string, sub: string, accent: string, badge?: { text: string; good: boolean }) => `
+      <div class="kcard" style="border-left:3px solid ${accent}">
+        <p class="kcard-label" style="color:${accent}">${esc(label)}</p>
+        <p class="kcard-value" style="color:${accent}">${esc(value)}</p>
+        <p class="kcard-sub">${esc(sub)}</p>
+        ${badge ? `<span class="badge" style="background:${badge.good ? '#10b98118' : '#f43f5e18'};color:${badge.good ? '#10b981' : '#f43f5e'}">${esc(badge.text)}</span>` : ''}
+      </div>`;
+
+    const bar = (share: number, color: string, height = 6) =>
+      `<div style="height:${height}px;border-radius:999px;background:#f3f4f6;overflow:hidden">
+        <div style="height:100%;border-radius:999px;width:${share}%;background:linear-gradient(90deg,${color}60,${color})"></div>
+      </div>`;
+
+    const th = (cols: string[], aligns: string[]) =>
+      `<tr class="thead-row">${cols.map((c,i) => `<th style="text-align:${aligns[i]||'left'}">${esc(c)}</th>`).join('')}</tr>`;
+
+    // ── SECTION 1 — Inventory Quantity ───────────────────────────────────────
+    const sec1 = `
+      <div class="section">
+        ${secHead(1,'Inventory Quantity','Total stock quantity — global & per branch (كمية المخزن)','#14b8a6')}
+        <div class="kgrid-3">
+          ${kcard('Total Stock Qty',         fn(grandTotalQty),    'All products, all branches',     '#14b8a6')}
+          ${kcard('Total Products',          fn(totalProducts||categories.length), 'Products with stock data', '#6366f1')}
+          ${kcard('Zero-Stock Items',        String(zeroStockCount),'Require immediate restock',      '#f43f5e',
+                  { text: zeroStockCount === 0 ? 'All stocked' : 'Action needed', good: zeroStockCount === 0 })}
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <h3 class="card-title">Stock Quantity by Branch</h3>
+          <p class="card-sub">Units in stock per branch — ${esc(activeDate || selectedYear)}</p>
+          <table class="data-table">
+            ${th(['Branch','Stock Qty','% of Total','Distribution'],['left','right','right','left'])}
+            <tbody>
+              ${sortedBranches.map((b,i) => {
+                const share = p(num(b.total_qty), grandTotalQty);
+                const c = PAL[i % PAL.length];
+                return `<tr class="${i%2?'row-alt':''}">
+                  <td><span class="dot" style="background:${c}"></span>${esc(b.branch)}</td>
+                  <td style="text-align:right;font-weight:700;color:${c}">${fn(b.total_qty)}</td>
+                  <td style="text-align:right"><span class="pct-badge" style="background:${c}18;color:${c}">${share}%</span></td>
+                  <td style="min-width:130px">${bar(share, c)}</td>
+                </tr>`;
+              }).join('')}
+              <tr class="total-row">
+                <td><strong>TOTAL</strong></td>
+                <td style="text-align:right;color:#6366f1;font-weight:900">${fn(grandTotalQty)}</td>
+                <td style="text-align:right;color:#6366f1;font-weight:700">100%</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+
+    // ── SECTION 2 — Inventory Value ──────────────────────────────────────────
+    const sec2 = `
+      <div class="section page-break">
+        ${secHead(2,'Inventory Value','Total stock value in LYD — global & breakdown (قيمة المخزن)','#6366f1')}
+        <div class="kgrid-3">
+          ${kcard('Total Stock Value',    fc(grandTotalValue), 'All branches combined',                        '#6366f1')}
+          ${kcard('Avg Value per Unit',   fc(grandTotalQty > 0 ? grandTotalValue / grandTotalQty : 0), 'Average cost price per unit', '#8b5cf6')}
+          ${kcard('Highest Value Branch', (sortedBranches[0]?.branch ?? '—').slice(0,18), fc(sortedBranches[0]?.total_value ?? 0), '#14b8a6')}
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <h3 class="card-title">Stock Value by Branch</h3>
+          <p class="card-sub">Total inventory value per branch — ${esc(activeDate || selectedYear)}</p>
+          <table class="data-table">
+            ${th(['Branch','Stock Value (LYD)','% of Total','Distribution'],['left','right','right','left'])}
+            <tbody>
+              ${sortedBranches.map((b,i) => {
+                const share = p(num(b.total_value), grandTotalValue);
+                const c = PAL[i % PAL.length];
+                return `<tr class="${i%2?'row-alt':''}">
+                  <td><span class="dot" style="background:${c}"></span>${esc(b.branch)}</td>
+                  <td style="text-align:right;font-weight:800;color:${c}">${fc(b.total_value)}</td>
+                  <td style="text-align:right"><span class="pct-badge" style="background:${c}18;color:${c}">${share}%</span></td>
+                  <td style="min-width:130px">${bar(share, c)}</td>
+                </tr>`;
+              }).join('')}
+              <tr class="total-row">
+                <td><strong>TOTAL</strong></td>
+                <td style="text-align:right;color:#6366f1;font-weight:900">${fc(grandTotalValue)}</td>
+                <td style="text-align:right;color:#6366f1;font-weight:700">100%</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+
+    // ── SECTION 3 — Value per Branch (merged) ────────────────────────────────
+    const sec3 = `
+      <div class="section page-break">
+        ${secHead(3,'Stock Value per Branch','Detailed breakdown — value, quantity, and share of total (قيمة مخزون لكل فرع)','#8b5cf6')}
+        <div class="card">
+          <h3 class="card-title">Branch Summary</h3>
+          <p class="card-sub">Qty, value, share and distribution per branch</p>
+          <table class="data-table">
+            ${th(['Branch','Qty','Value (LYD)','% of Total','Distribution'],['left','right','right','right','left'])}
+            <tbody>
+              ${sortedBranches.map((b,i) => {
+                const share = p(num(b.total_value), grandTotalValue);
+                const c = PAL[i % PAL.length];
+                return `<tr class="${i%2?'row-alt':''}">
+                  <td><span class="dot" style="background:${c}"></span>${esc(b.branch)}</td>
+                  <td style="text-align:right;color:#6b7280;font-weight:600">${fn(b.total_qty)}</td>
+                  <td style="text-align:right;font-weight:800;color:${c}">${fc(b.total_value)}</td>
+                  <td style="text-align:right"><span class="pct-badge" style="background:${c}18;color:${c}">${share}%</span></td>
+                  <td style="min-width:130px">${bar(share, c)}</td>
+                </tr>`;
+              }).join('')}
+              <tr class="total-row">
+                <td><strong>TOTAL</strong></td>
+                <td style="text-align:right;color:#6366f1;font-weight:900">${fn(grandTotalQty)}</td>
+                <td style="text-align:right;color:#6366f1;font-weight:900">${fc(grandTotalValue)}</td>
+                <td style="text-align:right;color:#6366f1;font-weight:700">100%</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+
+    // ── SECTION 4 — Value by Category ────────────────────────────────────────
+    const sec4 = `
+      <div class="section page-break">
+        ${secHead(4,'Inventory Value by Index / Category','Total stock value and quantity per product index/category (قيمة المخزون بالفهرس)','#f59e0b')}
+        <div class="kgrid-3">
+          ${kcard('Total Categories',    String(categories.length), 'Product indexes tracked', '#f59e0b')}
+          ${kcard('Top Category Value',  fc(sortedCategories[0]?.total_value ?? 0), (sortedCategories[0]?.category ?? '—').slice(0,22), '#14b8a6')}
+          ${kcard('Top Category Share',  `${p(num(sortedCategories[0]?.total_value), catTotalValue)}%`, 'Of total inventory value', '#8b5cf6')}
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <h3 class="card-title">Category Value Comparison</h3>
+          <p class="card-sub">Stock value ranked by category — ${esc(activeDate || selectedYear)}</p>
+          <table class="data-table">
+            ${th(['#','Category / Index','Total Qty','Total Value (LYD)','Value %','Qty %'],['left','left','right','right','right','right'])}
+            <tbody>
+              ${sortedCategories.map((c,i) => {
+                const vc = p(num(c.total_value), catTotalValue);
+                const qc = p(num(c.total_qty),   grandTotalQty);
+                const cl = CPAL[i % CPAL.length];
+                return `<tr class="${i%2?'row-alt':''}">
+                  <td style="color:#9ca3af;font-weight:700">${i+1}</td>
+                  <td><span class="dot" style="background:${cl}"></span>${esc(c.category||'Uncategorized')}</td>
+                  <td style="text-align:right;color:#6b7280">${fn(c.total_qty)}</td>
+                  <td style="text-align:right;font-weight:800;color:${cl}">${fc(c.total_value)}</td>
+                  <td style="text-align:right"><span class="pct-badge" style="background:${cl}18;color:${cl}">${vc}%</span></td>
+                  <td style="text-align:right"><span class="pct-badge" style="background:#6366f112;color:#6366f1">${qc}%</span></td>
+                </tr>`;
+              }).join('')}
+              <tr class="total-row">
+                <td></td>
+                <td><strong>TOTAL</strong></td>
+                <td style="text-align:right;color:#6366f1;font-weight:900">${fn(grandTotalQty)}</td>
+                <td style="text-align:right;color:#f59e0b;font-weight:900">${fc(catTotalValue)}</td>
+                <td style="text-align:right;color:#f59e0b;font-weight:700">100%</td>
+                <td style="text-align:right;color:#6366f1;font-weight:700">100%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+
+    // ── SECTION 5 — Index Ratio ───────────────────────────────────────────────
+    const sec5 = `
+      <div class="section page-break">
+        ${secHead(5,'Index Value / Ratio in Stock','Percentage share of each category (قيمة / نسبة الفهارس في مخزون)','#f97316')}
+        <div class="card">
+          <h3 class="card-title">Category / Index Inventory Ratio</h3>
+          <p class="card-sub">Each index as a percentage of total stock — value & quantity</p>
+          <div class="ratio-grid">
+            ${sortedCategories.map((c,i) => {
+              const vs = p(num(c.total_value), catTotalValue);
+              const qs = p(num(c.total_qty),   grandTotalQty);
+              const cl = CPAL[i % CPAL.length];
+              return `
+                <div class="ratio-card" style="border:1px solid ${cl}25;background:${i<3 ? cl+'08' : '#fff'}">
+                  <div class="ratio-header">
+                    <span class="rank-num" style="background:${cl}18;color:${cl}">${i+1}</span>
+                    <span class="ratio-name">${esc(c.category||'Uncategorized')}</span>
+                    <span class="pct-badge" style="background:${cl}18;color:${cl}">${vs}% val</span>
+                    <span class="pct-badge" style="background:#6366f112;color:#6366f1">${qs}% qty</span>
+                  </div>
+                  <div class="ratio-bars">
+                    <div class="ratio-bar-row">
+                      <span>Value</span><strong>${fc(c.total_value)}</strong>
+                      ${bar(vs, cl, 5)}
+                    </div>
+                    <div class="ratio-bar-row">
+                      <span>Qty</span><strong>${fn(c.total_qty)}</strong>
+                      ${bar(qs, '#6366f1', 5)}
+                    </div>
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>`;
+
+    // ── SECTION 6 — Rotation ─────────────────────────────────────────────────
+    const sec6 = `
+      <div class="section page-break">
+        ${secHead(6,'Rotation Rate & Slow-Moving Items','Fast-moving vs. slow-moving · global & per branch (عام وبكل فرع)','#f43f5e')}
+        <div class="kgrid-3">
+          ${kcard('Avg Rotation Rate', `${avgRotation.toFixed(2)}×`, 'Stock turns per year', '#14b8a6',
+                  { text: avgRotation >= 4 ? 'Healthy' : 'Low', good: avgRotation >= 4 })}
+          ${kcard('Low Rotation Products', String(lowRotCount), `Below ${stockKpi?.stock_summary?.low_rotation_threshold ?? 1}× per year`, '#f59e0b',
+                  { text: lowRotCount === 0 ? 'All good' : 'Review needed', good: lowRotCount === 0 })}
+          ${kcard('Zero Stock Products', String(zeroStockCount), 'Stockout — reorder needed', '#f43f5e',
+                  { text: zeroStockCount === 0 ? '✓ Fully stocked' : `${zeroStockCount} stockouts`, good: zeroStockCount === 0 })}
+        </div>
+
+        <div class="col-2" style="margin-top:14px;gap:14px">
+          <!-- Top movers -->
+          <div class="card">
+            <h3 class="card-title" style="color:#10b981">🏆 Fastest Moving Products</h3>
+            <p class="card-sub">Highest rotation rate — top performers</p>
+            <table class="data-table">
+              ${th(['#','Product','Stock Qty','Stock Value','Rate'],['left','left','right','right','right'])}
+              <tbody>
+                ${topRotation.map((pp,i) => `
+                  <tr class="${i%2?'row-alt':''}${i<3?' top3':''}">
+                    <td style="font-weight:800;color:${i<3?'#10b981':'#9ca3af'}">${i+1}</td>
+                    <td style="font-weight:600">${esc(pp.product_name)}</td>
+                    <td style="text-align:right;color:#6b7280">${fn(pp.stock_qty)}</td>
+                    <td style="text-align:right;color:#6b7280">${fc(pp.stock_value)}</td>
+                    <td style="text-align:right">
+                      <span class="rate-badge" style="background:#10b98118;color:#10b981;border-color:#10b98130">${pp.rotation_rate.toFixed(2)}×</span>
+                    </td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Slow movers -->
+          <div class="card">
+            <h3 class="card-title" style="color:#f43f5e">⚠️ Slow-Moving Products</h3>
+            <p class="card-sub">Lowest rotation rate — require attention</p>
+            <table class="data-table">
+              ${th(['Product','Stock Qty','Stock Value','Rate'],['left','right','right','right'])}
+              <tbody>
+                ${lowRotation.map((pp,i) => {
+                  const rc = pp.rotation_rate === 0 ? '#f43f5e' : '#f59e0b';
+                  return `<tr class="${i%2?'row-alt':''}">
+                    <td style="font-weight:600">${esc(pp.product_name)}</td>
+                    <td style="text-align:right;color:#6b7280">${fn(pp.stock_qty)}</td>
+                    <td style="text-align:right;color:#6b7280">${fc(pp.stock_value)}</td>
+                    <td style="text-align:right">
+                      <span class="rate-badge" style="background:${rc}18;color:${rc};border-color:${rc}30">${pp.rotation_rate.toFixed(2)}×</span>
+                    </td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        ${topRotation.length > 0 ? `
+          <div class="card" style="margin-top:14px">
+            <h3 class="card-title">Rotation Rate — Top Products</h3>
+            <p class="card-sub">Stock turnover rate per product</p>
+            <table class="data-table">
+              ${th(['Product','Rotation Rate','Status','Visual Bar'],['left','right','center','left'])}
+              <tbody>
+                ${topRotation.slice(0,10).map((pp,i) => {
+                  const rc = pp.rotation_rate >= 4 ? '#10b981' : pp.rotation_rate >= 2 ? '#f59e0b' : '#f43f5e';
+                  const maxRate = Math.max(...topRotation.map(x => x.rotation_rate), 1);
+                  const share   = p(pp.rotation_rate, maxRate);
+                  return `<tr class="${i%2?'row-alt':''}">
+                    <td style="font-weight:600">${esc(pp.product_name)}</td>
+                    <td style="text-align:right;font-weight:800;color:${rc}">${pp.rotation_rate.toFixed(2)}×</td>
+                    <td style="text-align:center"><span class="pct-badge" style="background:${rc}18;color:${rc}">${pp.rotation_rate >= 4 ? 'Healthy' : pp.rotation_rate >= 2 ? 'Monitor' : 'Low'}</span></td>
+                    <td style="min-width:130px">${bar(share, rc)}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>` : ''}
+      </div>`;
+
+    // ── CSS ───────────────────────────────────────────────────────────────────
+    const css_str = `
+      *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'DM Sans',sans-serif;background:#fff;color:#111827;font-size:12px;padding:0 12px 20px}
+      @page{size:A4 landscape;margin:8mm 10mm}
+      @page{orphans:3;widows:3}
+
+      /* Cover */
+      .cover{width:100%;height:190mm;display:grid;break-after:page;page-break-after:always;position:relative;overflow:hidden}
+      .cover-stripe{position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,#14b8a6,#6366f1 45%,#0ea5e9);z-index:3}
+      .cover-bg{position:absolute;top:0;right:0;width:52%;height:100%;background:linear-gradient(148deg,#ecfdf5,#d1fae5 40%,#a7f3d0 80%,#6ee7b7);clip-path:polygon(15% 0,100% 0,100% 100%,0% 100%);z-index:0}
+      .cover-inner{position:relative;z-index:4;display:grid;grid-template-rows:auto 1fr auto;height:100%;padding:28px 48px 26px}
+      .cover-top{display:flex;align-items:center;justify-content:space-between;padding-bottom:18px;border-bottom:1px solid #e5e7eb}
+      .cover-main{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;padding:24px 0 20px}
+      .cover-title{font-family:'Playfair Display',Georgia,serif;font-size:52px;font-weight:900;color:#0f172a;letter-spacing:-0.03em;line-height:1.0}
+      .cover-title-accent{color:#14b8a6;font-style:italic}
+      .cover-kpi{background:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.9);border-radius:14px;padding:14px 18px;margin-bottom:10px}
+      .ck-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.11em;color:#9ca3af;display:block}
+      .ck-value{font-family:'Playfair Display',Georgia,serif;font-size:26px;font-weight:700;letter-spacing:-0.02em;color:#0f172a;line-height:1.1}
+      .cover-bottom{border-top:1px solid #e5e7eb;padding-top:14px;display:flex;justify-content:space-between;align-items:center}
+
+      /* Sections */
+      .section{padding:20px 0 0}
+      .page-break{break-before:page;page-break-before:always}
+      .sec-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px}
+      .sec-num{width:34px;height:34px;border-radius:10px;font-size:15px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+      .sec-title{font-size:17px;font-weight:800;color:#0f172a;letter-spacing:-0.02em;line-height:1.2}
+      .sec-sub{font-size:11px;color:#6b7280;margin-top:3px}
+
+      /* KPI cards */
+      .kgrid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:0}
+      .kcard{background:#fff;border-radius:12px;padding:14px 16px;border:1px solid #e5e7eb}
+      .kcard-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
+      .kcard-value{font-size:22px;font-weight:900;letter-spacing:-0.03em;line-height:1.1;margin:2px 0 4px}
+      .kcard-sub{font-size:10px;color:#9ca3af}
+      .badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;margin-top:5px}
+
+      /* Cards */
+      .card{background:#fff;border-radius:14px;padding:18px 20px;border:1px solid #e5e7eb;margin-top:12px}
+      .card-title{font-size:13px;font-weight:700;color:#0f172a;margin-bottom:2px}
+      .card-sub{font-size:11px;color:#6b7280;margin-bottom:12px}
+
+      /* Tables */
+      .data-table{width:100%;border-collapse:collapse;font-size:11px}
+      .thead-row{background:#f9fafb}
+      .thead-row th{padding:7px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;border-bottom:2px solid #e5e7eb;white-space:nowrap}
+      .data-table td{padding:7px 10px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
+      .row-alt td{background:#f9fafb}
+      .top3 td{background:#f0fdf4}
+      .total-row td{padding:8px 10px;border-top:2px solid #e5e7eb;background:#f5f3ff;font-weight:800}
+
+      /* Widgets */
+      .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;flex-shrink:0}
+      .pct-badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px}
+      .rate-badge{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;border:1px solid transparent}
+
+      /* Layout helpers */
+      .col-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+      /* Ratio grid */
+      .ratio-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+      .ratio-card{border-radius:10px;padding:10px 12px}
+      .ratio-header{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+      .rank-num{width:18px;height:18px;border-radius:5px;font-size:9px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+      .ratio-name{flex:1;font-size:11px;font-weight:700;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+      .ratio-bars{display:flex;flex-direction:column;gap:5px}
+      .ratio-bar-row{display:grid;grid-template-columns:30px 1fr 1fr;align-items:center;gap:6px;font-size:10px;color:#6b7280}
+      .ratio-bar-row strong{font-size:10px;color:#0f172a;text-align:right}
+
+      *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+    `;
+
+    // ── Cover page ────────────────────────────────────────────────────────────
+    const cover = `
+      <div class="cover">
+        <div class="cover-stripe"></div>
+        <div class="cover-bg"></div>
+        <div class="cover-inner">
+          <div class="cover-top">
+            <span style="font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:#374151">WEEG Financial</span>
+            <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#14b8a6;background:#ecfdf5;border:1.5px solid #a7f3d0;padding:4px 13px;border-radius:20px">Inventory Report</span>
+          </div>
+          <div class="cover-main">
+            <div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.16em;color:#9ca3af;margin-bottom:14px">Inventory Management</div>
+              <h1 class="cover-title">Inventory<br/><span class="cover-title-accent">Turnover</span></h1>
+              <p style="font-size:15px;color:#6b7280;margin:12px 0 20px">Stock Analysis — ${esc(activeDate || selectedYear)}</p>
+              <p style="font-size:12px;color:#9ca3af;line-height:1.85;border-left:3px solid #a7f3d0;padding-left:16px">
+                Comprehensive inventory analysis: stock quantity, total value, value by branch, category breakdown, index ratios, and rotation performance across all branches.
+              </p>
+            </div>
+            <div>
+              <div class="cover-kpi"><span class="ck-label">Total Stock Quantity</span><p class="ck-value">${fn(grandTotalQty)}</p><span style="font-size:10px;color:#9ca3af">all branches</span></div>
+              <div class="cover-kpi"><span class="ck-label">Total Stock Value</span><p class="ck-value" style="color:#14b8a6">${fc(grandTotalValue)}</p><span style="font-size:10px;color:#9ca3af">${branches.length} branches</span></div>
+              <div class="cover-kpi"><span class="ck-label">Avg Rotation Rate</span><p class="ck-value" style="color:#6366f1">${avgRotation.toFixed(2)}×</p><span style="font-size:10px;color:#9ca3af">annualised</span></div>
+              <div class="cover-kpi"><span class="ck-label">Categories Tracked</span><p class="ck-value" style="font-size:22px">${categories.length}</p><span style="font-size:10px;color:#9ca3af">${totalProducts} products</span></div>
+            </div>
+          </div>
+          <div class="cover-bottom">
+            <div style="font-size:10px;color:#9ca3af">
+              Generated ${genDate} · ${activeDate ? `Snapshot: ${activeDate}` : `Year: ${selectedYear}`} · ${branches.length} branches · ${categories.length} categories
+            </div>
+            <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#14b8a6;border:1.5px solid #a7f3d0;padding:3px 10px;border-radius:20px;background:#ecfdf5">Confidential</span>
+          </div>
+        </div>
+      </div>`;
+
+    // ── Assemble & print ──────────────────────────────────────────────────────
     const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:-1;visibility:hidden;';
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:-1;visibility:hidden';
     document.body.appendChild(iframe);
     const doc = iframe.contentDocument!;
-    const genDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
 
     doc.open();
     doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/>
-<title>Inventory Turnover — ${activeDate || selectedYear}</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet"/>
-<style>
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:'DM Sans',sans-serif;background:#fff;color:#111827;padding:16px 20px;font-size:13px;}
-  @page{size:A4 landscape;margin:8mm 10mm;}
-  .cover{width:100%;height:190mm;display:grid;break-after:page!important;page-break-after:always!important;position:relative;overflow:hidden;}
-  .cover-stripe{position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,${C.teal} 0%,${C.indigo} 45%,${C.cyan} 100%);z-index:3;}
-  .cover-bg{position:absolute;top:0;right:0;width:52%;height:100%;background:linear-gradient(148deg,#ecfdf5 0%,#d1fae5 40%,#a7f3d0 80%,#6ee7b7 100%);clip-path:polygon(15% 0,100% 0,100% 100%,0% 100%);z-index:0;}
-  .cover-inner{position:relative;z-index:4;display:grid;grid-template-rows:auto 1fr auto;height:100%;padding:28px 48px 26px;}
-  .cover-top{display:flex;align-items:center;justify-content:space-between;padding-bottom:18px;border-bottom:1px solid #e5e7eb;}
-  .cover-main{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;padding:24px 0 20px;}
-  .cover-title{font-family:'Playfair Display',Georgia,serif;font-size:52px;font-weight:900;color:#0f172a;letter-spacing:-0.03em;line-height:1.0;}
-  .cover-title-accent{color:${C.teal};font-style:italic;}
-  .cover-kpi{background:rgba(255,255,255,0.75);border:1px solid rgba(255,255,255,0.9);border-radius:14px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
-  .ck-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.11em;color:#9ca3af;}
-  .ck-value{font-family:'Playfair Display',Georgia,serif;font-size:26px;font-weight:700;letter-spacing:-0.02em;color:#0f172a;line-height:1.1;}
-  .cover-bottom{border-top:1px solid #e5e7eb;padding-top:14px;display:flex;justify-content:space-between;align-items:center;}
-  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important;}
-  div[data-print="section"]{break-before:page!important;page-break-before:always!important;break-inside:avoid!important;}
-  div[style*="border-radius:16px"]{break-inside:avoid!important;border:1px solid #e5e7eb!important;margin-bottom:12px;}
-  button{display:none!important;}
-</style></head><body>
-<div class="cover">
-  <div class="cover-stripe"></div><div class="cover-bg"></div>
-  <div class="cover-inner">
-    <div class="cover-top">
-      <span style="font-weight:700;letter-spacing:0.08em;text-transform:uppercase;font-size:12px;color:#374151;">WEEG Financial</span>
-      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:${C.teal};background:#ecfdf5;border:1.5px solid #a7f3d0;padding:4px 13px;border-radius:20px;">Inventory Report</span>
-    </div>
-    <div class="cover-main">
-      <div>
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.16em;color:#9ca3af;margin-bottom:14px;">Inventory Management</div>
-        <h1 class="cover-title">Inventory<br/><span class="cover-title-accent">Turnover</span></h1>
-        <p style="font-size:15px;color:#6b7280;margin:12px 0 20px;">Stock Analysis — ${activeDate || selectedYear}</p>
-        <p style="font-size:12px;color:#9ca3af;line-height:1.85;border-left:3px solid #a7f3d0;padding-left:16px;">Comprehensive inventory analysis: stock quantity, total value, value by branch, category breakdown, index ratios, and rotation performance across all branches.</p>
-      </div>
-      <div>
-        <div class="cover-kpi"><div><span class="ck-label">Total Stock Quantity</span><p class="ck-value">${formatNumber(grandTotalQty)}</p><span style="font-size:10px;color:#9ca3af;">all branches</span></div></div>
-        <div class="cover-kpi"><div><span class="ck-label">Total Stock Value</span><p class="ck-value" style="color:${C.teal}">${formatCurrency(grandTotalValue)}</p><span style="font-size:10px;color:#9ca3af;">${branches.length} branches</span></div></div>
-        <div class="cover-kpi"><div><span class="ck-label">Avg Rotation Rate</span><p class="ck-value" style="color:${C.indigo}">${avgRotation.toFixed(2)}×</p><span style="font-size:10px;color:#9ca3af;">annualised</span></div></div>
-        <div class="cover-kpi"><div><span class="ck-label">Categories Tracked</span><p class="ck-value" style="font-size:22px">${categories.length}</p><span style="font-size:10px;color:#9ca3af;">${totalProducts} products</span></div></div>
-      </div>
-    </div>
-    <div class="cover-bottom">
-      <div style="display:flex;align-items:center;gap:12px;font-size:10px;color:#9ca3af;">
-        <span>Generated ${genDate}</span><span>·</span>
-        <span>${activeDate ? `Snapshot: ${activeDate}` : `Year: ${selectedYear}`}</span><span>·</span>
-        <span>${branches.length} branches · ${categories.length} categories</span>
-      </div>
-      <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:${C.teal};border:1.5px solid #a7f3d0;padding:3px 10px;border-radius:20px;background:#ecfdf5;">Confidential</span>
-    </div>
-  </div>
-</div>
-${clone.outerHTML}
-</body></html>`);
+      <title>Inventory Turnover — ${esc(activeDate || selectedYear)}</title>
+      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+      <style>${css_str}</style>
+    </head><body>
+      ${cover}
+      ${sec1}${sec2}${sec3}${sec4}${sec5}${sec6}
+    </body></html>`);
     doc.close();
-    iframe.style.visibility = 'visible'; iframe.style.zIndex = '9999';
-    const cleanup = () => { iframe.style.visibility = 'hidden'; setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 1500); };
-    const triggerPrint = () => { try { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); } catch { window.print(); } };
+
+    iframe.style.visibility = 'visible';
+    iframe.style.zIndex = '9999';
+
+    const cleanup = () => {
+      iframe.style.visibility = 'hidden';
+      setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 1500);
+    };
+    const triggerPrint = () => {
+      try { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); } catch { window.print(); }
+    };
     iframe.onload = () => setTimeout(triggerPrint, 800);
     setTimeout(triggerPrint, 1800);
-    if (iframe.contentWindow) { iframe.contentWindow.onafterprint = cleanup; setTimeout(cleanup, 90000); }
+    if (iframe.contentWindow) {
+      iframe.contentWindow.onafterprint = cleanup;
+      setTimeout(cleanup, 90000);
+    }
   };
 
   // ── Early states ──────────────────────────────────────────────────────────
@@ -398,8 +761,12 @@ ${clone.outerHTML}
         {/* Filters */}
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', paddingTop: 16, borderTop: `1px solid ${css.border}` }}>
           {dateOptions.length > 0 && (
-            <StyledDropdown label="Snapshot Date" options={dateOptions} value={activeDate}
-              onChange={v => setActiveDate(v)}
+            <StyledDropdown label="Snapshot Date" options={dateOptions} value={activeSnapshotId}
+              onChange={v => {
+                setActiveSnapshotId(v);
+                const snap = snapshots.find(s => s.id === v);
+                if (snap) setActiveDate(snap.display);
+              }}
               isOpen={openDropdown === 'date'} onToggle={() => setOpenDropdown(o => o === 'date' ? null : 'date')} onClose={() => setOpenDropdown(null)} />
           )}
           <StyledDropdown label="Year (Rotation KPI)" options={yearOptions} value={selectedYear}
@@ -490,86 +857,72 @@ ${clone.outerHTML}
 
         {/* ════════════════════════════════════════
             SECTION 3 — STOCK VALUE PER BRANCH
-            (قيمة مخزون لكل فرع)
         ════════════════════════════════════════ */}
         <div data-print="section" style={{ marginBottom: 52 }}>
           <SecHead n={3} title="Stock Value per Branch" sub="Detailed breakdown — value, quantity, and share of total (قيمة مخزون لكل فرع)" color={C.violet} />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={card}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Branch Summary</h3>
+            <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Qty, value, share and distribution per branch</p>
 
-            {/* Branch value ranking bars */}
-            <div style={card}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Branch Value Ranking</h3>
-              <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Stock value share by branch</p>
-              {sortedBranches.length === 0 ? <Empty /> : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {sortedBranches.map((b, i) => {
-                    const share = pct(num(b.total_value), grandTotalValue);
-                    return (
-                      <div key={i}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ width: 10, height: 10, borderRadius: 3, background: BRANCH_PAL[i % BRANCH_PAL.length], flexShrink: 0 }} />
-                            <span style={{ fontSize: 13, fontWeight: 600, color: css.cardFg }}>{b.branch}</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 20, background: `${BRANCH_PAL[i % BRANCH_PAL.length]}18`, color: BRANCH_PAL[i % BRANCH_PAL.length] }}>{share}%</span>
-                            <span style={{ fontSize: 13, fontWeight: 800, color: BRANCH_PAL[i % BRANCH_PAL.length] }}>{formatCurrency(b.total_value)}</span>
-                          </div>
-                        </div>
-                        <div style={{ height: 6, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', borderRadius: 999, width: `${share}%`, background: `linear-gradient(90deg, ${BRANCH_PAL[i % BRANCH_PAL.length]}60, ${BRANCH_PAL[i % BRANCH_PAL.length]})`, transition: 'width 0.6s ease' }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Branch summary table */}
-            <div style={card}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Branch Summary Table</h3>
-              <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Qty, value, and share per branch</p>
-              {sortedBranches.length === 0 ? <Empty /> : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                    <thead>
-                      <tr style={{ background: css.muted }}>
-                        {['Branch', 'Qty', 'Value (LYD)', '% of Total'].map(h => (
-                          <th key={h} style={{ padding: '8px 10px', textAlign: h === 'Branch' ? 'left' : 'right', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: css.mutedFg, borderBottom: `2px solid ${css.border}` }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedBranches.map((b, i) => (
+            {sortedBranches.length === 0 ? <Empty /> : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: css.muted }}>
+                      {['Branch', 'Qty', 'Value (LYD)', '% of Total', 'Distribution'].map(h => (
+                        <th key={h} style={{ padding: '8px 10px', textAlign: h === 'Branch' || h === 'Distribution' ? 'left' : 'right', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: css.mutedFg, borderBottom: `2px solid ${css.border}` }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedBranches.map((b, i) => {
+                      const share = pct(num(b.total_value), grandTotalValue);
+                      const color = BRANCH_PAL[i % BRANCH_PAL.length];
+                      return (
                         <tr key={i} style={{ borderBottom: `1px solid ${css.border}`, background: i % 2 === 0 ? 'transparent' : `${css.muted}40` }}>
+                          {/* Branch name */}
                           <td style={{ padding: '9px 10px', fontWeight: 600, color: css.cardFg }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: BRANCH_PAL[i % BRANCH_PAL.length] }} />
+                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
                               {b.branch}
                             </div>
                           </td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right', color: css.mutedFg, fontWeight: 600 }}>{formatNumber(b.total_qty)}</td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 800, color: BRANCH_PAL[i % BRANCH_PAL.length] }}>{formatCurrency(b.total_value)}</td>
+                          {/* Qty */}
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: css.mutedFg, fontWeight: 600 }}>
+                            {formatNumber(b.total_qty)}
+                          </td>
+                          {/* Value */}
+                          <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 800, color }}>
+                            {formatCurrency(b.total_value)}
+                          </td>
+                          {/* % badge */}
                           <td style={{ padding: '9px 10px', textAlign: 'right' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 12, background: `${BRANCH_PAL[i % BRANCH_PAL.length]}18`, color: BRANCH_PAL[i % BRANCH_PAL.length] }}>
-                              {pct(num(b.total_value), grandTotalValue)}%
+                            <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 12, background: `${color}18`, color }}>
+                              {share}%
                             </span>
                           </td>
+                          {/* Progress bar */}
+                          <td style={{ padding: '9px 10px', minWidth: 120 }}>
+                            <div style={{ height: 6, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', borderRadius: 999, width: `${share}%`, background: `linear-gradient(90deg, ${color}60, ${color})`, transition: 'width 0.6s ease' }} />
+                            </div>
+                          </td>
                         </tr>
-                      ))}
-                      <tr style={{ borderTop: `2px solid ${css.border}`, background: `${C.indigo}06` }}>
-                        <td style={{ padding: '9px 10px', fontWeight: 800, color: css.cardFg }}>TOTAL</td>
-                        <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 900, color: C.indigo }}>{formatNumber(grandTotalQty)}</td>
-                        <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 900, color: C.indigo }}>{formatCurrency(grandTotalValue)}</td>
-                        <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: C.indigo }}>100%</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+                      );
+                    })}
+                    {/* Total row */}
+                    <tr style={{ borderTop: `2px solid ${css.border}`, background: `${C.indigo}06` }}>
+                      <td style={{ padding: '9px 10px', fontWeight: 800, color: css.cardFg }}>TOTAL</td>
+                      <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 900, color: C.indigo }}>{formatNumber(grandTotalQty)}</td>
+                      <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 900, color: C.indigo }}>{formatCurrency(grandTotalValue)}</td>
+                      <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: C.indigo }}>100%</td>
+                      <td />
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
 
@@ -744,10 +1097,10 @@ ${clone.outerHTML}
               badge={{ text: zeroStockCount === 0 ? '✓ Fully stocked' : `${zeroStockCount} stockouts`, good: zeroStockCount === 0 }} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, minWidth: 0 }}>
 
             {/* Top rotation products */}
-            <div style={card}>
+            <div style={{ ...card, minWidth: 0, overflow: 'hidden' }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: C.emerald, margin: '0 0 4px' }}>🏆 Fastest Moving Products</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Highest rotation rate — top performers</p>
               {topRotation.length === 0 ? <Empty text="No rotation data" /> : (
@@ -767,7 +1120,7 @@ ${clone.outerHTML}
             </div>
 
             {/* Slow-moving products */}
-            <div style={card}>
+            <div style={{ ...card, minWidth: 0, overflow: 'hidden' }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: C.rose, margin: '0 0 4px' }}>⚠️ Slow-Moving Products</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Lowest rotation rate — require attention</p>
               {lowRotation.length === 0 ? <Empty text="No slow-moving products" /> : (
