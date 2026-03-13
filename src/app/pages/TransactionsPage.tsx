@@ -8,8 +8,6 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import {
-  MOVEMENT_TYPES,
-  MOVEMENT_TYPE_LABELS,
   isSaleType,
   isPurchaseType,
 } from '../lib/dataApi';
@@ -18,25 +16,6 @@ import {
 // Helper — Django DecimalField → string ("1.0000"). Toujours parser avant usage.
 // ─────────────────────────────────────────────────────────────────────────────
 const toNum = (val: unknown): number => parseFloat(String(val ?? 0)) || 0;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Labels étendus
-// ─────────────────────────────────────────────────────────────────────────────
-const ALL_LABELS: Record<string, string> = {
-  ...MOVEMENT_TYPE_LABELS,
-  'ف تسوية المخ': 'Inventory Adjustment',
-  'نقل':           'Stock Transfer',
-  'ف.أول المدة':   'Opening Balance',
-  'اخراج رئيسي':  'Main Exit',
-  'مردود شراء':    'Purchase Return',
-  'مردود بيع':     'Sales Return',
-  'ف.تالف': 'Damaged Goods', 'ف تالف': 'Damaged Goods', 'تالف': 'Damaged Goods',
-  'ف.عينات': 'Samples', 'ف عينات': 'Samples', 'عينات': 'Samples',
-};
-
-function getLabel(rawType: string): string {
-  return ALL_LABELS[rawType] ?? rawType;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Catégories UI
@@ -317,7 +296,7 @@ export function TransactionsPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
       .then(res => setAvailableTypes(res.data.movement_types))
-      .catch(() => setAvailableTypes(Object.values(MOVEMENT_TYPES)));
+      .catch(() => setAvailableTypes([]));
   }, []);
 
   // Fetch branches
@@ -387,7 +366,7 @@ export function TransactionsPage() {
 
   const typeOptions = [
     { key: 'all', label: 'All Types' },
-    ...availableTypes.map(t => ({ key: t, label: getLabel(t) })),
+    ...availableTypes.map(t => ({ key: t, label: t })),
   ];
 
   const branchOptions = [
@@ -409,7 +388,7 @@ export function TransactionsPage() {
             fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
             background: `${accent}18`, color: accent, border: `1px solid ${accent}35`,
           }}>
-            {row.movement_type_display || getLabel(row.movement_type)}
+            {row.movement_type_display || row.movement_type}
           </span>
         );
       },

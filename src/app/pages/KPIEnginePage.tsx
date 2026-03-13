@@ -1,5 +1,5 @@
 // src/app/pages/KPIEnginePage.tsx
-import { useState, useMemo , useRef, useEffect} from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -11,7 +11,6 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   Legend, ResponsiveContainer,
 } from 'recharts';
-import { Progress } from '../components/ui/progress';
 import { CreditKPISection } from '../components/CreditKPISection';
 import { SalesKPISection } from '../components/SalesKPISection';
 import { StockKPISection } from '../components/StockKPISection';
@@ -392,28 +391,6 @@ function FilterBar({
   );
 }
 
-// ── Movement type translation ──────────────────────────────────────────────
-
-const MOVEMENT_TYPE_EN: Record<string, string> = {
-  'ف بيع': 'Sale', 'مردودات بيع': 'Sales Return',
-  'ف شراء': 'Purchase', 'مردود شراء': 'Purchase Return',
-  'نقل': 'Transfer', 'ف تحويل': 'Transfer',
-  'اخراج رئيسي': 'Main Exit', 'ف اخراج رئيسي': 'Main Exit',
-  'ف.أول المدة': 'Opening Balance', 'أول المدة': 'Opening Balance', 'ف أول المدة': 'Opening Balance',
-  'ف تسوية المخ': 'Inventory Adjustment', 'ف تسوية': 'Adjustment',
-  'ف.تالف': 'Damaged Goods', 'ف تالف': 'Damaged Goods', 'تالف': 'Damaged Goods',
-  'ف.عينات': 'Samples', 'ف عينات': 'Samples', 'عينات': 'Samples',
-  'ادخال رئيسي': 'Main Entry', 'ف ادخال رئيسي': 'Main Entry',
-};
-function toEnLabel(arabicType: string): string {
-  if (MOVEMENT_TYPE_EN[arabicType]) return MOVEMENT_TYPE_EN[arabicType];
-  const trimmed = arabicType.trim();
-  for (const [key, val] of Object.entries(MOVEMENT_TYPE_EN)) {
-    if (trimmed.includes(key) || key.includes(trimmed)) return val;
-  }
-  return arabicType;
-}
-
 // ── BranchMonthlyChart ─────────────────────────────────────────────────────
 
 function BranchMonthlyChart({ branchFilter, dateFrom, dateTo }: { branchFilter: string; dateFrom: string; dateTo: string }) {
@@ -521,7 +498,7 @@ export function KPIEnginePage() {
 
   const typeData = useMemo(() =>
     (typeBreakdownRes?.breakdown ?? []).map(t => ({
-      name: toEnLabel(t.movement_type), in: t.total_in, out: t.total_out, count: t.count,
+      name: t.movement_type, in: t.total_in, out: t.total_out, count: t.count,
     })),
     [typeBreakdownRes],
   );
