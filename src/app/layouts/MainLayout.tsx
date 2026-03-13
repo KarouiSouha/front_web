@@ -11,18 +11,25 @@ export function MainLayout() {
   const location = useLocation();
 
   // Redirect to login if not authenticated
-  useEffect(() => {
-    if (!user) {
-      navigate('/login');
-    }
-  }, [user, navigate]);
+useEffect(() => {
+  if (!user) {
+    navigate('/login');
+    return;
+  }
+  // Redirect admin away from dashboard to their own page
+  if (user.role === 'admin' && location.pathname === '/dashboard') {
+    navigate('/dashboard/admin-verification');
+  }
+}, [user, navigate, location.pathname]);
 
   // Get current page from location
-const currentPage = location.pathname.replace('/dashboard/', '') || 'dashboard';
+const currentPage = location.pathname
+  .replace('/dashboard/', '')
+  .replace('/dashboard', '');
 
-  const handleNavigate = (page: string) => {
-  navigate(`/dashboard/${page}`);  // navigue vers /dashboard/settings ✓
-  };
+const handleNavigate = (page: string) => {
+  navigate(page ? `/dashboard/${page}` : '/dashboard');
+};
 
   if (!user) {
     return null; // Don't render anything while redirecting
