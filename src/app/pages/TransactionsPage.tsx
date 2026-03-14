@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+// src/app/pages/TransactionsPage.tsx
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { DataTable } from '../components/DataTable';
 import { formatCurrency, formatDate, formatNumber } from '../lib/utils';
@@ -7,10 +8,7 @@ import {
   Loader2, AlertTriangle, ChevronDown, RefreshCw,
 } from 'lucide-react';
 import axios from 'axios';
-import {
-  isSaleType,
-  isPurchaseType,
-} from '../lib/dataApi';
+import { isSaleType, isPurchaseType } from '../lib/dataApi';
 
 const toNum = (val: unknown): number => parseFloat(String(val ?? 0)) || 0;
 
@@ -24,7 +22,23 @@ function getCategory(movementType: string): MovementCategory {
   return 'other';
 }
 
-// ── Brand palette ─────────────────────────────────────────────────────────────
+// ── Period → date range helper ─────────────────────────────────────────────
+function periodToDates(period: string): { date_from?: string; date_to?: string } {
+  if (period === 'all') return {};
+  const today = new Date();
+  const pad   = (n: number) => String(n).padStart(2, '0');
+  const fmt   = (d: Date)   => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const dateTo = fmt(today);
+
+  if (period === '1m')  { const f = new Date(today); f.setMonth(f.getMonth() - 1);         return { date_from: fmt(f), date_to: dateTo }; }
+  if (period === '3m')  { const f = new Date(today); f.setMonth(f.getMonth() - 3);         return { date_from: fmt(f), date_to: dateTo }; }
+  if (period === '6m')  { const f = new Date(today); f.setMonth(f.getMonth() - 6);         return { date_from: fmt(f), date_to: dateTo }; }
+  if (period === '12m') { const f = new Date(today); f.setFullYear(f.getFullYear() - 1);   return { date_from: fmt(f), date_to: dateTo }; }
+  if (period === 'ytd') return { date_from: `${today.getFullYear()}-01-01`, date_to: dateTo };
+  return {};
+}
+
+// ── Brand palette ──────────────────────────────────────────────────────────
 const C = {
   indigo:  '#6366f1',
   violet:  '#8b5cf6',
@@ -53,7 +67,6 @@ const cardStyle: React.CSSProperties = {
   border:       `1px solid ${css.border}`,
 };
 
-// ── Badge colors ──────────────────────────────────────────────────────────────
 const BADGE_ACCENT: Record<MovementCategory, string> = {
   sale:       C.emerald,
   purchase:   C.cyan,
@@ -70,7 +83,7 @@ const CATEGORY_LABEL: Record<MovementCategory, string> = {
   other:      'Other',
 };
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────
 interface Movement {
   id: string;
   movement_date: string;
@@ -83,7 +96,7 @@ interface Movement {
   total_in:      number | string;
   total_out:     number | string;
   balance_price: number | string;
-  branch_name?:  string | null;
+  branch_name_resolved?: string | null;
   customer_name?: string | null;
 }
 
@@ -98,7 +111,7 @@ interface PaginatedMovements {
 
 type TransactionWithType = Movement & { category: MovementCategory };
 
-// ── StyledDropdown — portal-based, UNCHANGED ──────────────────────────────────
+// ── StyledDropdown ─────────────────────────────────────────────────────────
 function StyledDropdown({
   label, options, value, onChange, isOpen, onToggle, onClose,
 }: {
@@ -222,7 +235,7 @@ function StyledDropdown({
   );
 }
 
-// ── KPI Card — Dashboard style ────────────────────────────────────────────────
+// ── KPI Card ───────────────────────────────────────────────────────────────
 function KpiCard({
   label, value, sub, icon: Icon, accent,
 }: {
@@ -231,7 +244,6 @@ function KpiCard({
 }) {
   return (
     <div style={{ ...cardStyle, position: 'relative', overflow: 'hidden', borderTop: `3px solid ${accent}`, paddingTop: 20 }}>
-      {/* Background watermark */}
       <div style={{
         position: 'absolute', bottom: -20, right: -20,
         width: 90, height: 90, borderRadius: '50%',
@@ -271,7 +283,7 @@ function KpiCard({
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+// ── Page ───────────────────────────────────────────────────────────────────
 export function TransactionsPage() {
   const [transactions, setTransactions]           = useState<TransactionWithType[]>([]);
   const [loading, setLoading]                     = useState(true);
@@ -279,102 +291,104 @@ export function TransactionsPage() {
   const [availableTypes, setAvailableTypes]       = useState<string[]>([]);
   const [availableBranches, setAvailableBranches] = useState<string[]>([]);
 
+  // ✅ All 3 filters — each one re-fetches both KPIs and table data
   const [selectedPeriod, setSelectedPeriod] = useState('12m');
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [selectedType,   setSelectedType]   = useState('all');
+  const [openDropdown,   setOpenDropdown]   = useState<'period' | 'type' | 'branch' | null>(null);
 
-  const [openDropdown, setOpenDropdown] = useState<'period' | 'type' | 'branch' | null>(null);
-
-  const [page, setPage]             = useState(1);
-  const pageSize                    = 20;
+  const [page,       setPage]       = useState(1);
+  const pageSize                    = 50;
   const [totalCount, setTotalCount] = useState(0);
 
+  // ✅ KPI totals derived from filtered API response (no separate KPI call needed)
   const [grandTotalOut, setGrandTotalOut] = useState(0);
   const [grandTotalIn,  setGrandTotalIn]  = useState(0);
   const [kpiLoading,    setKpiLoading]    = useState(true);
 
-  const fetchKPIs = useCallback(async () => {
-    setKpiLoading(true);
-    try {
-      const token = localStorage.getItem('fasi_access_token');
-      const { data } = await axios.get<PaginatedMovements>('/api/transactions/', {
-        params:  { page: 1, page_size: 1 },
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      setGrandTotalOut(toNum(data.totals?.total_out_value));
-      setGrandTotalIn(toNum(data.totals?.total_in_value));
-    } catch (e) {
-      console.error('[KPI] fetch error', e);
-    } finally {
-      setKpiLoading(false);
-    }
-  }, []);
+  // Compute date range from period selection
+  const dateRange = useMemo(() => periodToDates(selectedPeriod), [selectedPeriod]);
 
-  useEffect(() => { fetchKPIs(); }, [fetchKPIs]);
-
-  const netFlow = grandTotalIn - grandTotalOut;
-
-  useEffect(() => {
+  function getAuthHeaders() {
     const token = localStorage.getItem('fasi_access_token');
-    axios.get<{ movement_types: string[] }>('/api/transactions/movement-types/', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    }).then(res => setAvailableTypes(res.data.movement_types)).catch(() => setAvailableTypes([]));
-  }, []);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
 
+  // Load available movement types and branches once on mount
   useEffect(() => {
-    const token = localStorage.getItem('fasi_access_token');
-    axios.get<{ branches: string[] }>('/api/transactions/branches/', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    }).then(res => setAvailableBranches(res.data.branches)).catch(() => setAvailableBranches([]));
+    const h = getAuthHeaders();
+    axios.get('/api/transactions/movement-types/', { headers: h })
+      .then(res => setAvailableTypes(res.data.movement_types ?? [])).catch(() => {});
+    axios.get('/api/transactions/branches/', { headers: h })
+      .then(res => setAvailableBranches(res.data.branches ?? [])).catch(() => {});
   }, []);
 
+  // ✅ Single fetch function — applies ALL 3 filters simultaneously
+  // KPI totals come from the same response (totals field), so they always
+  // reflect exactly the same data as the table.
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
+    setKpiLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('fasi_access_token');
       const params: Record<string, any> = { page, page_size: pageSize };
-      if (selectedType   !== 'all') params.movement_type = selectedType;
-      if (selectedBranch !== 'all') params.branch        = selectedBranch;
+
+      // Movement type filter
+      if (selectedType !== 'all') params.movement_type = selectedType;
+
+      // Branch filter — exact match
+      if (selectedBranch !== 'all') params.branch = selectedBranch;
+
+      // Period → date_from / date_to
+      if (dateRange.date_from) params.date_from = dateRange.date_from;
+      if (dateRange.date_to)   params.date_to   = dateRange.date_to;
 
       const { data } = await axios.get<PaginatedMovements>('/api/transactions/', {
         params,
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: getAuthHeaders(),
       });
 
       const mapped: TransactionWithType[] = data.movements.map(m => ({
         ...m, category: getCategory(m.movement_type),
       }));
       mapped.sort((a, b) => new Date(b.movement_date).getTime() - new Date(a.movement_date).getTime());
+
       setTransactions(mapped);
       setTotalCount(data.count);
+
+      // ✅ KPI cards get values directly from the filtered response totals
+      setGrandTotalOut(toNum(data.totals?.total_out_value));
+      setGrandTotalIn(toNum(data.totals?.total_in_value));
     } catch (err: any) {
       setError(err.response?.data?.error || err.message || 'Failed to load transactions');
     } finally {
       setLoading(false);
+      setKpiLoading(false);
     }
-  }, [page, selectedPeriod, selectedBranch, selectedType]);
+  }, [page, selectedPeriod, selectedBranch, selectedType, dateRange]);
 
   useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
 
-  const handleRefresh = useCallback(() => {
-    fetchKPIs();
-    fetchTransactions();
-  }, [fetchKPIs, fetchTransactions]);
+  // Reset to page 1 when any filter changes
+  useEffect(() => { setPage(1); }, [selectedPeriod, selectedBranch, selectedType]);
 
+  const netFlow    = grandTotalIn - grandTotalOut;
   const totalPages = Math.ceil(totalCount / pageSize);
 
+  const isFiltered = selectedPeriod !== '12m' || selectedBranch !== 'all' || selectedType !== 'all';
+
   const periodOptions = [
-    { key: '1m',  label: 'Last Month'     },
+    { key: 'all', label: 'All Time'        },
+    { key: '1m',  label: 'Last Month'      },
     { key: '3m',  label: 'Last 3 Months'  },
     { key: '6m',  label: 'Last 6 Months'  },
     { key: '12m', label: 'Last 12 Months' },
     { key: 'ytd', label: 'Year to Date'   },
   ];
-  const typeOptions   = [{ key: 'all', label: 'All Types'     }, ...availableTypes.map(t => ({ key: t, label: t }))];
-  const branchOptions = [{ key: 'all', label: 'All Branches'  }, ...availableBranches.map(b => ({ key: b, label: b }))];
+  const typeOptions   = [{ key: 'all', label: 'All Types'    }, ...availableTypes.map(t => ({ key: t, label: t }))];
+  const branchOptions = [{ key: 'all', label: 'All Branches' }, ...availableBranches.map(b => ({ key: b, label: b }))];
 
-  // ── Table columns — UNCHANGED ─────────────────────────────────────────────
+  // ── Table columns ──────────────────────────────────────────────────────────
   const columns = [
     {
       key: 'movement_type',
@@ -415,10 +429,10 @@ export function TransactionsPage() {
       ),
     },
     {
-      key: 'branch_name',
+      key: 'branch_name_resolved',
       label: 'Branch',
       render: (row: TransactionWithType) => (
-        <span style={{ fontSize: 13, color: css.cardFg }}>{row.branch_name || '—'}</span>
+        <span style={{ fontSize: 13, color: css.cardFg }}>{(row as any).branch_name_resolved || '—'}</span>
       ),
     },
     {
@@ -490,7 +504,7 @@ export function TransactionsPage() {
           </p>
         </div>
         <button
-          onClick={handleRefresh}
+          onClick={fetchTransactions}
           disabled={loading || kpiLoading}
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
@@ -509,34 +523,109 @@ export function TransactionsPage() {
         </button>
       </div>
 
-      {/* ── KPI Cards — Dashboard style ── */}
+      {/* ✅ KPI Cards — values come from the same filtered API response as the table */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 24 }}>
-        <KpiCard label="Total Value Out" value={formatCurrency(grandTotalOut)} sub="of Sales"           icon={ArrowUpRight}   accent={C.rose}    />
-        <KpiCard label="Total Value In"  value={formatCurrency(grandTotalIn)}  sub="All movement types" icon={ArrowDownLeft}  accent={C.emerald} />
-        <KpiCard label="Total Movements" value={formatNumber(totalCount)}       sub="Across all types"  icon={ArrowLeftRight} accent={C.indigo}  />
+        <KpiCard
+          label="Total Value Out"
+          value={kpiLoading ? '…' : formatCurrency(grandTotalOut)}
+          sub={selectedBranch !== 'all' ? `Branch: ${selectedBranch}` : 'Sales (filtered)'}
+          icon={ArrowUpRight}
+          accent={C.rose}
+        />
+        <KpiCard
+          label="Total Value In"
+          value={kpiLoading ? '…' : formatCurrency(grandTotalIn)}
+          sub={selectedBranch !== 'all' ? `Branch: ${selectedBranch}` : 'All movement types'}
+          icon={ArrowDownLeft}
+          accent={C.emerald}
+        />
+        <KpiCard
+          label="Total Movements"
+          value={kpiLoading ? '…' : formatNumber(totalCount)}
+          sub={[selectedBranch !== 'all' ? selectedBranch : '', selectedType !== 'all' ? selectedType : ''].filter(Boolean).join(' · ') || 'All filters'}
+          icon={ArrowLeftRight}
+          accent={C.indigo}
+        />
         <KpiCard
           label="Net Flow"
-          value={`${netFlow >= 0 ? '+' : '-'}${formatCurrency(Math.abs(netFlow))}`}
+          value={kpiLoading ? '…' : `${netFlow >= 0 ? '+' : '-'}${formatCurrency(Math.abs(netFlow))}`}
           sub={netFlow >= 0 ? 'Net positive' : 'Net negative'}
           icon={ArrowLeftRight}
           accent={netFlow >= 0 ? C.emerald : C.rose}
         />
       </div>
 
-      {/* ── Filters — UNCHANGED ── */}
+      {/* ✅ Filters — all 3 affect KPI cards + table */}
       <div style={{ ...cardStyle, marginBottom: 16 }}>
         <div style={{ marginBottom: 16 }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>Filters</h3>
-          <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>Customize your transaction view</p>
+          <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>
+            All KPI cards and the table update automatically when filters change
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <StyledDropdown label="Period"        options={periodOptions} value={selectedPeriod} onChange={v => { setSelectedPeriod(v); setPage(1); }} isOpen={openDropdown === 'period'} onToggle={() => setOpenDropdown(o => o === 'period' ? null : 'period')} onClose={() => setOpenDropdown(null)} />
-          <StyledDropdown label="Movement Type" options={typeOptions}   value={selectedType}   onChange={v => { setSelectedType(v);   setPage(1); }} isOpen={openDropdown === 'type'}   onToggle={() => setOpenDropdown(o => o === 'type'   ? null : 'type')}   onClose={() => setOpenDropdown(null)} />
-          <StyledDropdown label="Branch"        options={branchOptions} value={selectedBranch} onChange={v => { setSelectedBranch(v); setPage(1); }} isOpen={openDropdown === 'branch'} onToggle={() => setOpenDropdown(o => o === 'branch' ? null : 'branch')} onClose={() => setOpenDropdown(null)} />
+          <StyledDropdown
+            label="Period"
+            options={periodOptions}
+            value={selectedPeriod}
+            onChange={v => { setSelectedPeriod(v); setPage(1); }}
+            isOpen={openDropdown === 'period'}
+            onToggle={() => setOpenDropdown(o => o === 'period' ? null : 'period')}
+            onClose={() => setOpenDropdown(null)}
+          />
+          <StyledDropdown
+            label="Movement Type"
+            options={typeOptions}
+            value={selectedType}
+            onChange={v => { setSelectedType(v); setPage(1); }}
+            isOpen={openDropdown === 'type'}
+            onToggle={() => setOpenDropdown(o => o === 'type' ? null : 'type')}
+            onClose={() => setOpenDropdown(null)}
+          />
+          <StyledDropdown
+            label="Branch"
+            options={branchOptions}
+            value={selectedBranch}
+            onChange={v => { setSelectedBranch(v); setPage(1); }}
+            isOpen={openDropdown === 'branch'}
+            onToggle={() => setOpenDropdown(o => o === 'branch' ? null : 'branch')}
+            onClose={() => setOpenDropdown(null)}
+          />
+          {isFiltered && (
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+              <div style={{ height: 23 }} />
+              <button
+                onClick={() => { setSelectedPeriod('12m'); setSelectedBranch('all'); setSelectedType('all'); setPage(1); }}
+                style={{ height: 38, padding: '0 14px', borderRadius: 10, border: `1px solid ${css.border}`, background: css.card, color: css.mutedFg, fontSize: 13, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', whiteSpace: 'nowrap' }}
+              >
+                Reset filters
+              </button>
+            </div>
+          )}
         </div>
+        {/* Active filter badges */}
+        {isFiltered && (
+          <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {selectedPeriod !== '12m' && (
+              <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: `${C.indigo}10`, color: C.indigo, border: `1px solid ${C.indigo}25` }}>
+                {periodOptions.find(o => o.key === selectedPeriod)?.label}
+              </span>
+            )}
+            {selectedType !== 'all' && (
+              <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: `${C.amber}10`, color: C.amber, border: `1px solid ${C.amber}25` }}>
+                {selectedType}
+              </span>
+            )}
+            {selectedBranch !== 'all' && (
+              <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: `${C.cyan}10`, color: C.cyan, border: `1px solid ${C.cyan}25` }}>
+                {selectedBranch}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* ── Legend ── */}
+      {/* Legend */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 16 }}>
         <span style={{ fontSize: 11, color: css.mutedFg }}>Legend:</span>
         {(Object.keys(CATEGORY_LABEL) as MovementCategory[]).map(cat => {
@@ -554,12 +643,14 @@ export function TransactionsPage() {
         })}
       </div>
 
-      {/* ── Table ── */}
+      {/* Table */}
       <div style={cardStyle}>
         <div style={{ marginBottom: 20 }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>Transaction Details</h3>
           <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>
-            Complete movement history across all branches
+            {formatNumber(totalCount)} transactions
+            {selectedBranch !== 'all' && ` · Branch: ${selectedBranch}`}
+            {selectedType !== 'all' && ` · Type: ${selectedType}`}
           </p>
         </div>
 
@@ -575,14 +666,14 @@ export function TransactionsPage() {
         ) : loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120, gap: 10, color: css.mutedFg }}>
             <Loader2 size={22} className="animate-spin" style={{ color: C.indigo }} />
-            <span style={{ fontSize: 14 }}>Loading transactions...</span>
+            <span style={{ fontSize: 14 }}>Loading transactions…</span>
           </div>
         ) : (
           <DataTable data={transactions} columns={columns} searchable exportable pageSize={pageSize} />
         )}
 
-        {/* Pagination — UNCHANGED */}
-        {!loading && (
+        {/* Pagination */}
+        {!loading && totalCount > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 16, borderTop: `1px solid ${css.border}` }}>
             <p style={{ fontSize: 13, color: css.mutedFg, margin: 0 }}>
               Showing {formatNumber((page - 1) * pageSize + 1)} to {formatNumber(Math.min(page * pageSize, totalCount))} of {formatNumber(totalCount)} results
