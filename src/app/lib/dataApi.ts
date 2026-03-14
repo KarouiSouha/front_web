@@ -386,13 +386,13 @@ export const inventoryApi = {
   dates: () => api.get<{ dates: string[] }>("/inventory/dates/"),
 
   /** Stock value + qty totals per branch. Optional ?snapshot_id= filter. */
-  branchSummary: (params?: { snapshot_id?: string }) =>
+  branchSummary: (params?: { snapshot_id?: string ; branch?: string  }) =>
     api.get<{ branches: BranchSummary[] }>(
       `/inventory/branch-summary/${qs(params)}`,
     ),
 
   /** Stock value + qty totals per product category. Optional ?snapshot_id= filter. */
-  categoryBreakdown: (params?: { snapshot_id?: string }) =>
+  categoryBreakdown: (params?: { snapshot_id?: string ; branch?: string }) =>
     api.get<{ categories: CategoryBreakdown[] }>(
       `/inventory/category-breakdown/${qs(params)}`,
     ),
@@ -481,12 +481,12 @@ export const transactionsApi = {
 
   get: (id: string) => api.get<any>(`/transactions/${id}/`),
 
-  summary: (params?: { year?: number; months?: number }) =>
+  summary: (params?: { year?: number; months?: number ; branch?: string }) =>
     api.get<{ summary: MonthlySummaryItem[] }>(
       `/transactions/summary/${qs(params)}`,
     ),
 
-  typeBreakdown: (params?: { date_from?: string; date_to?: string }) =>
+  typeBreakdown: (params?: { date_from?: string; date_to?: string ;branch?: string  }) =>
     api.get<{ breakdown: TypeBreakdownItem[] }>(
       `/transactions/type-breakdown/${qs(params)}`,
     ),

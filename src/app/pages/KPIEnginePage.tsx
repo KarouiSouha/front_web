@@ -20,7 +20,7 @@ import {
   useBranchBreakdown,
   useTypeBreakdown,
   useBranchMonthly,
-  useInventorySnapshots,
+  useBranchSummary,
   useAgingList,
   type MonthlySummaryItem,
 } from '../lib/dataHooks';
@@ -41,16 +41,14 @@ const C = {
 
 const BRANCH_COLORS = [C.indigo, C.cyan, C.teal, C.emerald, C.amber, C.rose, C.violet];
 
-// ── CSS-variable-based helpers ─────────────────────────────────────────────
-
 const css = {
-  card:      'hsl(var(--card))',
-  cardFg:    'hsl(var(--card-foreground))',
-  border:    'hsl(var(--border))',
-  muted:     'hsl(var(--muted))',
-  mutedFg:   'hsl(var(--muted-foreground))',
-  bg:        'hsl(var(--background))',
-  fg:        'hsl(var(--foreground))',
+  card:    'hsl(var(--card))',
+  cardFg:  'hsl(var(--card-foreground))',
+  border:  'hsl(var(--border))',
+  muted:   'hsl(var(--muted))',
+  mutedFg: 'hsl(var(--muted-foreground))',
+  bg:      'hsl(var(--background))',
+  fg:      'hsl(var(--foreground))',
 };
 
 const cardStyle: React.CSSProperties = {
@@ -69,22 +67,14 @@ const legendStyle = { fontSize: 12, color: 'hsl(var(--muted-foreground))', paddi
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{
-      background: css.card, border: `1px solid ${css.border}`, borderRadius: 12,
-      padding: '12px 16px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-      fontSize: 12, minWidth: 220, maxWidth: 300,
-    }}>
-      <p style={{ fontSize: 12, fontWeight: 700, color: css.cardFg, paddingBottom: 8, borderBottom: `1px solid ${css.border}`, margin: '0 0 8px 0' }}>
-        {label}
-      </p>
+    <div style={{ background: css.card, border: `1px solid ${css.border}`, borderRadius: 12, padding: '12px 16px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', fontSize: 12, minWidth: 220, maxWidth: 300 }}>
+      <p style={{ fontSize: 12, fontWeight: 700, color: css.cardFg, paddingBottom: 8, borderBottom: `1px solid ${css.border}`, margin: '0 0 8px 0' }}>{label}</p>
       <div style={{ marginTop: 10 }}>
         {payload.map((p: any, i: number) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: i > 0 ? 8 : 0 }}>
             <span style={{ width: 10, height: 10, borderRadius: 3, background: p.fill ?? p.color, display: 'inline-block', flexShrink: 0 }} />
             <span style={{ color: css.mutedFg, flex: 1 }}>{p.name}</span>
-            <span style={{ fontWeight: 700, color: css.cardFg }}>
-              {typeof p.value === 'number' ? formatCurrency(p.value) : p.value}
-            </span>
+            <span style={{ fontWeight: 700, color: css.cardFg }}>{typeof p.value === 'number' ? formatCurrency(p.value) : p.value}</span>
           </div>
         ))}
       </div>
@@ -104,42 +94,34 @@ function Loader({ label }: { label: string }) {
 }
 
 function Empty({ height = 120 }: { height?: number }) {
-  return (
-    <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: css.mutedFg, fontSize: 13 }}>
-      No data available
-    </div>
-  );
+  return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: css.mutedFg, fontSize: 13 }}>No data available</div>;
 }
 
 // ── KPI Card ───────────────────────────────────────────────────────────────
 
-function KPI({
-  title, value, icon: Icon, accent, sub, trend,
-}: {
-  title: string;
-  value: React.ReactNode;
-  icon: LucideIcon;
-  accent: string;
-  sub?: string;
-  trend?: { value: number; isPositive: boolean };
+function KPI({ title, value, icon: Icon, accent, sub, trend, globalOnly }: {
+  title: string; value: React.ReactNode; icon: LucideIcon; accent: string;
+  sub?: string; trend?: { value: number; isPositive: boolean }; globalOnly?: boolean;
 }) {
   return (
     <div style={{ ...cardStyle, position: 'relative', overflow: 'hidden', borderTop: `3px solid ${accent}`, paddingTop: 20 }}>
       <div style={{ position: 'absolute', bottom: -20, right: -20, width: 90, height: 90, borderRadius: '50%', background: accent, opacity: 0.06, pointerEvents: 'none' }} />
+      {/* Badge Global — affiché si la card n'est pas filtrable par branch */}
+      {globalOnly && (
+        <div style={{ position: 'absolute', top: 10, right: 10, fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: css.mutedFg, background: css.muted, borderRadius: 6, padding: '2px 7px', border: `1px solid ${css.border}` }}>
+          Global
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
         <div style={{ width: 38, height: 38, borderRadius: 11, background: `${accent}15`, border: `1px solid ${accent}25`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Icon size={16} style={{ color: accent }} />
         </div>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700,
-          color: trend?.isPositive === false ? C.rose : C.emerald,
-          background: trend?.isPositive === false ? `${C.rose}12` : `${C.emerald}12`,
-          border: `1px solid ${trend?.isPositive === false ? C.rose : C.emerald}25`,
-          padding: '3px 8px', borderRadius: 20,
-        }}>
-          <ArrowUpRight size={10} />
-          {trend ? `${trend.value.toFixed(1)}%` : '—'}
-        </div>
+        {!globalOnly && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, color: trend?.isPositive === false ? C.rose : C.emerald, background: trend?.isPositive === false ? `${C.rose}12` : `${C.emerald}12`, border: `1px solid ${trend?.isPositive === false ? C.rose : C.emerald}25`, padding: '3px 8px', borderRadius: 20 }}>
+            <ArrowUpRight size={10} />
+            {trend ? `${trend.value.toFixed(1)}%` : '—'}
+          </div>
+        )}
       </div>
       <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: css.mutedFg, margin: 0 }}>{title}</p>
       <p style={{ fontSize: 22, fontWeight: 800, color: css.cardFg, marginTop: 5, marginBottom: 4, letterSpacing: '-0.03em', lineHeight: 1 }}>{value}</p>
@@ -170,11 +152,7 @@ function Panel({ title, sub, children, action }: { title: string; sub?: string; 
 }
 
 function SectionHeader({ title }: { title: string }) {
-  return (
-    <h2 style={{ fontSize: 18, fontWeight: 800, color: css.fg, letterSpacing: '-0.02em', margin: '0 0 16px 0' }}>
-      {title}
-    </h2>
-  );
+  return <h2 style={{ fontSize: 18, fontWeight: 800, color: css.fg, letterSpacing: '-0.02em', margin: '0 0 16px 0' }}>{title}</h2>;
 }
 
 // ── Period helpers ─────────────────────────────────────────────────────────
@@ -194,104 +172,56 @@ function periodToDates(key: PeriodKey): { dateFrom: string; dateTo: string } {
   const pad = (n: number) => String(n).padStart(2, '0');
   const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const dateTo = fmt(today);
-
   if (key === 'last_month') {
-    const first = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const last  = new Date(today.getFullYear(), today.getMonth(), 0);
-    return { dateFrom: fmt(first), dateTo: fmt(last) };
+    return { dateFrom: fmt(new Date(today.getFullYear(), today.getMonth() - 1, 1)), dateTo: fmt(new Date(today.getFullYear(), today.getMonth(), 0)) };
   }
-  if (key === 'last_3') {
-    const from = new Date(today); from.setMonth(from.getMonth() - 3);
-    return { dateFrom: fmt(from), dateTo };
-  }
-  if (key === 'last_6') {
-    const from = new Date(today); from.setMonth(from.getMonth() - 6);
-    return { dateFrom: fmt(from), dateTo };
-  }
-  if (key === 'last_12') {
-    const from = new Date(today); from.setFullYear(from.getFullYear() - 1);
-    return { dateFrom: fmt(from), dateTo };
-  }
+  if (key === 'last_3')  { const f = new Date(today); f.setMonth(f.getMonth() - 3);    return { dateFrom: fmt(f), dateTo }; }
+  if (key === 'last_6')  { const f = new Date(today); f.setMonth(f.getMonth() - 6);    return { dateFrom: fmt(f), dateTo }; }
+  if (key === 'last_12') { const f = new Date(today); f.setFullYear(f.getFullYear()-1); return { dateFrom: fmt(f), dateTo }; }
   return { dateFrom: `${today.getFullYear()}-01-01`, dateTo };
 }
 
 // ── StyledDropdown ─────────────────────────────────────────────────────────
 
-function StyledDropdown({
-  label, options, value, onChange, isOpen, onToggle, onClose,
-}: {
-  label: string;
-  options: { key: string; label: string }[];
-  value: string;
-  onChange: (v: string) => void;
-  isOpen: boolean;
-  onToggle: () => void;
-  onClose: () => void;
+function StyledDropdown({ label, options, value, onChange, isOpen, onToggle, onClose }: {
+  label: string; options: { key: string; label: string }[]; value: string;
+  onChange: (v: string) => void; isOpen: boolean; onToggle: () => void; onClose: () => void;
 }) {
-  const ref    = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 0 });
   const current = options.find(o => o.key === value)?.label ?? label;
 
   useEffect(() => {
     if (isOpen && btnRef.current) {
-      const rect = btnRef.current.getBoundingClientRect();
-      setMenuPos({ top: rect.bottom + window.scrollY + 6, left: rect.left + window.scrollX, width: rect.width });
+      const r = btnRef.current.getBoundingClientRect();
+      setMenuPos({ top: r.bottom + window.scrollY + 6, left: r.left + window.scrollX, width: r.width });
     }
   }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
-    const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
   }, [isOpen, onClose]);
 
   const menu = isOpen ? createPortal(
-    <div style={{
-      position: 'absolute', top: menuPos.top, left: menuPos.left, width: menuPos.width,
-      zIndex: 9999, background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 12,
-      boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: 280, overflowY: 'auto', padding: 6,
-    }}>
+    <div style={{ position: 'absolute', top: menuPos.top, left: menuPos.left, width: menuPos.width, zIndex: 9999, background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: 280, overflowY: 'auto', padding: 6 }}>
       {options.map(opt => (
-        <button
-          key={opt.key}
-          onMouseDown={e => e.stopPropagation()}
-          onClick={() => { onChange(opt.key); onClose(); }}
-          style={{
-            width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 8,
-            border: 'none', cursor: 'pointer', fontSize: 13,
-            background: value === opt.key ? `${C.indigo}15` : 'transparent',
-            color:      value === opt.key ? C.indigo : '#111827',
-            fontWeight: value === opt.key ? 600 : 400,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}
-        >
+        <button key={opt.key} onMouseDown={e => e.stopPropagation()} onClick={() => { onChange(opt.key); onClose(); }}
+          style={{ width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, background: value === opt.key ? `${C.indigo}15` : 'transparent', color: value === opt.key ? C.indigo : '#111827', fontWeight: value === opt.key ? 600 : 400, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {opt.label}
           {value === opt.key && <span style={{ color: C.indigo, fontSize: 12 }}>✓</span>}
         </button>
       ))}
-    </div>,
-    document.body,
+    </div>, document.body,
   ) : null;
 
   return (
     <div ref={ref} style={{ position: 'relative', flex: 1, minWidth: 160 }}>
-      <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: css.mutedFg, marginBottom: 6 }}>
-        {label}
-      </p>
-      <button
-        ref={btnRef}
-        onClick={onToggle}
-        style={{
-          width: '100%', height: 38, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '0 12px', borderRadius: 10, border: `1px solid ${css.border}`,
-          background: css.card, color: css.cardFg, fontSize: 13, cursor: 'pointer',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        }}
-      >
+      <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: css.mutedFg, marginBottom: 6 }}>{label}</p>
+      <button ref={btnRef} onClick={onToggle} style={{ width: '100%', height: 38, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px', borderRadius: 10, border: `1px solid ${css.border}`, background: css.card, color: css.cardFg, fontSize: 13, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{current}</span>
         <ChevronDown size={14} style={{ flexShrink: 0, marginLeft: 8, color: css.mutedFg, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
       </button>
@@ -302,56 +232,24 @@ function StyledDropdown({
 
 // ── FilterBar ──────────────────────────────────────────────────────────────
 
-function FilterBar({
-  period, onPeriodChange, branch, onBranchChange, branches,
-}: {
-  period: PeriodKey;
-  onPeriodChange: (k: PeriodKey) => void;
-  branch: string;
-  onBranchChange: (b: string) => void;
-  branches: string[];
+function FilterBar({ period, onPeriodChange, branch, onBranchChange, branches }: {
+  period: PeriodKey; onPeriodChange: (k: PeriodKey) => void;
+  branch: string; onBranchChange: (b: string) => void; branches: string[];
 }) {
   const [openDropdown, setOpenDropdown] = useState<'period' | 'branch' | null>(null);
-
-  const branchOptions = [
-    { key: '', label: 'All Branches' },
-    ...branches.map(b => ({ key: b, label: b })),
-  ];
+  const branchOptions = [{ key: '', label: 'All Branches' }, ...branches.map(b => ({ key: b, label: b }))];
 
   return (
     <Panel title="Filters" sub="Customize your view — all charts update automatically">
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <StyledDropdown
-          label="Period"
-          options={PERIOD_OPTIONS}
-          value={period}
-          onChange={v => onPeriodChange(v as PeriodKey)}
-          isOpen={openDropdown === 'period'}
-          onToggle={() => setOpenDropdown(o => o === 'period' ? null : 'period')}
-          onClose={() => setOpenDropdown(null)}
-        />
-        <StyledDropdown
-          label="Branch"
-          options={branchOptions}
-          value={branch}
-          onChange={onBranchChange}
-          isOpen={openDropdown === 'branch'}
-          onToggle={() => setOpenDropdown(o => o === 'branch' ? null : 'branch')}
-          onClose={() => setOpenDropdown(null)}
-        />
+        <StyledDropdown label="Period" options={PERIOD_OPTIONS} value={period} onChange={v => onPeriodChange(v as PeriodKey)}
+          isOpen={openDropdown === 'period'} onToggle={() => setOpenDropdown(o => o === 'period' ? null : 'period')} onClose={() => setOpenDropdown(null)} />
+        <StyledDropdown label="Branch" options={branchOptions} value={branch} onChange={onBranchChange}
+          isOpen={openDropdown === 'branch'} onToggle={() => setOpenDropdown(o => o === 'branch' ? null : 'branch')} onClose={() => setOpenDropdown(null)} />
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-          <div style={{ height: 6 + 11 + 6 }} />
-          <button
-            onClick={() => { onPeriodChange('ytd'); onBranchChange(''); }}
-            disabled={period === 'ytd' && !branch}
-            style={{
-              height: 38, padding: '0 18px', borderRadius: 10,
-              border: `1px solid ${css.border}`, background: css.card,
-              color: css.cardFg, fontSize: 13, cursor: 'pointer',
-              opacity: period === 'ytd' && !branch ? 0.45 : 1,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06)', whiteSpace: 'nowrap',
-            }}
-          >
+          <div style={{ height: 23 }} />
+          <button onClick={() => { onPeriodChange('ytd'); onBranchChange(''); }} disabled={period === 'ytd' && !branch}
+            style={{ height: 38, padding: '0 18px', borderRadius: 10, border: `1px solid ${css.border}`, background: css.card, color: css.cardFg, fontSize: 13, cursor: 'pointer', opacity: period === 'ytd' && !branch ? 0.45 : 1, boxShadow: '0 1px 3px rgba(0,0,0,0.06)', whiteSpace: 'nowrap' }}>
             Reset filters
           </button>
         </div>
@@ -360,23 +258,15 @@ function FilterBar({
   );
 }
 
-// ── ActiveFilterBadge — visual feedback when filters are active ────────────
+// ── ActiveFilterBadge ──────────────────────────────────────────────────────
 
 function ActiveFilterBadge({ period, branch }: { period: PeriodKey; branch: string }) {
   const periodLabel = PERIOD_OPTIONS.find(o => o.key === period)?.label ?? period;
-  const isDefault   = period === 'ytd' && !branch;
-  if (isDefault) return null;
-
+  if (period === 'ytd' && !branch) return null;
   return (
-    <div style={{
-      display: 'inline-flex', alignItems: 'center', gap: 8,
-      background: `${C.indigo}10`, border: `1px solid ${C.indigo}25`,
-      borderRadius: 20, padding: '4px 12px', marginBottom: 16,
-    }}>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: `${C.indigo}10`, border: `1px solid ${C.indigo}25`, borderRadius: 20, padding: '4px 12px', marginBottom: 16 }}>
       <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.indigo, flexShrink: 0 }} />
-      <span style={{ fontSize: 12, color: C.indigo, fontWeight: 600 }}>
-        Filtered: {periodLabel}{branch ? ` · ${branch}` : ''}
-      </span>
+      <span style={{ fontSize: 12, color: C.indigo, fontWeight: 600 }}>Filtered: {periodLabel}{branch ? ` · ${branch}` : ''}</span>
     </div>
   );
 }
@@ -384,22 +274,17 @@ function ActiveFilterBadge({ period, branch }: { period: PeriodKey; branch: stri
 // ── BranchMonthlyChart ─────────────────────────────────────────────────────
 
 function BranchMonthlyChart({ branchFilter, dateFrom, dateTo }: { branchFilter: string; dateFrom: string; dateTo: string }) {
-  const { data, loading } = useBranchMonthly({
-    movement_type: MOVEMENT_TYPES.SALE,
-    date_from:     dateFrom,
-    date_to:       dateTo,
-  });
+  const { data, loading } = useBranchMonthly({ movement_type: MOVEMENT_TYPES.SALE, date_from: dateFrom, date_to: dateTo });
 
   if (loading) return <Panel title="Revenue Trend by Branch" sub="Monthly sales revenue — one line per branch"><Loader label="Loading…" /></Panel>;
   if (!data || data.monthly_data.length === 0) return <Panel title="Revenue Trend by Branch" sub="Monthly sales revenue — one line per branch"><Empty height={200} /></Panel>;
 
-  // ✅ Filter branches client-side when a branch is selected
   const visibleBranches = branchFilter
     ? data.branches.filter(b => b.toLowerCase().includes(branchFilter.toLowerCase()))
     : data.branches;
 
   return (
-    <Panel title="Revenue Trend by Branch" sub="Monthly sales revenue — one line per branch">
+    <Panel title="Revenue Trend by Branch" sub={`Monthly sales revenue${branchFilter ? ` · ${branchFilter}` : ' — all branches'}`}>
       <ResponsiveContainer width="100%" height={300}>
         <AreaChart data={data.monthly_data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <defs>
@@ -412,25 +297,14 @@ function BranchMonthlyChart({ branchFilter, dateFrom, dateTo }: { branchFilter: 
             ))}
           </defs>
           <CartesianGrid stroke={css.border} strokeWidth={1} vertical={false} />
-          <XAxis
-            dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} dy={6}
-            tickFormatter={(v, i) => { const row = data.monthly_data[i]; return row ? `${v} ${row.year}` : String(v); }}
-          />
+          <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} dy={6}
+            tickFormatter={(v, i) => { const row = data.monthly_data[i]; return row ? `${v} ${row.year}` : String(v); }} />
           <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tickCount={5} width={36} />
           <RechartsTooltip content={<CustomTooltip />} cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 3' }} />
           <Legend wrapperStyle={legendStyle} iconType="plainline" iconSize={18} />
           {visibleBranches.map((branch, i) => (
-            <Area
-              key={branch}
-              type="natural"
-              dataKey={branch}
-              stroke={BRANCH_COLORS[i % BRANCH_COLORS.length]}
-              strokeWidth={2}
-              fill={`url(#kpi-gb-${i})`}
-              dot={false}
-              activeDot={{ r: 5, fill: css.card, stroke: BRANCH_COLORS[i % BRANCH_COLORS.length], strokeWidth: 2 }}
-              name={branch}
-            />
+            <Area key={branch} type="natural" dataKey={branch} stroke={BRANCH_COLORS[i % BRANCH_COLORS.length]} strokeWidth={2}
+              fill={`url(#kpi-gb-${i})`} dot={false} activeDot={{ r: 5, fill: css.card, stroke: BRANCH_COLORS[i % BRANCH_COLORS.length], strokeWidth: 2 }} name={branch} />
           ))}
         </AreaChart>
       </ResponsiveContainer>
@@ -446,40 +320,53 @@ export function KPIEnginePage() {
 
   const { dateFrom, dateTo } = useMemo(() => periodToDates(period), [period]);
 
-  // ── ALL hooks receive dateFrom / dateTo so they re-fetch on period change ──
+  // ── Hooks — tous filtrés par period + branch ───────────────────────────
 
-  // Summary: monthly sales & purchases — filtered by period
+  // ✅ Summary filtré par period + branch
   const { data: summaryRes, loading: summaryLoading, refetch: refetchSummary } = useTransactionSummary({
     date_from: dateFrom,
     date_to:   dateTo,
+    branch:    branchFilter || undefined,
   });
 
-  // Branch breakdowns — filtered by period
+  // Branch breakdowns pour la liste des branches disponibles + perf chart
   const { data: branchSalesRes,     refetch: refetchBranchSales }     = useBranchBreakdown({ movement_type: MOVEMENT_TYPES.SALE,     date_from: dateFrom, date_to: dateTo });
   const { data: branchPurchasesRes, refetch: refetchBranchPurchases } = useBranchBreakdown({ movement_type: MOVEMENT_TYPES.PURCHASE, date_from: dateFrom, date_to: dateTo });
 
-  // Movement type breakdown — filtered by period
-  const { data: typeBreakdownRes, refetch: refetchTypeBreakdown } = useTypeBreakdown({ date_from: dateFrom, date_to: dateTo });
+  // ✅ Type breakdown filtré par period + branch
+  const { data: typeBreakdownRes, refetch: refetchTypeBreakdown } = useTypeBreakdown({
+    date_from: dateFrom,
+    date_to:   dateTo,
+    branch:    branchFilter || undefined,
+  });
 
-  // Stock and receivables — not time-filtered (snapshot-based)
-  const { data: inventoryRes } = useInventorySnapshots({ page_size: 1 });
-  const { data: agingRes }     = useAgingList({ page_size: 1 });
+  // ✅ Stock Value filtré par branch via /inventory/branch-summary/?branch=X
+  const { data: branchStockRes, refetch: refetchBranchStock } = useBranchSummary({
+    branch: branchFilter || undefined,
+  });
 
-  const stockValue       = Number(inventoryRes?.items?.[0]?.total_lines_value ?? 0);
+  // Total Receivables — aging n'a pas de dimension branch → toujours global
+  const { data: agingRes } = useAgingList({ page_size: 1 });
   const totalReceivables = agingRes?.grand_total ?? 0;
+
+  // ✅ Stock value sommé des branches filtrées
+  const stockValue = useMemo(
+    () => (branchStockRes?.branches ?? []).reduce((s, b) => s + b.total_value, 0),
+    [branchStockRes],
+  );
 
   const refetchAll = () => {
     refetchSummary();
     refetchBranchSales();
     refetchBranchPurchases();
     refetchTypeBreakdown();
+    refetchBranchStock();
   };
 
-  // ── Derived data ───────────────────────────────────────────────────────────
+  // ── Données dérivées ───────────────────────────────────────────────────
 
   const monthlySummary: MonthlySummaryItem[] = summaryRes?.summary ?? [];
 
-  // ✅ Monthly sales chart — already filtered by period via useTransactionSummary
   const monthlySalesData = [...monthlySummary]
     .sort((a, b) => (a.year * 100 + a.month) - (b.year * 100 + b.month))
     .map(m => ({ month: `${m.month_label} ${m.year}`, sales: m.total_sales, purchases: m.total_purchases }));
@@ -487,15 +374,15 @@ export function KPIEnginePage() {
   const branchSales     = branchSalesRes?.branches     ?? [];
   const branchPurchases = branchPurchasesRes?.branches ?? [];
 
-  // ✅ All branches from current period data
-  const allBranches = useMemo(() =>
-    Array.from(new Set([...branchSales.map(b => b.branch), ...branchPurchases.map(b => b.branch)])).sort(),
+  // Liste de toutes les branches disponibles (depuis les transactions de la période)
+  const allBranches = useMemo(
+    () => Array.from(new Set([...branchSales.map(b => b.branch), ...branchPurchases.map(b => b.branch)])).sort(),
     [branchSales, branchPurchases],
   );
 
-  // ✅ Branch performance — filtered by selected branch AND period
-  const branchPerformanceData = useMemo(() =>
-    allBranches
+  // Branch Performance chart — filtré client-side par branch sélectionné
+  const branchPerformanceData = useMemo(
+    () => allBranches
       .filter(b => !branchFilter || b === branchFilter)
       .map(branch => ({
         branch,
@@ -505,26 +392,25 @@ export function KPIEnginePage() {
     [allBranches, branchFilter, branchSales, branchPurchases],
   );
 
-  // ✅ Type breakdown — filtered by period, then optionally by branch client-side
-  const typeData = useMemo(() =>
-    (typeBreakdownRes?.breakdown ?? []).map(t => ({
-      name: t.movement_type, in: t.total_in, out: t.total_out, count: t.count,
-    })),
+  const typeData = useMemo(
+    () => (typeBreakdownRes?.breakdown ?? []).map(t => ({ name: t.movement_type, in: t.total_in, out: t.total_out, count: t.count })),
     [typeBreakdownRes],
   );
 
-  // ✅ KPI aggregates derived from filtered period data (replaces useKPIs)
-  const totalSales = useMemo(
-    () => monthlySummary.reduce((s, m) => s + m.total_sales, 0),
-    [monthlySummary],
-  );
+  // KPIs agrégés depuis les données filtrées
+  const totalSales = useMemo(() => monthlySummary.reduce((s, m) => s + m.total_sales, 0), [monthlySummary]);
 
   const totalPurchases = useMemo(() => {
-    // Prefer the branch breakdown total (more accurate for filtered period)
+    // Si branch sélectionné, utiliser le total de ce branch depuis branchPurchasesRes
+    if (branchFilter) {
+      const found = branchPurchasesRes?.branches.find(b => b.branch === branchFilter);
+      if (found) return found.total;
+    }
+    // Sinon, sommer tous les branches
     const fromBranch = branchPurchasesRes?.branches.reduce((s, b) => s + b.total, 0);
     if (fromBranch !== undefined && fromBranch > 0) return fromBranch;
     return monthlySummary.reduce((s, m) => s + m.total_purchases, 0);
-  }, [branchPurchasesRes, monthlySummary]);
+  }, [branchPurchasesRes, branchFilter, monthlySummary]);
 
   const totalPurchasesCount = useMemo(
     () => (typeBreakdownRes?.breakdown ?? []).find(t => t.movement_type === MOVEMENT_TYPES.PURCHASE)?.count ?? 0,
@@ -533,13 +419,13 @@ export function KPIEnginePage() {
 
   const grossMargin = totalSales > 0 ? ((totalSales - totalPurchases) / totalSales) * 100 : 0;
 
-  // Trend: compare first vs last month in current period
   const lastTwo    = monthlySummary.slice(-2);
   const salesTrend = lastTwo.length === 2 && lastTwo[0].total_sales > 0
     ? { value: Math.abs(((lastTwo[1].total_sales - lastTwo[0].total_sales) / lastTwo[0].total_sales) * 100), isPositive: lastTwo[1].total_sales >= lastTwo[0].total_sales }
     : undefined;
 
-  const isLoading = summaryLoading;
+  const isLoading   = summaryLoading;
+  const periodLabel = PERIOD_OPTIONS.find(o => o.key === period)?.label ?? period;
 
   return (
     <div style={{ background: css.bg, minHeight: '100vh', padding: '32px 28px' }}>
@@ -548,20 +434,10 @@ export function KPIEnginePage() {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 28 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: css.fg, letterSpacing: '-0.03em', margin: 0 }}>KPI Engine</h1>
-          <p style={{ fontSize: 13, color: css.mutedFg, marginTop: 4 }}>
-            Automated calculation and monitoring of key performance indicators
-          </p>
+          <p style={{ fontSize: 13, color: css.mutedFg, marginTop: 4 }}>Automated calculation and monitoring of key performance indicators</p>
         </div>
-        <button
-          onClick={refetchAll}
-          disabled={isLoading}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 16px',
-            borderRadius: 10, border: `1px solid ${css.border}`, background: css.card,
-            color: css.cardFg, fontSize: 13, cursor: isLoading ? 'not-allowed' : 'pointer',
-            opacity: isLoading ? 0.6 : 1, boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          }}
-        >
+        <button onClick={refetchAll} disabled={isLoading}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 16px', borderRadius: 10, border: `1px solid ${css.border}`, background: css.card, color: css.cardFg, fontSize: 13, cursor: isLoading ? 'not-allowed' : 'pointer', opacity: isLoading ? 0.6 : 1, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
           {isLoading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
           Refresh
         </button>
@@ -569,19 +445,11 @@ export function KPIEnginePage() {
 
       {/* ── Filters ── */}
       <div style={{ marginBottom: 24 }}>
-        <FilterBar
-          period={period}
-          onPeriodChange={setPeriod}
-          branch={branchFilter}
-          onBranchChange={setBranchFilter}
-          branches={allBranches}
-        />
+        <FilterBar period={period} onPeriodChange={setPeriod} branch={branchFilter} onBranchChange={setBranchFilter} branches={allBranches} />
       </div>
 
-      {/* ── Active filter badge ── */}
       <ActiveFilterBadge period={period} branch={branchFilter} />
 
-      {/* ── Loading ── */}
       {isLoading && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 0', gap: 12, color: css.mutedFg }}>
           <Loader2 size={20} className="animate-spin" style={{ color: C.indigo }} />
@@ -591,45 +459,41 @@ export function KPIEnginePage() {
 
       {!isLoading && (
         <>
-          {/* ── Business Overview KPIs — ✅ all derived from filtered data ── */}
+          {/* ── Business Overview KPIs ── */}
           <div style={{ marginBottom: 24 }}>
             <SectionHeader title="Business Overview" />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-              <KPI
-                title="Total Sales"
-                value={formatCurrency(totalSales)}
-                icon={TrendingUp}
-                accent={C.indigo}
-                trend={salesTrend}
-              />
-              <KPI
-                title="Total Purchases"
-                value={formatCurrency(totalPurchases)}
-                icon={DollarSign}
-                accent={C.amber}
-                sub={`${formatNumber(totalPurchasesCount)} operations`}
-              />
+
+              {/* ✅ Filtré par period + branch */}
+              <KPI title="Total Sales" value={formatCurrency(totalSales)} icon={TrendingUp} accent={C.indigo} trend={salesTrend} />
+
+              {/* ✅ Filtré par period + branch */}
+              <KPI title="Total Purchases" value={formatCurrency(totalPurchases)} icon={DollarSign} accent={C.amber}
+                sub={`${formatNumber(totalPurchasesCount)} operations`} />
+
+              {/* ✅ Filtré par branch via useBranchSummary */}
               <KPI
                 title="Stock Value"
                 value={formatCurrency(stockValue)}
                 icon={Package}
                 accent={C.cyan}
-                sub="Latest snapshot"
+                sub={branchFilter ? `Branch: ${branchFilter}` : 'All branches · Latest snapshot'}
               />
+
+              {/* ⚠️ Non filtrable par branch (aging = dimension client, pas branch) */}
               <KPI
                 title="Total Receivables"
                 value={formatCurrency(totalReceivables)}
                 icon={BarChart3}
                 accent={C.violet}
-                sub="Latest aging report"
+                sub="All branches · Latest aging report"
+                globalOnly={!!branchFilter}
               />
-              <KPI
-                title="Gross Margin"
-                value={`${grossMargin.toFixed(1)}%`}
-                icon={BarChart3}
-                accent={C.teal}
-                trend={{ value: 0, isPositive: grossMargin > 0 }}
-              />
+
+              {/* ✅ Filtré par period + branch */}
+              <KPI title="Gross Margin" value={`${grossMargin.toFixed(1)}%`} icon={BarChart3} accent={C.teal}
+                trend={{ value: 0, isPositive: grossMargin > 0 }} />
+
               {/* Sales / Stock Ratio */}
               <div style={{ ...cardStyle, position: 'relative', overflow: 'hidden', borderTop: `3px solid ${C.emerald}`, paddingTop: 20 }}>
                 <div style={{ position: 'absolute', bottom: -20, right: -20, width: 90, height: 90, borderRadius: '50%', background: C.emerald, opacity: 0.06, pointerEvents: 'none' }} />
@@ -653,9 +517,9 @@ export function KPIEnginePage() {
             </div>
           </div>
 
-          {/* ── Sales vs Purchases Monthly — ✅ filtered by period ── */}
+          {/* ── Sales vs Purchases Monthly ── */}
           <div style={{ marginBottom: 16 }}>
-            <Panel title="Sales vs Purchases — Monthly Trend" sub={`${PERIOD_OPTIONS.find(o => o.key === period)?.label ?? period}${branchFilter ? ` · ${branchFilter}` : ''}`}>
+            <Panel title="Sales vs Purchases — Monthly Trend" sub={`${periodLabel}${branchFilter ? ` · ${branchFilter}` : ''}`}>
               {summaryLoading ? <Loader label="Loading…" /> :
                monthlySalesData.length === 0 ? <Empty height={320} /> : (
                 <ResponsiveContainer width="100%" height={280}>
@@ -685,10 +549,10 @@ export function KPIEnginePage() {
             </Panel>
           </div>
 
-          {/* ── Branch Performance — ✅ filtered by period + branch ── */}
+          {/* ── Branch Performance ── */}
           {branchPerformanceData.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <Panel title="Branch Performance" sub={`Sales and purchases by branch · ${PERIOD_OPTIONS.find(o => o.key === period)?.label ?? period}`}>
+              <Panel title="Branch Performance" sub={`Sales and purchases by branch · ${periodLabel}`}>
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={branchPerformanceData} barCategoryGap="30%" barGap={4} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                     <defs>
@@ -714,15 +578,15 @@ export function KPIEnginePage() {
             </div>
           )}
 
-          {/* ── Per-Branch Monthly Chart — ✅ filtered by period + branch ── */}
+          {/* ── Per-Branch Monthly ── */}
           <div style={{ marginBottom: 16 }}>
             <BranchMonthlyChart branchFilter={branchFilter} dateFrom={dateFrom} dateTo={dateTo} />
           </div>
 
-          {/* ── Movement Type Breakdown — ✅ filtered by period ── */}
+          {/* ── Movement Type Breakdown ── */}
           {typeData.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <Panel title="Movement Type Breakdown" sub="Inventory movement activity by type">
+              <Panel title="Movement Type Breakdown" sub={`Inventory movement activity by type${branchFilter ? ` · ${branchFilter}` : ''}`}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {typeData.map((t, i) => {
                     const maxVal = Math.max(...typeData.map(x => Math.max(x.in, x.out)), 1);
@@ -757,17 +621,13 @@ export function KPIEnginePage() {
             </div>
           )}
 
-          {/* ── Sales KPIs ── */}
+          {/* ── Sales / Stock / Credit KPIs ── */}
           <div style={{ marginTop: 24, paddingTop: 24, borderTop: `1px solid ${css.border}` }}>
             <SalesKPISection />
           </div>
-
-          {/* ── Stock KPIs ── */}
           <div style={{ marginTop: 24, paddingTop: 24, borderTop: `1px solid ${css.border}` }}>
             <StockKPISection />
           </div>
-
-          {/* ── Credit KPIs ── */}
           <div style={{ marginTop: 24, paddingTop: 24, borderTop: `1px solid ${css.border}` }}>
             <CreditKPISection />
           </div>

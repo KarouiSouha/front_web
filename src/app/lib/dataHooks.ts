@@ -172,14 +172,14 @@ export function useInventoryDates() {
   return useAsync(() => inventoryApi.dates(), []);
 }
 
-export function useBranchSummary(params?: { snapshot_id?: string }) {
+export function useBranchSummary(params?: { snapshot_id?: string ; branch?: string  }) {
   return useAsync(
     () => inventoryApi.branchSummary(params),
     [JSON.stringify(params)],
   );
 }
 
-export function useCategoryBreakdown(params?: { snapshot_id?: string }) {
+export function useCategoryBreakdown(params?: { snapshot_id?: string ; branch?: string   }) {
   return useAsync(
     () => inventoryApi.categoryBreakdown(params),
     [JSON.stringify(params)],
@@ -211,6 +211,7 @@ export function useTransactionSummary(params?: {
   year?: number;
   date_from?: string;
   date_to?: string;
+  branch?: string;
 }) {
   return useAsync(
     () => transactionsApi.summary(params),
@@ -267,6 +268,7 @@ export function useBranchMonthly(params?: {
 export function useTypeBreakdown(params?: {
   date_from?: string;
   date_to?: string;
+  branch?: string;
 }) {
   return useAsync(
     () => transactionsApi.typeBreakdown(params),
