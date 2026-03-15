@@ -251,12 +251,13 @@ export function PricingProfitabilityReport() {
   const fetchAll = useCallback(async () => {
     setLoading(true); setError('');
     const year = Number(selectedYear);
+    const branch = selectedBranch !== 'all' ? selectedBranch : undefined;
     try {
       const [sales, saleBrRes, salesMonthly, summRes, branchesRes] = await Promise.all([
-        salesKpiApi.getAll({ year, top_n: 20 }),
+        salesKpiApi.getAll({ year, branch, top_n: 20 }),
         axios.get('/api/transactions/branch-breakdown/', { headers: auth(), params: { movement_type: MOVEMENT_TYPES.SALE, year } }),
         axios.get('/api/transactions/branch-monthly/', { headers: auth(), params: { movement_type: MOVEMENT_TYPES.SALE, metric: 'profit', year } }),
-        axios.get('/api/transactions/summary/', { headers: auth(), params: { year } }),
+        axios.get('/api/transactions/summary/', { headers: auth(), params: { year, ...(branch ? { branch } : {}) } }),
         axios.get('/api/transactions/branches/', { headers: auth() }),
       ]);
       setSalesKPI(sales);
@@ -270,7 +271,7 @@ export function PricingProfitabilityReport() {
     } finally {
       setLoading(false);
     }
-  }, [selectedYear]);
+  }, [selectedBranch, selectedYear]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 

@@ -981,12 +981,14 @@ export const salesKpiApi = {
     year?: number;
     date_from?: string;
     date_to?: string;
+    branch?: string;
     top_n?: number;
   }) => {
     const p = new URLSearchParams();
     if (params?.year) p.set("year", String(params.year));
     if (params?.date_from) p.set("date_from", params.date_from);
     if (params?.date_to) p.set("date_to", params.date_to);
+    if (params?.branch) p.set("branch", params.branch);
     if (params?.top_n) p.set("top_n", String(params.top_n));
     const qs = p.toString();
     const raw = await api.get<SalesKPIRawData>(
@@ -1148,11 +1150,13 @@ export const stockKpiApi = {
   getAll: async (params?: {
     snapshot_date?: string;
     year?: number;
+    branch?: string;
     low_rotation_threshold?: number;
   }) => {
     const p = new URLSearchParams();
     if (params?.snapshot_date) p.set("snapshot_date", params.snapshot_date);
     if (params?.year) p.set("year", String(params.year));
+    if (params?.branch) p.set("branch", params.branch);
     if (params?.low_rotation_threshold !== undefined)
       p.set("low_rotation_threshold", String(params.low_rotation_threshold));
     const qs = p.toString();

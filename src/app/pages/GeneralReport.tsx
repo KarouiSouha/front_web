@@ -244,15 +244,16 @@ export function GeneralReport() {
   const fetchAll = useCallback(async () => {
     setLoading(true); setError('');
     const year = Number(selectedYear);
+    const branch = selectedBranch !== 'all' ? selectedBranch : undefined;
     try {
       const [sales, stock, saleBrRes, purchBrRes, salesMonthly, purchMonthly, summRes, branchesRes] = await Promise.all([
-        salesKpiApi.getAll({ year, top_n: 20 }),
-        stockKpiApi.getAll({ year }),
+        salesKpiApi.getAll({ year, branch, top_n: 20 }),
+        stockKpiApi.getAll({ year, branch }),
         axios.get('/api/transactions/branch-breakdown/', { headers: auth(), params: { movement_type: MOVEMENT_TYPES.SALE, year } }),
         axios.get('/api/transactions/branch-breakdown/', { headers: auth(), params: { movement_type: MOVEMENT_TYPES.PURCHASE, year } }),
         axios.get('/api/transactions/branch-monthly/', { headers: auth(), params: { movement_type: MOVEMENT_TYPES.SALE, year } }),
         axios.get('/api/transactions/branch-monthly/', { headers: auth(), params: { movement_type: MOVEMENT_TYPES.PURCHASE, year } }),
-        axios.get('/api/transactions/summary/', { headers: auth(), params: { year } }),
+        axios.get('/api/transactions/summary/', { headers: auth(), params: { year, ...(branch ? { branch } : {}) } }),
         axios.get('/api/transactions/branches/', { headers: auth() }),
       ]);
       setSalesKPI(sales);
@@ -270,24 +271,24 @@ export function GeneralReport() {
     } finally {
       setLoading(false);
     }
-  }, [selectedYear]);
+  }, [selectedBranch, selectedYear]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   // ── Derived data ─────────────────────────────────────────────────────────
-  const totalRevenue   = num(salesKPI?.ca?.total);
-  const totalPurchases = useMemo(() => purchaseBranches.reduce((s, b) => s + num(b.total), 0), [purchaseBranches]);
-  const grossProfit    = useMemo(
-    () => monthlySummary.reduce((sum, month) => sum + num(month.total_profit ?? 0), 0),
-    [monthlySummary]
-  );
-  const grossMarginPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+  const totalRevenue = num(salesKPI?.ca?.total);
 
   // filtered branch data
   const filterBranch = <T extends { branch: string }>(arr: T[]) =>
     selectedBranch === 'all' ? arr : arr.filter(b => b.branch === selectedBranch);
 
-  const filteredPurchBranches   = filterBranch(purchaseBranches);
+  const filteredPurchBranches = filterBranch(purchaseBranches);
+  const totalPurchases = useMemo(() => filteredPurchBranches.reduce((s, b) => s + num(b.total), 0), [filteredPurchBranches]);
+  const grossProfit = useMemo(
+    () => monthlySummary.reduce((sum, month) => sum + num(month.total_profit ?? 0), 0),
+    [monthlySummary]
+  );
+  const grossMarginPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
   const visibleSalesBranchNames = selectedBranch === 'all'
     ? salesBranchNames
@@ -798,7 +799,7 @@ ${clone.outerHTML}
             <KCard label="Total Purchases" value={formatCurrency(totalPurchases)} sub={`${selectedYear}`} accent={C.amber} Icon={ShoppingCart} />
             <KCard label="Purchase / Revenue Ratio" value={totalRevenue > 0 ? `${((totalPurchases / totalRevenue) * 100).toFixed(1)}%` : '—'} sub="Cost of goods as % of sales" accent={C.orange} Icon={BarChart3}
               badge={{ text: totalRevenue > 0 && (totalPurchases / totalRevenue) < 0.7 ? 'Healthy' : 'High cost', good: totalRevenue > 0 && (totalPurchases / totalRevenue) < 0.7 }} />
-            <KCard label="Branches Purchasing" value={String(purchaseBranches.length)} sub="Active purchasing branches" accent={C.cyan} Icon={Package} />
+            <KCard label="Branches Purchasing" value={String(filteredPurchBranches.length)} sub="Active purchasing branches" accent={C.cyan} Icon={Package} />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
