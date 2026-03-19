@@ -32,7 +32,7 @@ const menuGroups = [
     items: [
       { id: '', label: 'Dashboard', icon: LayoutDashboard, permission: 'view-dashboard' },
       { id: 'team', label: 'My Team', icon: Users, permission: 'view-team' },
-      { id: 'alerts', label: 'Smart Alerts', icon: Bell, permission: 'receive-notifications', badge: 3 },
+      { id: 'alerts', label: 'Smart Alerts', icon: Bell, permission: 'receive-notifications'},
     ],
   },
   {

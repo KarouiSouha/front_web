@@ -1,17 +1,11 @@
-// ═══════════════════════════════════════════════════════════════════
-// ReportsPage.tsx — Updated to use redesigned AgingReport
-// Replace the inline AgingReport with the imported one
-// ═══════════════════════════════════════════════════════════════════
-
 import { useState } from 'react';
-import { BarChart3, FileText } from 'lucide-react';
-import { AgingReport } from './AgingReport';         // ← new file
+import { BarChart3, FileText, Target, Clock, BarChart2, DollarSign, Package, Globe } from 'lucide-react';
+import { AgingReport } from './AgingReport';
 import { GeneralReport } from './GeneralReport';
 import { SupplyPolicyPage } from './SupplyPolicyPage';
 import { PricingProfitabilityReport } from './PricingProfitabilityReport';
 import { InventoryTurnoverReport } from './InventoryTurnoverReport';
 
-// ─── Design tokens (same as AgingReport) ─────────────────────────
 const C = { indigo: '#4f46e5', emerald: '#059669' };
 const css = {
   card: 'hsl(var(--card))', border: 'hsl(var(--border))',
@@ -25,13 +19,22 @@ const card: React.CSSProperties = {
   border: `1px solid ${css.border}`,
 };
 
+const ICON_MAP: Record<string, React.ReactNode> = {
+  general:       <Target       size={22} strokeWidth={1.5} />,
+  aging:         <Clock        size={22} strokeWidth={1.5} />,
+  turnover:      <BarChart2    size={22} strokeWidth={1.5} />,
+  profitability: <DollarSign   size={22} strokeWidth={1.5} />,
+  supply:        <Package      size={22} strokeWidth={1.5} />,
+  distribution:  <Globe        size={22} strokeWidth={1.5} />,
+};
+
 const REPORT_TYPES = [
-  { id: 'general',       title: 'General Report',           desc: 'Overview of key metrics and performance indicators',                                                   icon: '🎯', live: true  },
-  { id: 'aging',         title: 'Aging Receivables',        desc: 'Receivables, top debtors, collection rate & customer balances — all branches',                        icon: '⏰', live: true  },
-  { id: 'turnover',      title: 'Inventory Turnover',       desc: 'Stock value · branches · categories · rotation & slow-moving',                                        icon: '📊', live: true  },
-  { id: 'profitability', title: 'Pricing & Profitability',  desc: 'Revenue, profit & ratio by month/branch · product & customer profitability',                          icon: '💰', live: true  },
-  { id: 'supply',        title: 'Stock Policy',             desc: 'Reorder points, lead times, optimal stock levels',                                                     icon: '📦', live: true  },
-  { id: 'distribution',  title: 'Sales Behavior',           desc: 'Patterns by channel, region, and customer segment',                                                   icon: '🌍', live: false },
+  { id: 'general',       title: 'General Report',          desc: 'Overview of key metrics and performance indicators',                                    live: true  },
+  { id: 'aging',         title: 'Aging Receivables',       desc: 'Receivables, top debtors, collection rate and customer balances — all branches',       live: true  },
+  { id: 'turnover',      title: 'Inventory Turnover',      desc: 'Stock value, branches, categories, rotation and slow-moving items',                    live: true  },
+  { id: 'profitability', title: 'Pricing & Profitability', desc: 'Revenue, profit and ratio by month/branch, product and customer profitability',        live: true  },
+  { id: 'supply',        title: 'Stock Policy',            desc: 'Reorder points, lead times, optimal stock levels',                                     live: true  },
+  { id: 'distribution',  title: 'Sales Behavior',          desc: 'Patterns by channel, region, and customer segment',                                    live: false },
 ];
 
 export function ReportsPage() {
@@ -40,31 +43,31 @@ export function ReportsPage() {
   return (
     <div style={{ background: css.bg, minHeight: '100vh', padding: '32px 28px' }}>
 
-      {/* Page header */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: css.fg, letterSpacing: '-0.03em', margin: 0 }}>Reports</h1>
         <p style={{ fontSize: 13, color: css.mutedFg, marginTop: 4 }}>Generate comprehensive analytical reports</p>
       </div>
 
-      {/* Report type cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 28 }}>
         {REPORT_TYPES.map(r => {
           const isActive = activeReport === r.id;
           return (
             <div key={r.id} style={{
               ...card,
+              position: 'relative',
               transition: 'box-shadow .15s, border-color .15s',
               borderColor: isActive ? C.indigo : css.border,
               boxShadow: isActive
                 ? `0 0 0 2px ${C.indigo}25, 0 4px 20px rgba(0,0,0,0.07)`
                 : card.boxShadow as string,
             }}>
-              {/* Top accent bar when active */}
               {isActive && (
                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: C.indigo, borderRadius: '12px 12px 0 0' }} />
               )}
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
-                <span style={{ fontSize: 26, lineHeight: 1 }}>{r.icon}</span>
+                <div style={{ color: isActive ? C.indigo : css.mutedFg, marginTop: 2, flexShrink: 0 }}>
+                  {ICON_MAP[r.id]}
+                </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                     <h3 style={{ fontSize: 13, fontWeight: 700, color: css.cardFg, margin: 0 }}>{r.title}</h3>
@@ -97,7 +100,6 @@ export function ReportsPage() {
         })}
       </div>
 
-      {/* Active report content */}
       {activeReport === 'aging'         && <AgingReport />}
       {activeReport === 'general'       && <GeneralReport />}
       {activeReport === 'supply'        && <SupplyPolicyPage />}
