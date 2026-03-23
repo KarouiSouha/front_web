@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Button } from '../components/ui/button';
 import {
-  Check, X, Mail, Calendar, User as UserIcon, Building2,
+  Check, X, Mail, Calendar, Building2,
   Loader2, RefreshCw, Ban, UserCheck, Filter,
   Globe, MapPin, Server, Briefcase, Shield, ChevronRight,
-  Users, Clock, AlertCircle, TrendingUp,
+  Users, Clock, TrendingUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
@@ -217,11 +216,11 @@ const formatDate = (d: string) =>
 type TabId = 'pending' | 'managers' | 'agents' | 'suspended' | 'all';
 
 const TABS: { id: TabId; label: string; url: string; icon: React.ReactNode }[] = [
+  { id: 'all',       label: 'All Users', url: '/users/users/',                  icon: <TrendingUp className="h-3.5 w-3.5" /> },
   { id: 'pending',   label: 'Pending',   url: '/users/users/?status=pending',   icon: <Clock className="h-3.5 w-3.5" /> },
   { id: 'managers',  label: 'Managers',  url: '/users/users/?role=manager',     icon: <Shield className="h-3.5 w-3.5" /> },
   { id: 'agents',    label: 'Agents',    url: '/users/users/?role=agent',       icon: <Users className="h-3.5 w-3.5" /> },
   { id: 'suspended', label: 'Suspended', url: '/users/users/?status=suspended', icon: <Ban className="h-3.5 w-3.5" /> },
-  { id: 'all',       label: 'All Users', url: '/users/users/',                  icon: <TrendingUp className="h-3.5 w-3.5" /> },
 ];
 
 // ---------------------------------------------------------------------------
@@ -448,7 +447,7 @@ function UserCard({ user, onApprove, onReject, onSuspend, onReactivate, isActing
 // ---------------------------------------------------------------------------
 
 export function AdminVerificationPage() {
-  const [activeTab, setActiveTab]         = useState<TabId>('pending');
+  const [activeTab, setActiveTab]         = useState<TabId>('all');
   const [users, setUsers]                 = useState<ManagerUser[]>([]);
   const [isLoading, setIsLoading]         = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);

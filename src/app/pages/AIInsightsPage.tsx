@@ -1,20 +1,7 @@
-/**
- * src/app/pages/AIInsightsPage.tsx
- * ──────────────────────────────────
- * Intelligent Analysis Sprint — All 8 SCRUM tickets wired to real backend.
- *
- * SCRUM-24  KPI Analyzer          → GET /ai-insights/kpis/
- * SCRUM-25  Anomaly Detector      → GET /ai-insights/anomalies/
- * SCRUM-26  Seasonal Analyzer     → GET /ai-insights/seasonal/
- * SCRUM-27  Churn Prediction      → GET /ai-insights/churn/
- * SCRUM-28  Stock Optimizer       → GET /ai-insights/stock/
- * SCRUM-30  Revenue Predictor     → GET /ai-insights/predict/
- * SCRUM-35  Critical Detector     → GET /ai-insights/critical/
- */
 
 import {
   Sparkles, TrendingUp, AlertTriangle, Package, Users, Zap,
-  Activity, BarChart3, ShieldAlert, Brain, ArrowUpRight,
+  BarChart3, ShieldAlert, Brain, ArrowUpRight,
   ArrowDownRight, Minus, RefreshCw, Clock, ChevronDown,
   ChevronRight, Target, AlertCircle, TrendingDown, CheckCircle2,
   XCircle, Flame, Calendar, DollarSign,
@@ -23,10 +10,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge }    from '../components/ui/badge';
 import { Button }   from '../components/ui/button';
-import { Progress } from '../components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
-  LineChart, Line, BarChart, Bar, AreaChart, Area,
+  BarChart, Bar, AreaChart, Area,
   ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine,
 } from 'recharts';

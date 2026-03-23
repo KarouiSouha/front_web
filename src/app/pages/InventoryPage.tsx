@@ -1,7 +1,7 @@
 // src/app/pages/InventoryPage.tsx
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Package, AlertTriangle, TrendingUp, RefreshCw, Loader2, ChevronDown, ArrowUpRight } from 'lucide-react';
+import { Package, AlertTriangle, RefreshCw, Loader2, ChevronDown, ArrowUpRight } from 'lucide-react';
 import { DataTable } from '../components/DataTable';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -232,11 +232,9 @@ export function InventoryPage() {
   // ✅ Tous les KPI viennent de totalsData (appel dédié, pas affecté par la pagination)
   const totalQty           = toNum(totalsData?.totals?.grand_total_qty);
   const totalValue         = toNum(totalsData?.totals?.grand_total_value);
-  const uniqueProductCount = totalsData?.totals?.distinct_products  ?? 0;
   const outOfStockCount    = totalsData?.totals?.out_of_stock_count ?? 0;
   const criticalCount      = totalsData?.totals?.critical_count     ?? 0;
   const lowCount           = totalsData?.totals?.low_count          ?? 0;
-  const totalLinesCount    = totalsData?.count ?? 0;
 
   const categoryPieData = categories.slice(0, 8).map((c, i) => ({
     name: c.category || 'Uncategorized', value: toNum(c.total_value), qty: toNum(c.total_qty), fill: CATEGORY_COLORS[i % CATEGORY_COLORS.length],

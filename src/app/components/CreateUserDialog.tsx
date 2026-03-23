@@ -10,8 +10,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from './ui/dialog';
-import { AVAILABLE_PERMISSIONS, DEFAULT_AGENT_PERMISSIONS, useAuth } from '../contexts/AuthContext';
+import { AVAILABLE_PERMISSIONS, useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
+
+const REQUIRED_PERMISSION = 'view-dashboard';
+
+const ensureRequiredPermission = (permissions: string[]) => {
+  if (permissions.includes(REQUIRED_PERMISSION)) return permissions;
+  return [...permissions, REQUIRED_PERMISSION];
+};
 
 interface UserAccount {
   name: string;
@@ -36,7 +43,7 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
     email: '',
     tempPassword: '',
   });
-  const [selectedPermissions, setSelectedPermissions] = useState<string[]>(DEFAULT_AGENT_PERMISSIONS);
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,12 +64,11 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
         name: formData.name,
         email: formData.email,
         role: 'agent',
-        permissions: selectedPermissions,
+        permissions: ensureRequiredPermission(selectedPermissions),
         tempPassword: formData.tempPassword || undefined,
       });
       // Only reset + close on success
       setFormData({ name: '', email: '', tempPassword: '' });
-      setSelectedPermissions(DEFAULT_AGENT_PERMISSIONS);
       onClose();
     } catch (err: any) {
       const data = err?.data ?? {};
@@ -79,8 +85,11 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
   };
 
   const togglePermission = (permissionId: string) => {
+    if (permissionId === REQUIRED_PERMISSION) return;
     setSelectedPermissions(prev =>
-      prev.includes(permissionId) ? prev.filter(p => p !== permissionId) : [...prev, permissionId]
+      prev.includes(permissionId)
+        ? prev.filter(p => p !== permissionId)
+        : ensureRequiredPermission([...prev, permissionId])
     );
   };
 
@@ -88,7 +97,9 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
     const ids = AVAILABLE_PERMISSIONS.filter(p => p.category === category).map(p => p.id);
     const allSelected = ids.every(p => selectedPermissions.includes(p));
     setSelectedPermissions(prev =>
-      allSelected ? prev.filter(p => !ids.includes(p)) : [...new Set([...prev, ...ids])]
+      allSelected
+        ? ensureRequiredPermission(prev.filter(p => !ids.includes(p)))
+        : ensureRequiredPermission([...new Set([...prev, ...ids])])
     );
   };
 
@@ -172,13 +183,10 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
           <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
             <span className="text-sm font-medium">Quick selection:</span>
             <div className="flex gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPermissions(DEFAULT_AGENT_PERMISSIONS)}>
-                Default agent
-              </Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPermissions(AVAILABLE_PERMISSIONS.map(p => p.id))}>
+              <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPermissions(ensureRequiredPermission(AVAILABLE_PERMISSIONS.map(p => p.id)))}>
                 Select all
               </Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPermissions([])}>
+              <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPermissions([REQUIRED_PERMISSION])}>
                 Clear all
               </Button>
             </div>
@@ -218,6 +226,7 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
                           type="checkbox"
                           checked={selectedPermissions.includes(permission.id)}
                           onChange={() => togglePermission(permission.id)}
+                          disabled={permission.id === REQUIRED_PERMISSION}
                           className="h-4 w-4 rounded border-gray-300"
                         />
                       </div>

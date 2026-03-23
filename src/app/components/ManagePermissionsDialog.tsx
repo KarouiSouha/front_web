@@ -9,9 +9,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from './ui/dialog';
-import { User as UserAccount, AVAILABLE_PERMISSIONS, DEFAULT_AGENT_PERMISSIONS } from '../contexts/AuthContext';
+import { User as UserAccount, AVAILABLE_PERMISSIONS } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
+
+const REQUIRED_PERMISSION = 'view-dashboard';
+
+const ensureRequiredPermission = (permissions: string[]) => {
+  if (permissions.includes(REQUIRED_PERMISSION)) return permissions;
+  return [...permissions, REQUIRED_PERMISSION];
+};
 
 interface ManagePermissionsDialogProps {
   open: boolean;
@@ -40,9 +47,9 @@ export function ManagePermissionsDialog({
         agents: Array<{ id: string; permissions_list?: string[] }>;
       }>('/users/agents/');
       const found = res.agents.find(a => a.id === user.id);
-      setSelectedPermissions(found?.permissions_list ?? []);
+      setSelectedPermissions(ensureRequiredPermission(found?.permissions_list ?? []));
     } catch {
-      setSelectedPermissions(user.permissions ?? []);
+      setSelectedPermissions(ensureRequiredPermission(user.permissions ?? []));
       toast.error('Unable to load current permissions');
     } finally {
       setLoadingUser(false);
@@ -50,10 +57,11 @@ export function ManagePermissionsDialog({
   };
 
   const togglePermission = (permissionId: string) => {
+    if (permissionId === REQUIRED_PERMISSION) return;
     setSelectedPermissions(prev =>
       prev.includes(permissionId)
         ? prev.filter(p => p !== permissionId)
-        : [...prev, permissionId]
+        : ensureRequiredPermission([...prev, permissionId])
     );
   };
 
@@ -61,7 +69,9 @@ export function ManagePermissionsDialog({
     const ids = AVAILABLE_PERMISSIONS.filter(p => p.category === category).map(p => p.id);
     const allSelected = ids.every(p => selectedPermissions.includes(p));
     setSelectedPermissions(prev =>
-      allSelected ? prev.filter(p => !ids.includes(p)) : [...new Set([...prev, ...ids])]
+      allSelected
+        ? ensureRequiredPermission(prev.filter(p => !ids.includes(p)))
+        : ensureRequiredPermission([...new Set([...prev, ...ids])])
     );
   };
 
@@ -207,17 +217,12 @@ export function ManagePermissionsDialog({
 
                   <div className="flex gap-2">
                     <Button type="button" size="sm" variant="outline"
-                      onClick={() => setSelectedPermissions(DEFAULT_AGENT_PERMISSIONS)}
-                      disabled={loadingUser}>
-                      Default agent
-                    </Button>
-                    <Button type="button" size="sm" variant="outline"
-                      onClick={() => setSelectedPermissions(AVAILABLE_PERMISSIONS.map(p => p.id))}
+                      onClick={() => setSelectedPermissions(ensureRequiredPermission(AVAILABLE_PERMISSIONS.map(p => p.id)))}
                       disabled={loadingUser}>
                       Select all
                     </Button>
                     <Button type="button" size="sm" variant="outline"
-                      onClick={() => setSelectedPermissions([])}
+                      onClick={() => setSelectedPermissions([REQUIRED_PERMISSION])}
                       disabled={loadingUser}>
                       Clear all
                     </Button>
@@ -255,6 +260,7 @@ export function ManagePermissionsDialog({
                                   type="checkbox"
                                   checked={selectedPermissions.includes(permission.id)}
                                   onChange={() => togglePermission(permission.id)}
+                                  disabled={permission.id === REQUIRED_PERMISSION}
                                   className="h-4 w-4 rounded border-gray-300"
                                 />
                               </div>

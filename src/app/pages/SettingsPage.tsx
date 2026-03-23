@@ -1,9 +1,5 @@
 import { useState, useEffect } from 'react';
 import { User, Building, Bell, Shield, Loader2, Eye, EyeOff, Check, ChevronRight } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Label } from '../components/ui/label';
-import { Input } from '../components/ui/input';
-import { Button } from '../components/ui/button';
 import { Switch } from '../components/ui/switch';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
@@ -227,6 +223,16 @@ export function SettingsPage() {
   const { user, logout, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('profile');
+  const isAdmin = (user?.role ?? '').toLowerCase().includes('admin');
+  const visibleNav = isAdmin
+    ? NAV.filter(item => item.id !== 'company' && item.id !== 'notifications')
+    : NAV;
+
+  useEffect(() => {
+    if (isAdmin && (tab === 'company' || tab === 'notifications')) {
+      setTab('profile');
+    }
+  }, [isAdmin, tab]);
 
   // ── Profile ──────────────────────────────────────────────────────────────
   const [profileForm, setProfileForm] = useState({ first_name: '', last_name: '', phone_number: '' });
@@ -295,7 +301,7 @@ export function SettingsPage() {
       <div className="settings-layout">
         {/* Sidebar */}
         <nav className="settings-nav">
-          {NAV.map(n => (
+          {visibleNav.map(n => (
             <button key={n.id} className={`nav-item${tab === n.id ? ' active' : ''}`} onClick={() => setTab(n.id)}>
               <span className="icon">{n.icon}</span>
               {n.label}
@@ -351,24 +357,33 @@ export function SettingsPage() {
           )}
 
           {/* ── COMPANY ── */}
-          {tab === 'company' && (
+          {!isAdmin && tab === 'company' && (
             <SCard icon={<Building size={16} />} title="Company information" desc="Details of your organization">
               <div className="info-row">
                 <label>Company name</label>
                 <div className="info-badge">{user?.companyName || 'Not assigned'}</div>
               </div>
               <div className="info-row">
-                <label>Branch</label>
-                <div className="info-badge">{user?.branchName || 'Not assigned'}</div>
+                <label>Industry</label>
+                <div className="info-badge">{user?.companyIndustry || 'Not provided'}</div>
               </div>
-              <p style={{ fontSize: '.78rem', color: 'var(--muted-foreground)', margin: 0 }}>
-                Company information is managed by your administrator.
-              </p>
+              <div className="info-row">
+                <label>Country</label>
+                <div className="info-badge">{user?.companyCountry || 'Not provided'}</div>
+              </div>
+              <div className="info-row">
+                <label>City</label>
+                <div className="info-badge">{user?.companyCity || 'Not provided'}</div>
+              </div>
+              <div className="info-row">
+                <label>Current ERP</label>
+                <div className="info-badge">{user?.companyCurrentErp || 'Not provided'}</div>
+              </div>
             </SCard>
           )}
 
           {/* ── NOTIFICATIONS ── */}
-          {tab === 'notifications' && (
+          {!isAdmin && tab === 'notifications' && (
             <SCard icon={<Bell size={16} />} title="Notification preferences" desc="Choose which alerts you receive">
               <div>
                 {[

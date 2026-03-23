@@ -25,6 +25,13 @@ export interface BackendUser {
   branch_name: string | null;
   company: string | null;
   company_name: string | null;
+  company_industry?: string | null;
+  company_country?: string | null;
+  company_city?: string | null;
+  company_current_erp?: string | null;
+  company_phone?: string | null;
+  company_address?: string | null;
+  company_is_active?: boolean | null;
   must_change_password: boolean;
   is_verified: boolean;
   created_at: string;
@@ -100,6 +107,9 @@ export interface Company {
   id: string;
   name: string;
   industry: string | null;
+  country: string | null;
+  city: string | null;
+  current_erp: string | null;
   phone: string | null;
   address: string | null;
   is_active: boolean;

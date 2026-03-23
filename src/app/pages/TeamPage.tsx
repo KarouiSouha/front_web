@@ -2,9 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Users, UserPlus, Shield, Trash2, Loader2,
   Mail, Building2, RefreshCw, AlertTriangle, Search,
-  ArrowUpRight,
 } from 'lucide-react';
-import { Button } from '../components/ui/button';
 import { CreateUserDialog } from '../components/CreateUserDialog';
 import { ManagePermissionsDialog } from '../components/ManagePermissionsDialog';
 import { useAuth } from '../contexts/AuthContext';

@@ -1,5 +1,3 @@
-// src/app/pages/DataImportPage.tsx
-// Design unified with DashboardPage — zero functional changes
 
 import { useState } from 'react';
 import {

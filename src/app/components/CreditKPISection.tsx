@@ -1,13 +1,11 @@
 // src/app/components/CreditKPISection.tsx
-// Design unified with DashboardPage — zero functional changes
-
 import { useState, useEffect, useCallback } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Users, TrendingDown, AlertCircle, Clock,
   RefreshCw, Loader2, ShieldAlert, CreditCard,
   BarChart3, TrendingUp, ArrowUpRight, ArrowDownRight,
-  DollarSign, Wallet, Receipt, AlertTriangle, UserCheck,
+  DollarSign, Receipt, AlertTriangle, UserCheck,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,

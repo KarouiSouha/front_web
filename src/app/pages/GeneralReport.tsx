@@ -1,9 +1,3 @@
-// src/app/pages/PricingMarginsReport.tsx
-// ═══════════════════════════════════════════════════════════════════════════════
-// General Report
-// Sections: Sales · Profit · Pricing/Profitability · Purchases · Top Products
-//           Customers · Supplier/Purchase Analysis
-// ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';

@@ -14,6 +14,7 @@ export interface Permission {
 export const AVAILABLE_PERMISSIONS: Permission[] = [
   { id: 'import-data',            label: 'Import Data',             description: 'Import Excel files into the database',        category: 'data' },
   { id: 'view-dashboard',         label: 'View Dashboard',          description: 'Access main dashboard with KPIs',             category: 'analytics' },
+  { id: 'view-team',              label: 'View Team',               description: 'Access the My Team page',                     category: 'system' },
   { id: 'view-reports',           label: 'View Reports',            description: 'Access and view all reports',                 category: 'analytics' },
   { id: 'view-kpi',               label: 'View KPIs',               description: 'Access KPI Engine and metrics',               category: 'analytics' },
   { id: 'view-sales',             label: 'View Sales',              description: 'Access sales and purchases data',             category: 'sales' },
@@ -22,13 +23,6 @@ export const AVAILABLE_PERMISSIONS: Permission[] = [
   { id: 'receive-notifications',  label: 'Receive Notifications',   description: 'Get notified about important events',         category: 'system' },
   { id: 'view-profile',           label: 'View Profile',            description: 'Access personal profile',                    category: 'system' },
   { id: 'ai-insights',            label: 'AI Insights',             description: 'Access AI-powered insights and chat',         category: 'analytics' },
-];
-
-export const DEFAULT_AGENT_PERMISSIONS: string[] = [
-  'import-data', 'view-dashboard', 'view-reports',
-  'view-kpi', 'view-sales', 'view-inventory',
-  'receive-notifications',
-  'view-profile',
 ];
 
 export const DEFAULT_MANAGER_PERMISSIONS: string[] = AVAILABLE_PERMISSIONS.map(p => p.id);
@@ -46,6 +40,13 @@ export interface User {
   branchName?: string | null;
   companyId?: string | null;
   companyName?: string | null;
+  companyIndustry?: string | null;
+  companyCountry?: string | null;
+  companyCity?: string | null;
+  companyCurrentErp?: string | null;
+  companyPhone?: string | null;
+  companyAddress?: string | null;
+  companyIsActive?: boolean | null;
 }
 
 function mapBackendUser(backendUser: BackendUser): User {
@@ -62,6 +63,13 @@ function mapBackendUser(backendUser: BackendUser): User {
     branchName: backendUser.branch_name,
     companyId: backendUser.company,
     companyName: backendUser.company_name,
+    companyIndustry: backendUser.company_industry,
+    companyCountry: backendUser.company_country,
+    companyCity: backendUser.company_city,
+    companyCurrentErp: backendUser.company_current_erp,
+    companyPhone: backendUser.company_phone,
+    companyAddress: backendUser.company_address,
+    companyIsActive: backendUser.company_is_active,
   };
 }
 
@@ -206,7 +214,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         last_name,
         phone_number:     userData.phone       ?? '',
         company_name:     userData.companyName.trim(),
-        // ✅ NEW fields forwarded to backend
         industry:         userData.industry    ?? '',
         country:          userData.country     ?? '',
         city:             userData.city        ?? '',

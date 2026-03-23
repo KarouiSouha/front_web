@@ -1,7 +1,3 @@
-// src/app/pages/SupplyPolicyPage.tsx
-// ═══════════════════════════════════════════════════════════════
-// Supply Policy Report  —  v6 (print matches display)
-// ═══════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';

@@ -14,9 +14,8 @@
  */
 
 import {
-  Sparkles, Send, Trash2, ChevronRight, AlertTriangle,
-  TrendingUp, Package, Users, DollarSign, BarChart3,
-  ThumbsUp, ThumbsDown, Copy, Download, Brain, Zap,
+  Sparkles, Send, ChevronRight,
+  ThumbsUp, ThumbsDown, Download, Brain,
   CheckCircle, Clock, User, RefreshCw,
 } from 'lucide-react';
 import {

@@ -1,9 +1,3 @@
-// src/app/pages/PricingProfitabilityReport.tsx
-// ═══════════════════════════════════════════════════════════════════════════════
-// PRICING & PROFITABILITY REPORT
-// Sections: Sales Quantity · Total Revenue · Profit · Profit Ratio (by month, branch)
-//           Product Profitability · Customer Profitability · Branch Analysis
-// ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';

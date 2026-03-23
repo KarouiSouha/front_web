@@ -1,14 +1,3 @@
-// src/app/pages/InventoryTurnoverReport.tsx
-// ═══════════════════════════════════════════════════════════════════════════════
-// INVENTORY TURNOVER REPORT
-// Sections:
-//   1. Inventory Quantity   (كمية المخزن)
-//   2. Inventory Value      (قيمة المخزن)
-//   3. Value per Branch     (قيمة مخزون لكل فرع)
-//   4. Value by Index/Category  (قيمة المخزون بالفهرس)
-//   5. Index Value / Ratio  (قيمة / نسبة الفهارس في مخزون)
-//   6. Rotation & Slow-Moving  (عام وبكل فرع)
-// ═══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';

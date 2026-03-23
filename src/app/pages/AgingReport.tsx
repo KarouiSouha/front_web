@@ -1,10 +1,4 @@
-// ═══════════════════════════════════════════════════════════════════
-// AgingReport.tsx — SINGLE PAGE REPORT · PRINT-READY
-// Cover page + all sections on one scroll · no tabs
-// Partie A: Synthèse générale · Partie B: Analyse agences
-// Partie C: Débiteurs & risques · Partie D: Taux de recouvrement
-// ═══════════════════════════════════════════════════════════════════
-
+// src/app/pages/AgingReport.tsx
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import {
