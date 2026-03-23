@@ -106,6 +106,8 @@ export interface KPIResult {
 
 export interface Anomaly {
   stream:               string;
+  product_code?:        string;
+  product_name?:        string;
   date:                 string;
   observed_value:       number;
   expected_value:       number;

@@ -5,6 +5,7 @@ import { GeneralReport } from './GeneralReport';
 import { SupplyPolicyPage } from './SupplyPolicyPage';
 import { PricingProfitabilityReport } from './PricingProfitabilityReport';
 import { InventoryTurnoverReport } from './InventoryTurnoverReport';
+import { SalesBehaviorReport } from './SalesBehaviorReport';
 
 const C = { indigo: '#4f46e5', emerald: '#059669' };
 const css = {
@@ -34,7 +35,7 @@ const REPORT_TYPES = [
   { id: 'turnover',      title: 'Inventory Turnover',      desc: 'Stock value, branches, categories, rotation and slow-moving items',                    live: true  },
   { id: 'profitability', title: 'Pricing & Profitability', desc: 'Revenue, profit and ratio by month/branch, product and customer profitability',        live: true  },
   { id: 'supply',        title: 'Stock Policy',            desc: 'Reorder points, lead times, optimal stock levels',                                     live: true  },
-  { id: 'distribution',  title: 'Sales Behavior',          desc: 'Patterns by channel, region, and customer segment',                                    live: false },
+  { id: 'distribution',  title: 'Sales Behavior',          desc: 'AI-generated patterns by channel, region, and customer segment',                       live: true  },
 ];
 
 export function ReportsPage() {
@@ -105,6 +106,7 @@ export function ReportsPage() {
       {activeReport === 'supply'        && <SupplyPolicyPage />}
       {activeReport === 'profitability' && <PricingProfitabilityReport />}
       {activeReport === 'turnover'      && <InventoryTurnoverReport />}
+      {activeReport === 'distribution'  && <SalesBehaviorReport />}
 
       {!activeReport && (
         <div style={{ ...card, background: `${css.muted}60`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, padding: 56, borderStyle: 'dashed' }}>
@@ -113,7 +115,7 @@ export function ReportsPage() {
             Select a report above and click <strong>Generate</strong>
           </p>
           <p style={{ fontSize: 12, color: css.mutedFg, margin: 0, opacity: .7 }}>
-            General Report, Aging Receivables, Pricing &amp; Profitability, Inventory Turnover, Stock Policy available
+            General Report, Aging Receivables, Pricing &amp; Profitability, Inventory Turnover, Stock Policy, Sales Behavior available
           </p>
         </div>
       )}

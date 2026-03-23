@@ -8,8 +8,8 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Badge }    from '../components/ui/badge';
-import { Button }   from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
   BarChart, Bar, AreaChart, Area,
@@ -453,17 +453,8 @@ function KPISection() {
 function KPIContent({ data }: { data: KPIResult }) {
   const healthColor = data.health_score >= 80 ? 'text-emerald-600'
     : data.health_score >= 60 ? 'text-amber-600' : 'text-red-600';
-  const healthBg = data.health_score >= 80 ? 'bg-emerald-500'
-    : data.health_score >= 60 ? 'bg-amber-500' : 'bg-red-500';
 
   const kpiEntries = Object.entries(data.kpis);
-
-  const chartData = kpiEntries.map(([key, v]) => ({
-    name:     resolveKpiLabel(key, v),
-    current:  v.current,
-    baseline: v.baseline,
-    status:   v.status,
-  })).slice(0, 6); // top 6 for chart readability
 
   return (
     <div className="space-y-5">
@@ -729,6 +720,9 @@ function AnomalyContent({ data }: { data: AnomalyResult }) {
 function AnomalyCard({ anomaly: a }: { anomaly: Anomaly }) {
   const [open, setOpen] = useState(false);
   const isSpike = a.direction === 'spike';
+  const isProductAnomaly = a.anomaly_type === 'product_level';
+  const productName = a.product_name || null;
+  const productCode = a.product_code || null;
   const Icon = isSpike ? ArrowUpRight : ArrowDownRight;
   const iconColor = isSpike ? 'text-emerald-600' : 'text-red-600';
   const borderMap: Record<string, string> = {
@@ -751,6 +745,21 @@ function AnomalyCard({ anomaly: a }: { anomaly: Anomaly }) {
           </Button>
         </div>
       </div>
+
+      {isProductAnomaly && (productName || productCode) && (
+        <div className="flex flex-wrap gap-2 text-xs">
+          {productName && (
+            <span className="px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+              Product: {productName}
+            </span>
+          )}
+          {productCode && (
+            <span className="px-2 py-0.5 rounded-full border border-muted-foreground/20 text-muted-foreground">
+              Code: {productCode}
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-3 text-xs">
         <span><span className="text-muted-foreground">Observed:</span> <strong>{a.observed_value.toLocaleString()}</strong></span>
@@ -833,10 +842,6 @@ function SeasonalContent({ data }: { data: SeasonalResult }) {
     si:    +(v.seasonality_index ?? 1).toFixed(3),
     label: v.label,
   }));
-
-  const barColor = (entry: any) =>
-    entry.label === 'peak'   ? '#4f46e5' :
-    entry.label === 'trough' ? '#f97316' : '#94a3b8';
 
   return (
     <div className="space-y-5">

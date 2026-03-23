@@ -377,12 +377,36 @@ interface AIChatProps {
   className?: string;
 }
 
+interface StoredConversationSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface StoredConversationMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  metadata?: {
+    decision_needed?: boolean;
+    decision_card?: DecisionCard | null;
+    suggested_followups?: string[];
+    urgency?: Urgency;
+    topic?: Topic;
+    fallback?: boolean;
+  };
+  created_at: string;
+}
+
 export function AIChat({ className = '' }: AIChatProps) {
   const [messages,     setMessages]     = useState<ChatMessage[]>([INITIAL_MESSAGE]);
   const [input,        setInput]        = useState('');
   const [sending,      setSending]      = useState(false);
   const [loadingPhrase,setLoadingPhrase]= useState(LOADING_PHRASES[0]);
   const [activeTopic,  setActiveTopic]  = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(true);
 
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLTextAreaElement>(null);
@@ -402,6 +426,65 @@ export function AIChat({ className = '' }: AIChatProps) {
     }, 2000);
     return () => clearInterval(interval);
   }, [sending]);
+
+  // Load and resume latest conversation on mount
+  useEffect(() => {
+    let mounted = true;
+
+    const loadLatestConversation = async () => {
+      try {
+        const conversationsRes = await api.get<{
+          count: number;
+          conversations: StoredConversationSummary[];
+        }>('/ai-insights/conversations/');
+
+        const latest = conversationsRes.conversations?.[0];
+        if (!latest) {
+          if (mounted) {
+            setMessages([INITIAL_MESSAGE]);
+            setConversationId(null);
+          }
+          return;
+        }
+
+        const historyRes = await api.get<{
+          count: number;
+          messages: StoredConversationMessage[];
+        }>(`/ai-insights/conversations/${latest.id}/messages/`);
+
+        const mapped = (historyRes.messages || []).map((m): ChatMessage => ({
+          id: m.id,
+          role: m.role === 'assistant' ? 'ai' : 'user',
+          content: m.content,
+          time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          decision_needed: m.metadata?.decision_needed,
+          decision_card: m.metadata?.decision_card ?? null,
+          suggested_followups: m.metadata?.suggested_followups,
+          urgency: m.metadata?.urgency,
+          topic: m.metadata?.topic,
+          fallback: m.metadata?.fallback,
+        }));
+
+        if (mounted) {
+          setConversationId(latest.id);
+          setMessages(mapped.length ? mapped : [INITIAL_MESSAGE]);
+        }
+      } catch {
+        if (mounted) {
+          setMessages([INITIAL_MESSAGE]);
+          setConversationId(null);
+        }
+      } finally {
+        if (mounted) setLoadingHistory(false);
+      }
+    };
+
+    loadLatestConversation();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const send = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -426,6 +509,7 @@ export function AIChat({ className = '' }: AIChatProps) {
 
     try {
       const res = await api.post<{
+        conversation_id?: string;
         answer:              string;
         decision_needed:     boolean;
         decision_card:       DecisionCard | null;
@@ -433,7 +517,14 @@ export function AIChat({ className = '' }: AIChatProps) {
         urgency:             Urgency;
         topic:               Topic;
         fallback:            boolean;
-      }>('/ai-insights/chat/', { messages: apiHistory });
+      }>('/ai-insights/chat/', {
+        messages: apiHistory,
+        ...(conversationId ? { conversation_id: conversationId } : {}),
+      });
+
+      if (res.conversation_id) {
+        setConversationId(res.conversation_id);
+      }
 
       const aiMsg: ChatMessage = {
         id:                  uid(),
@@ -464,7 +555,7 @@ export function AIChat({ className = '' }: AIChatProps) {
     } finally {
       setSending(false);
     }
-  }, [messages, sending]);
+  }, [messages, sending, conversationId]);
 
   const handleKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -476,21 +567,8 @@ export function AIChat({ className = '' }: AIChatProps) {
   const handleClear = () => {
     setMessages([INITIAL_MESSAGE]);
     setActiveTopic(null);
+    setConversationId(null);
     inputRef.current?.focus();
-  };
-
-  const handleExport = () => {
-    const text = messages
-      .filter(m => !m.loading)
-      .map(m => `[${m.time}] ${m.role === 'user' ? 'Manager' : 'AI Advisor'}: ${m.content}`)
-      .join('\n\n');
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url;
-    a.download = `weeg-decision-session-${new Date().toISOString().slice(0,10)}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   const topicGroup = activeTopic ? TOPIC_QUESTIONS[activeTopic] : null;
@@ -514,13 +592,6 @@ export function AIChat({ className = '' }: AIChatProps) {
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-[10px] text-indigo-200 font-medium">Connected</span>
           </div>
-          <button
-            onClick={handleExport}
-            title="Export conversation"
-            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-          >
-            <Download className="h-3.5 w-3.5 text-indigo-200" />
-          </button>
           <button
             onClick={handleClear}
             title="New conversation"
@@ -575,11 +646,17 @@ export function AIChat({ className = '' }: AIChatProps) {
 
       {/* ── Messages ── */}
       <div className="flex-1 overflow-y-auto py-3 space-y-1 scroll-smooth">
-        {messages.map(msg => (
-          msg.loading
-            ? <TypingIndicator key={msg.id} phrase={loadingPhrase} />
-            : <MessageBubble key={msg.id} message={msg} onFollowup={send} />
-        ))}
+        {loadingHistory ? (
+          <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+            Loading conversation history...
+          </div>
+        ) : (
+          messages.map(msg => (
+            msg.loading
+              ? <TypingIndicator key={msg.id} phrase={loadingPhrase} />
+              : <MessageBubble key={msg.id} message={msg} onFollowup={send} />
+          ))
+        )}
 
         {sending && <TypingIndicator phrase={loadingPhrase} />}
         <div ref={bottomRef} />
