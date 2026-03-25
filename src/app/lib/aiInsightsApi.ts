@@ -247,6 +247,7 @@ export interface ChurnResult {
 export interface StockItem {
   product_code:             string;
   product_name:             string;
+  branch_name:              string;
   abc_class:                'A' | 'B' | 'C';
   total_revenue_lyd:        number;
   revenue_pct:              number;

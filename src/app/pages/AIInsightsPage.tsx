@@ -731,7 +731,7 @@ function AnomalyCard({ anomaly: a }: { anomaly: Anomaly }) {
   };
 
   return (
-    <div className={`rounded-lg border-l-4 border border-border p-4 space-y-2 ${borderMap[a.severity] ?? ''}`}>
+    <div className={`rounded-lg border-l-4 border border-border p-4 space-y-2 cursor-pointer transition-colors hover:bg-muted/40 ${borderMap[a.severity] ?? ''}`} onClick={() => setOpen(o => !o)}>
       <div className="flex items-start gap-2 justify-between">
         <div className="flex items-center gap-2 min-w-0">
           <Icon className={`h-4 w-4 shrink-0 ${iconColor}`} />
@@ -740,9 +740,9 @@ function AnomalyCard({ anomaly: a }: { anomaly: Anomaly }) {
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <SeverityPill severity={a.severity} />
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setOpen(o => !o)}>
+          <div className="h-6 w-6 flex items-center justify-center">
             {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-          </Button>
+          </div>
         </div>
       </div>
 
@@ -1238,6 +1238,9 @@ function StockItemCard({ item }: { item: StockItem }) {
             {item.abc_class}
           </span>
           <span className="text-sm font-medium flex-1 truncate">{item.product_name}</span>
+          <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 shrink-0">
+            {item.branch_name}
+          </span>
           <div className="flex items-center gap-1.5 shrink-0">
             <span className={`text-xs font-bold px-1.5 py-0.5 rounded uppercase ${
               item.urgency === 'immediate' ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' :
