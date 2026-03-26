@@ -1,12 +1,25 @@
+/**
+ * AIInsightsPage.tsx  —  Full redesign: Phase 1-4
+ *
+ * Changes vs original:
+ *  - Phase 1: Updated StockResult / StockItem types to be fully branch-aware
+ *  - Phase 2: All calculations use per-branch stock; branch attribution fixed
+ *  - Phase 3: Branch filter added to StockSection (global vs per-branch view)
+ *  - Phase 4: AI insights labelled per branch; transfer suggestions surfaced
+ *
+ * Drop-in replacement for the original file.
+ * Requires the same imports (lucide-react, recharts, shadcn/ui, etc.).
+ */
 
 import {
   Sparkles, TrendingUp, AlertTriangle, Package, Users, Zap,
   BarChart3, ShieldAlert, Brain, ArrowUpRight,
   ArrowDownRight, Minus, RefreshCw, Clock, ChevronDown,
   ChevronRight, Target, AlertCircle, TrendingDown, CheckCircle2,
-  XCircle, Flame, Calendar, DollarSign,
+  XCircle, Flame, Calendar, DollarSign, GitMerge, Building2,
+  Layers, Filter,
 } from 'lucide-react';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -30,12 +43,60 @@ import {
 import { formatCurrency } from '../lib/utils';
 import { AIChat } from '../components/AIChat';
 
-// ── Generic async hook ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PHASE 1 — Extended types for branch-aware stock
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Extended StockItem that adds branch-level fields.
+ * Backward-compatible: all original fields retained.
+ */
+export interface BranchStockItem extends StockItem {
+  branch_id?:             string;
+  // Per-branch aggregated siblings (other branches holding same product)
+  sibling_branches?: Array<{
+    branch_name:   string;
+    current_stock: number;
+    urgency:       'immediate' | 'soon' | 'watch' | 'ok';
+  }>;
+  // AI cross-branch transfer suggestion (Phase 4)
+  transfer_suggestion?: {
+    from_branch: string;
+    qty:         number;
+    rationale:   string;
+  };
+}
+
+export interface BranchStockResult extends StockResult {
+  // All unique branches detected in this snapshot
+  branches: string[];
+  // Per-branch summary breakdown
+  branch_summaries?: Record<string, {
+    total_items:        number;
+    immediate_reorders: number;
+    soon_reorders:      number;
+    total_stock_value:  number;
+  }>;
+  // Override items with richer type
+  items: BranchStockItem[];
+  // Data quality
+  snapshot_date?:  string;
+  validation?: {
+    passed:          boolean;
+    total_qty:       number;
+    branches_found:  number;
+    warnings:        string[];
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Generic async hook
+// ─────────────────────────────────────────────────────────────────────────────
 
 function useAnalyzer<T>(fetchFn: () => Promise<T>, deps: unknown[] = []) {
-  const [data, setData]       = useState<T | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
+  const [data, setData]         = useState<T | null>(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
   const [loadedAt, setLoadedAt] = useState<Date | null>(null);
   const mounted = useRef(true);
 
@@ -62,7 +123,9 @@ function useAnalyzer<T>(fetchFn: () => Promise<T>, deps: unknown[] = []) {
   return { data, loading, error, loadedAt, reload: load };
 }
 
-// ── Shared UI atoms ───────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared UI atoms
+// ─────────────────────────────────────────────────────────────────────────────
 
 const AIBadge = () => (
   <Badge className="bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs gap-1 shrink-0">
@@ -188,7 +251,6 @@ function DeltaBadge({ delta }: { delta: number }) {
   );
 }
 
-// Tooltip style shared across recharts
 const TOOLTIP_STYLE = {
   backgroundColor: 'hsl(var(--card))',
   border:          '1px solid hsl(var(--border))',
@@ -196,9 +258,102 @@ const TOOLTIP_STYLE = {
   fontSize:        '12px',
 };
 
-// ── SECTION COMPONENTS ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PHASE 3 — Branch Selector component (reusable)
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ── 1. Critical Executive Briefing (SCRUM-35) ─────────────────────────────────
+function BranchSelector({
+  branches,
+  selected,
+  onChange,
+}: {
+  branches: string[];
+  selected: string | null;   // null = all branches
+  onChange: (branch: string | null) => void;
+}) {
+  if (branches.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="flex items-center gap-1 text-xs font-semibold text-muted-foreground shrink-0">
+        <Building2 className="h-3.5 w-3.5" />Branch:
+      </span>
+      <button
+        onClick={() => onChange(null)}
+        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+          selected === null
+            ? 'bg-indigo-600 text-white'
+            : 'bg-muted text-muted-foreground hover:bg-muted/70'
+        }`}
+      >
+        All ({branches.length})
+      </button>
+      {branches.map(b => (
+        <button
+          key={b}
+          onClick={() => onChange(b)}
+          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors max-w-[160px] truncate ${
+            selected === b
+              ? 'bg-indigo-600 text-white'
+              : 'bg-muted text-muted-foreground hover:bg-muted/70'
+          }`}
+          title={b}
+        >
+          {b}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Data Validation Banner (Phase 1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function DataValidationBanner({ validation, snapshotDate }: {
+  validation?: BranchStockResult['validation'];
+  snapshotDate?: string;
+}) {
+  if (!validation) return null;
+
+  if (!validation.passed) {
+    return (
+      <div className="flex items-start gap-2 p-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
+        <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+        <div className="text-xs space-y-1">
+          <p className="font-semibold text-red-700 dark:text-red-300">
+            Snapshot validation failed — data may be unreliable
+          </p>
+          {validation.warnings.map((w, i) => (
+            <p key={i} className="text-red-600 dark:text-red-400">· {w}</p>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300">
+        <CheckCircle2 className="h-3 w-3" />
+        Snapshot validated · {validation.branches_found} branches · {validation.total_qty.toLocaleString()} units
+      </span>
+      {snapshotDate && (
+        <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
+          Snapshot: {snapshotDate}
+        </span>
+      )}
+      {validation.warnings.length > 0 && validation.warnings.map((w, i) => (
+        <span key={i} className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+          <AlertTriangle className="h-3 w-3" />{w}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1. Critical Executive Briefing
+// ─────────────────────────────────────────────────────────────────────────────
 
 function CriticalSection() {
   const { data, loading, error, loadedAt, reload } =
@@ -232,7 +387,6 @@ function CriticalSection() {
         {error  && <ErrorState message={error} onRetry={reload} />}
         {data   && (
           <div className="space-y-4">
-            {/* Risk banner */}
             <div className={`rounded-xl border-2 ${riskBorder[data.risk_level]} p-4 bg-gradient-to-br ${riskColors[data.risk_level]}/5`}>
               <div className="flex items-start gap-3">
                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${riskColors[data.risk_level]}`}>
@@ -254,7 +408,6 @@ function CriticalSection() {
               </div>
             </div>
 
-            {/* Situation list */}
             {data.situations.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -266,7 +419,6 @@ function CriticalSection() {
               </div>
             )}
 
-            {/* Causal clusters */}
             {data.causal_clusters?.length > 0 && (
               <div className="rounded-xl border border-violet-100 dark:border-violet-900 p-4 space-y-3 bg-violet-50/30 dark:bg-violet-950/20">
                 <p className="text-xs font-semibold text-violet-700 dark:text-violet-300 uppercase tracking-wider flex items-center gap-1.5">
@@ -290,7 +442,6 @@ function CriticalSection() {
               </div>
             )}
 
-            {/* Action plan */}
             {data.grouped_actions && (
               <GroupedActionsPanel actions={data.grouped_actions} />
             )}
@@ -304,12 +455,10 @@ function CriticalSection() {
 function SituationRow({ situation: s, rank }: { situation: CriticalSituation; rank: number }) {
   const [open, setOpen] = useState(false);
   const sourceIcon: Record<string, React.ElementType> = {
-    churn:   Users, anomaly: Zap, aging: AlertTriangle,
-    stock:   Package, kpi: BarChart3,
+    churn: Users, anomaly: Zap, aging: AlertTriangle,
+    stock: Package, kpi: BarChart3,
   };
   const Icon = sourceIcon[s.source] ?? AlertCircle;
-
-  // Entity name (customer / account / product)
   const entityName = s.customer_name || s.account_name || s.product_name;
 
   return (
@@ -392,25 +541,23 @@ function GroupedActionsPanel({ actions }: { actions: CriticalDetectionResult['gr
   );
 }
 
-// ── 2. KPI Analysis (SCRUM-24) ────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. KPI Analysis
+// ─────────────────────────────────────────────────────────────────────────────
 
 const KPI_LABELS: Record<string, string> = {
-  // ── Credit (v3) ──
   dso_days:                    'DSO (days)',
   overdue_ratio:               'Overdue Ratio',
   collection_efficiency_pct:   'Collection Efficiency %',
   total_receivable_lyd:        'Total Receivable',
   overdue_lyd:                 'Overdue Amount (LYD)',
   taux_recouvrement_pct:       'Collection Rate %',
-  // ── Sales (v3) ──
   total_revenue_lyd:           'Total Revenue',
   gross_margin_pct:            'Gross Margin %',
   avg_daily_revenue_lyd:       'Avg Daily Revenue',
-  // ── Stock (v3) ──
   stock_rupture_pct:           'Out-of-Stock Rate %',
   critical_coverage_pct:       'Critical Coverage %',
   total_stock_value_lyd:       'Total Stock Value',
-  // ── Legacy v1 keys (kept for backward compat) ──
   total_transactions:          'Transactions',
   avg_order_value_lyd:         'Avg Order Value',
   active_customers:            'Active Customers',
@@ -421,7 +568,6 @@ const KPI_LABELS: Record<string, string> = {
   new_customer_pct:            'New Customer %',
 };
 
-/** Resolve label: backend `label` field > KPI_LABELS map > formatted key */
 function resolveKpiLabel(key: string, kpi: KPIValue): string {
   if ((kpi as any).label) return (kpi as any).label;
   if (KPI_LABELS[key]) return KPI_LABELS[key];
@@ -453,12 +599,10 @@ function KPISection() {
 function KPIContent({ data }: { data: KPIResult }) {
   const healthColor = data.health_score >= 80 ? 'text-emerald-600'
     : data.health_score >= 60 ? 'text-amber-600' : 'text-red-600';
-
   const kpiEntries = Object.entries(data.kpis);
 
   return (
     <div className="space-y-5">
-      {/* Health score */}
       <div className="flex items-center gap-4 p-4 rounded-xl border bg-muted/30">
         <div className="relative flex h-16 w-16 shrink-0 items-center justify-center">
           <svg className="h-16 w-16 -rotate-90" viewBox="0 0 64 64">
@@ -490,7 +634,6 @@ function KPIContent({ data }: { data: KPIResult }) {
         </div>
       </div>
 
-      {/* Top insight */}
       {data.top_insight && (
         <div className="p-3 rounded-lg border border-indigo-100 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/50">
           <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mb-0.5">Top insight</p>
@@ -498,14 +641,12 @@ function KPIContent({ data }: { data: KPIResult }) {
         </div>
       )}
 
-      {/* KPI grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {kpiEntries.map(([key, v]) => (
           <KPIRow key={key} label={resolveKpiLabel(key, v)} kpi={v} commentary={data.kpi_commentary?.[key]} />
         ))}
       </div>
 
-      {/* Recommended actions */}
       {data.recommended_actions?.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recommended Actions</p>
@@ -525,7 +666,6 @@ function KPIContent({ data }: { data: KPIResult }) {
         </div>
       )}
 
-      {/* Risk flags */}
       {data.risk_flags?.filter(f => !f.includes('No critical')).length > 0 && (
         <div className="space-y-1">
           {data.risk_flags.map((f, i) => (
@@ -536,7 +676,6 @@ function KPIContent({ data }: { data: KPIResult }) {
         </div>
       )}
 
-      {/* Extra context from KPI modules */}
       {(data as any).extra_context && (() => {
         const ctx = (data as any).extra_context;
         const sales = ctx.sales;
@@ -544,7 +683,6 @@ function KPIContent({ data }: { data: KPIResult }) {
         const stock = ctx.stock;
         return (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-            {/* Sales context */}
             {sales && (
               <div className="rounded-lg border p-3 bg-emerald-50/40 dark:bg-emerald-950/20">
                 <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 mb-2 uppercase tracking-wider">
@@ -568,7 +706,6 @@ function KPIContent({ data }: { data: KPIResult }) {
                 )}
               </div>
             )}
-            {/* Credit context */}
             {credit && (
               <div className="rounded-lg border p-3 bg-orange-50/40 dark:bg-orange-950/20">
                 <p className="text-[10px] font-bold text-orange-700 dark:text-orange-400 mb-2 uppercase tracking-wider">
@@ -595,7 +732,6 @@ function KPIContent({ data }: { data: KPIResult }) {
                 )}
               </div>
             )}
-            {/* Stock context */}
             {stock && (
               <div className="rounded-lg border p-3 bg-teal-50/40 dark:bg-teal-950/20">
                 <p className="text-[10px] font-bold text-teal-700 dark:text-teal-400 mb-2 uppercase tracking-wider">
@@ -627,7 +763,6 @@ function KPIRow({ label, kpi, commentary }: { label: string; kpi: KPIValue; comm
   };
   const badge = source ? sourceBadge[source] : null;
 
-  // Smart number formatting
   const fmt = (v: number) => {
     if (label.includes('%') || label.toLowerCase().includes('ratio') || label.toLowerCase().includes('rate')) {
       if (v > 0 && v <= 1) return `${(v * 100).toFixed(1)}%`;
@@ -666,7 +801,9 @@ function KPIRow({ label, kpi, commentary }: { label: string; kpi: KPIValue; comm
   );
 }
 
-// ── 3. Anomaly Detection (SCRUM-25) ───────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 3. Anomaly Detection
+// ─────────────────────────────────────────────────────────────────────────────
 
 function AnomalySection() {
   const { data, loading, error, loadedAt, reload } =
@@ -695,7 +832,6 @@ function AnomalyContent({ data }: { data: AnomalyResult }) {
 
   return (
     <div className="space-y-4">
-      {/* Summary pills */}
       <div className="flex flex-wrap gap-2">
         {[
           { label: 'Critical', n: data.summary.critical, color: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' },
@@ -708,8 +844,6 @@ function AnomalyContent({ data }: { data: AnomalyResult }) {
           </span>
         ))}
       </div>
-
-      {/* Anomaly cards */}
       <div className="space-y-3">
         {data.anomalies.map((a, i) => <AnomalyCard key={i} anomaly={a} />)}
       </div>
@@ -809,7 +943,9 @@ function AnomalyCard({ anomaly: a }: { anomaly: Anomaly }) {
   );
 }
 
-// ── 4. Seasonal Analysis (SCRUM-26) ───────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. Seasonal Analysis
+// ─────────────────────────────────────────────────────────────────────────────
 
 function SeasonalSection() {
   const { data, loading, error, loadedAt, reload } =
@@ -845,7 +981,6 @@ function SeasonalContent({ data }: { data: SeasonalResult }) {
 
   return (
     <div className="space-y-5">
-      {/* Current season + alert */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="px-3 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 text-sm font-medium text-indigo-700 dark:text-indigo-300">
           {data.current_season}
@@ -857,7 +992,6 @@ function SeasonalContent({ data }: { data: SeasonalResult }) {
         )}
       </div>
 
-      {/* Trend model badge */}
       {data.trend && (
         <div className="flex flex-wrap gap-3 text-xs">
           <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-muted">
@@ -873,7 +1007,6 @@ function SeasonalContent({ data }: { data: SeasonalResult }) {
         </div>
       )}
 
-      {/* Seasonality bar chart */}
       {chartData.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-muted-foreground mb-2">Monthly demand index (1.0 = average month)</p>
@@ -885,12 +1018,7 @@ function SeasonalContent({ data }: { data: SeasonalResult }) {
                 <YAxis tick={{ fontSize: 11 }} domain={[0.5, 'auto']} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [v, 'SI']} />
                 <ReferenceLine y={1} stroke="#94a3b8" strokeDasharray="4 4" />
-                <Bar dataKey="si" radius={[4, 4, 0, 0]} fill="#4f46e5"
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  label={false}
-                  // cell color per label
-                  // recharts requires cell override — we'll use a single color + reference line
-                />
+                <Bar dataKey="si" radius={[4, 4, 0, 0]} fill="#4f46e5" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -901,7 +1029,6 @@ function SeasonalContent({ data }: { data: SeasonalResult }) {
         </div>
       )}
 
-      {/* Peak / Trough */}
       <div className="grid grid-cols-2 gap-3">
         <div className="p-3 rounded-lg border bg-indigo-50/50 dark:bg-indigo-950/50">
           <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mb-1">📈 Peak months</p>
@@ -913,7 +1040,6 @@ function SeasonalContent({ data }: { data: SeasonalResult }) {
         </div>
       </div>
 
-      {/* Ramadan analysis */}
       {data.ramadan_analysis?.detected && (
         <div className="p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/30">
           <p className="text-xs font-semibold text-amber-700 dark:text-amber-300 mb-1">
@@ -926,7 +1052,6 @@ function SeasonalContent({ data }: { data: SeasonalResult }) {
         </div>
       )}
 
-      {/* AI Narrative */}
       {data.seasonal_narrative && (
         <div className="p-3 rounded-lg border bg-muted/30">
           <p className="text-xs font-semibold text-muted-foreground mb-1">AI Narrative</p>
@@ -934,7 +1059,6 @@ function SeasonalContent({ data }: { data: SeasonalResult }) {
         </div>
       )}
 
-      {/* Stock prep calendar */}
       {data.stock_preparation_calendar?.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Stock Preparation Calendar</p>
@@ -952,7 +1076,6 @@ function SeasonalContent({ data }: { data: SeasonalResult }) {
         </div>
       )}
 
-      {/* AI recommendations */}
       {data.ai_recommendations?.length > 0 && (
         <div className="space-y-1.5">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recommendations</p>
@@ -967,7 +1090,9 @@ function SeasonalContent({ data }: { data: SeasonalResult }) {
   );
 }
 
-// ── 5. Churn Prediction (SCRUM-27) ────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. Churn Prediction
+// ─────────────────────────────────────────────────────────────────────────────
 
 function ChurnSection() {
   const { data, loading, error, loadedAt, reload } =
@@ -1004,7 +1129,6 @@ function ChurnContent({ data }: { data: ChurnResult }) {
 
   return (
     <div className="space-y-5">
-      {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[
           { label: 'Critical', n: summary.critical, color: 'text-red-600' },
@@ -1019,7 +1143,6 @@ function ChurnContent({ data }: { data: ChurnResult }) {
         ))}
       </div>
 
-      {/* Distribution bar */}
       {summary.total > 0 && (
         <div>
           <div className="flex h-3 rounded-full overflow-hidden gap-0.5">
@@ -1039,7 +1162,6 @@ function ChurnContent({ data }: { data: ChurnResult }) {
         </div>
       )}
 
-      {/* Predictions list */}
       <div className="space-y-2">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Top at-risk customers
@@ -1088,7 +1210,6 @@ function ChurnCard({ prediction: p }: { prediction: ChurnPrediction }) {
       {open && (
         <div className="border-t px-4 pb-4 pt-3 space-y-3">
           <p className="text-sm text-muted-foreground">{p.ai_explanation}</p>
-
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
             {[
               { label: 'Avg Monthly Rev', value: formatCurrency(p.avg_monthly_revenue_lyd) },
@@ -1133,48 +1254,161 @@ function ChurnCard({ prediction: p }: { prediction: ChurnPrediction }) {
   );
 }
 
-// ── 6. Stock Optimizer (SCRUM-28) ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. Stock Optimizer — FULLY REDESIGNED (Phase 1-4)
+// ─────────────────────────────────────────────────────────────────────────────
 
-function StockSection() {
+/**
+ * Phase 2 fix: branch attribution helper.
+ * When `selectedBranch` is set, filter items to that branch only.
+ * When null, show all items (global view).
+ */
+function useBranchFilteredItems(
+  items: BranchStockItem[],
+  selectedBranch: string | null,
+  urgencyFilter: 'all' | 'immediate' | 'soon',
+) {
+  return useMemo(() => {
+    let filtered = selectedBranch
+      ? items.filter(i => i.branch_name === selectedBranch)
+      : items;
+
+    if (urgencyFilter !== 'all') {
+      filtered = filtered.filter(i => i.urgency === urgencyFilter);
+    }
+
+    return filtered;
+  }, [items, selectedBranch, urgencyFilter]);
+}
+
+/**
+ * Phase 3 fix: per-branch summary computed client-side from items.
+ * Used when backend doesn't provide branch_summaries.
+ */
+function useBranchSummaries(items: BranchStockItem[]) {
+  return useMemo(() => {
+    const map: Record<string, {
+      total_items: number;
+      immediate_reorders: number;
+      soon_reorders: number;
+    }> = {};
+
+    for (const item of items) {
+      const b = item.branch_name;
+      if (!map[b]) map[b] = { total_items: 0, immediate_reorders: 0, soon_reorders: 0 };
+      map[b].total_items++;
+      if (item.urgency === 'immediate') map[b].immediate_reorders++;
+      if (item.urgency === 'soon')      map[b].soon_reorders++;
+    }
+    return map;
+  }, [items]);
+}
+
+export function StockSection() {
   const { data, loading, error, loadedAt, reload } =
     useAnalyzer(() => aiInsightsApi.stock(), []);
+
+  // Cast to richer type (backward compatible)
+  const stockData = data as BranchStockResult | null;
 
   return (
     <Card>
       <CardHeader>
         <SectionHeader
-          icon={Package} iconColor="text-teal-600" title="Stock Optimization"
-          description="ABC Pareto + EOQ + ROP · 95% service level · AI recommendations for Class A"
-          loadedAt={loadedAt} loading={loading} onRefresh={reload}
+          icon={Package}
+          iconColor="text-teal-600"
+          title="Stock Optimization"
+          description="ABC Pareto + EOQ + ROP · per-branch stock · AI recommendations Class A · real & estimated sources"
+          loadedAt={loadedAt}
+          loading={loading}
+          onRefresh={reload}
         />
       </CardHeader>
       <CardContent>
         {loading && <LoadingSkeleton rows={4} />}
         {error   && <ErrorState message={error} onRetry={reload} />}
-        {data    && <StockContent data={data} />}
+        {stockData && <StockContent data={stockData} />}
       </CardContent>
     </Card>
   );
 }
 
-function StockContent({ data }: { data: StockResult }) {
+function StockContent({ data }: { data: BranchStockResult }) {
   const { summary, items } = data;
-  const [filter, setFilter] = useState<'all' | 'immediate' | 'soon'>('immediate');
 
-  const filtered = items.filter(i =>
-    filter === 'all'       ? true :
-    filter === 'immediate' ? i.urgency === 'immediate' :
-    i.urgency === 'soon'
+  // Phase 3: branch filter state
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const [urgencyFilter, setUrgencyFilter]   = useState<'all' | 'immediate' | 'soon'>('immediate');
+
+  // Phase 1: data source counts
+  const realCount     = items.filter(i => i.stock_source === 'real').length;
+  const estimateCount = items.filter(i => i.stock_source === 'estimate').length;
+
+  // Phase 2: compute branches deterministically from items
+  const branches = useMemo(
+    () => Array.from(new Set(items.map(i => i.branch_name))).sort(),
+    [items]
   );
+
+  // Phase 3: client-side branch summaries fallback
+  const branchSummaries = useBranchSummaries(items as BranchStockItem[]);
+
+  // Phase 2: filtered items (branch + urgency)
+  const filtered = useBranchFilteredItems(items as BranchStockItem[], selectedBranch, urgencyFilter);
+
+  // Counts for selected branch (or global)
+  const scopedSummary = selectedBranch && branchSummaries[selectedBranch]
+    ? branchSummaries[selectedBranch]
+    : { total_items: summary.total_items, immediate_reorders: summary.immediate_reorders, soon_reorders: summary.soon_reorders };
 
   return (
     <div className="space-y-5">
-      {/* Summary */}
+
+      {/* Phase 1: Data validation banner */}
+      <DataValidationBanner
+        validation={data.validation}
+        snapshotDate={data.snapshot_date}
+      />
+
+      {/* Phase 1: Meta pills */}
+      <div className="flex flex-wrap gap-2">
+        {data.service_level && (
+          <span className="px-2.5 py-1 rounded-full text-xs font-medium
+            bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800
+            text-indigo-700 dark:text-indigo-300">
+            Service level · {data.service_level}
+          </span>
+        )}
+        {data.analysis_window_days && (
+          <span className="px-2.5 py-1 rounded-full text-xs bg-muted text-muted-foreground">
+            Analysis window: {data.analysis_window_days}d
+          </span>
+        )}
+        {realCount > 0 && (
+          <span className="px-2.5 py-1 rounded-full text-xs font-medium
+            bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800
+            text-emerald-700 dark:text-emerald-300">
+            ✓ {realCount} SKUs from real snapshot
+          </span>
+        )}
+        {estimateCount > 0 && (
+          <span
+            className="px-2.5 py-1 rounded-full text-xs font-medium
+              bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800
+              text-amber-700 dark:text-amber-300"
+            title="Stock estimated via purchases − sales. Upload a snapshot for exact values."
+          >
+            ⚠ {estimateCount} SKUs estimated (no snapshot)
+          </span>
+        )}
+      </div>
+
+      {/* Global KPI grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[
-          { label: 'Class A',   n: summary.class_a_count,      color: 'text-indigo-600' },
-          { label: 'Class B',   n: summary.class_b_count,      color: 'text-amber-600' },
-          { label: 'Class C',   n: summary.class_c_count,      color: 'text-muted-foreground' },
+          { label: 'Class A',    n: summary.class_a_count,      color: 'text-indigo-600' },
+          { label: 'Class B',    n: summary.class_b_count,      color: 'text-amber-600' },
+          { label: 'Class C',    n: summary.class_c_count,      color: 'text-muted-foreground' },
           { label: '⚠ Reorder', n: summary.immediate_reorders, color: 'text-red-600' },
         ].map(({ label, n, color }) => (
           <div key={label} className="text-center p-3 rounded-lg border bg-muted/30">
@@ -1184,34 +1418,113 @@ function StockContent({ data }: { data: StockResult }) {
         ))}
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex gap-1.5">
-        {[
-          { key: 'immediate', label: `Immediate (${summary.immediate_reorders})`, color: 'text-red-600' },
-          { key: 'soon',      label: `Soon (${summary.soon_reorders})`,           color: 'text-amber-600' },
-          { key: 'all',       label: `All (${summary.total_items})`,              color: '' },
-        ].map(({ key, label, color }) => (
-          <button key={key}
-            onClick={() => setFilter(key as any)}
+      {/* Secondary summary */}
+      {(summary.items_at_or_below_rop > 0 || summary.total_revenue_covered_lyd > 0) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {summary.items_at_or_below_rop > 0 && (
+            <div className="p-3 rounded-lg border bg-red-50/30 dark:bg-red-950/20">
+              <p className="text-sm font-bold text-red-600">{summary.items_at_or_below_rop}</p>
+              <p className="text-xs text-muted-foreground">SKUs at or below ROP</p>
+            </div>
+          )}
+          {summary.total_revenue_covered_lyd > 0 && (
+            <div className="p-3 rounded-lg border bg-teal-50/30 dark:bg-teal-950/20">
+              <p className="text-sm font-bold text-teal-600">{formatCurrency(summary.total_revenue_covered_lyd)}</p>
+              <p className="text-xs text-muted-foreground">Revenue covered ({data.analysis_window_days ?? 90}d)</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Phase 3: BRANCH SELECTOR — critical for multi-branch */}
+      {branches.length > 1 && (
+        <div className="rounded-xl border border-indigo-100 dark:border-indigo-900 p-4 space-y-3 bg-indigo-50/30 dark:bg-indigo-950/20">
+          <div className="flex items-center gap-2">
+            <Layers className="h-4 w-4 text-indigo-600" />
+            <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">
+              Branch View — {selectedBranch ? selectedBranch : `All ${branches.length} branches`}
+            </p>
+          </div>
+          <BranchSelector
+            branches={branches}
+            selected={selectedBranch}
+            onChange={setSelectedBranch}
+          />
+
+          {/* Phase 3: per-branch breakdown table */}
+          {selectedBranch === null && (
+            <div className="overflow-x-auto mt-2">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-1.5 pr-3 font-semibold text-muted-foreground">Branch</th>
+                    <th className="text-right py-1.5 pr-3 font-semibold text-muted-foreground">SKUs</th>
+                    <th className="text-right py-1.5 pr-3 font-semibold text-red-600">Immediate</th>
+                    <th className="text-right py-1.5 font-semibold text-amber-600">Soon</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {branches.map(b => {
+                    const s = branchSummaries[b];
+                    return (
+                      <tr key={b}
+                        className="border-b last:border-0 hover:bg-muted/40 transition-colors cursor-pointer"
+                        onClick={() => setSelectedBranch(b)}
+                      >
+                        <td className="py-1.5 pr-3 font-medium flex items-center gap-1.5">
+                          <Building2 className="h-3 w-3 text-muted-foreground" />
+                          {b}
+                        </td>
+                        <td className="py-1.5 pr-3 text-right">{s.total_items}</td>
+                        <td className="py-1.5 pr-3 text-right text-red-600 font-semibold">{s.immediate_reorders || '—'}</td>
+                        <td className="py-1.5 text-right text-amber-600 font-semibold">{s.soon_reorders || '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Urgency filter tabs */}
+      <div className="flex gap-1.5 flex-wrap">
+        <span className="flex items-center text-xs text-muted-foreground mr-1">
+          <Filter className="h-3 w-3 mr-1" />Urgency:
+        </span>
+        {([
+          { key: 'immediate', label: `Immediate (${scopedSummary.immediate_reorders})` },
+          { key: 'soon',      label: `Soon (${scopedSummary.soon_reorders})` },
+          { key: 'all',       label: `All (${scopedSummary.total_items})` },
+        ] as const).map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setUrgencyFilter(key)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              filter === key
+              urgencyFilter === key
                 ? 'bg-indigo-600 text-white'
                 : 'bg-muted text-muted-foreground hover:bg-muted/70'
-            } ${color}`}
+            }`}
           >
             {label}
           </button>
         ))}
       </div>
 
-      {/* Items */}
+      {/* Item list */}
       {filtered.length === 0
         ? <EmptyState text="No items match this filter." />
         : (
           <div className="space-y-2">
-            {filtered.slice(0, 15).map((item, i) => (
-              <StockItemCard key={i} item={item} />
+            {filtered.slice(0, 20).map((item, i) => (
+              <StockItemCard key={`${item.product_code}-${item.branch_name}-${i}`} item={item} />
             ))}
+            {filtered.length > 20 && (
+              <p className="text-center text-xs text-muted-foreground py-2">
+                Showing 20 of {filtered.length} items · use branch filter to narrow down
+              </p>
+            )}
           </div>
         )
       }
@@ -1219,8 +1532,9 @@ function StockContent({ data }: { data: StockResult }) {
   );
 }
 
-function StockItemCard({ item }: { item: StockItem }) {
+function StockItemCard({ item }: { item: BranchStockItem }) {
   const [open, setOpen] = useState(false);
+
   const urgencyColor = {
     immediate: 'border-l-red-500 bg-red-50/30 dark:bg-red-950/20',
     soon:      'border-l-amber-500 bg-amber-50/30 dark:bg-amber-950/20',
@@ -1228,30 +1542,71 @@ function StockItemCard({ item }: { item: StockItem }) {
     ok:        '',
   }[item.urgency] ?? '';
 
-  const classBg = { A: 'bg-indigo-600', B: 'bg-amber-500', C: 'bg-gray-400' };
+  const classBg: Record<string, string> = {
+    A: 'bg-indigo-600',
+    B: 'bg-amber-500',
+    C: 'bg-gray-400',
+  };
+
+  // Phase 1: estimate vs real
+  const isEstimate     = item.stock_source === 'estimate';
+  // Phase 2 / seasonal
+  const hasSeasonBoost = (item.season_multiplier ?? 1) > 1 && item.safety_stock_raw != null;
 
   return (
     <div className={`rounded-lg border-l-4 border border-border p-3 ${urgencyColor}`}>
+
+      {/* Header row */}
       <button className="w-full text-left" onClick={() => setOpen(o => !o)}>
-        <div className="flex items-center gap-2">
-          <span className={`h-5 w-5 rounded-full text-[10px] font-bold text-white flex items-center justify-center shrink-0 ${classBg[item.abc_class] ?? 'bg-gray-400'}`}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`h-5 w-5 rounded-full text-[10px] font-bold text-white
+            flex items-center justify-center shrink-0 ${classBg[item.abc_class] ?? 'bg-gray-400'}`}>
             {item.abc_class}
           </span>
-          <span className="text-sm font-medium flex-1 truncate">{item.product_name}</span>
-          <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 shrink-0">
-            {item.branch_name}
+
+          <span className="text-sm font-medium flex-1 truncate min-w-0">{item.product_name}</span>
+
+          {/* Phase 1: estimation badge */}
+          {isEstimate && (
+            <span
+              className="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0
+                bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+              title="Estimated stock (purchases − sales). No real snapshot available."
+            >
+              EST.
+            </span>
+          )}
+
+          {/* Phase 3: branch badge — always visible */}
+          <span className="px-2 py-0.5 rounded text-xs font-medium shrink-0
+            bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 flex items-center gap-1">
+            <Building2 className="h-3 w-3" />{item.branch_name}
           </span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className={`text-xs font-bold px-1.5 py-0.5 rounded uppercase ${
-              item.urgency === 'immediate' ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' :
-              item.urgency === 'soon'      ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' :
-              'bg-muted text-muted-foreground'
-            }`}>{item.urgency}</span>
-            {open ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-          </div>
+
+          <span className={`text-xs font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${
+            item.urgency === 'immediate'
+              ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+              : item.urgency === 'soon'
+              ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+              : 'bg-muted text-muted-foreground'
+          }`}>
+            {item.urgency}
+          </span>
+
+          {open
+            ? <ChevronDown  className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
         </div>
-        <div className="flex gap-4 mt-1.5 text-xs text-muted-foreground">
-          <span>Stock: <strong className="text-foreground">{item.current_stock.toFixed(0)}</strong></span>
+
+        {/* Quick metrics */}
+        <div className="flex flex-wrap gap-4 mt-1.5 text-xs text-muted-foreground">
+          <span>
+            Stock:{' '}
+            <strong className={isEstimate ? 'text-amber-600' : 'text-foreground'}>
+              {item.current_stock.toFixed(0)}
+              {isEstimate && <span className="ml-0.5 opacity-70">~</span>}
+            </strong>
+          </span>
           <span>ROP: {item.reorder_point.toFixed(0)}</span>
           <span>EOQ: {item.eoq}</span>
           {item.estimated_days_to_stockout !== null && (
@@ -1262,16 +1617,107 @@ function StockItemCard({ item }: { item: StockItem }) {
         </div>
       </button>
 
+      {/* Phase 4: sibling branches strip — visible in header (collapsed) */}
+      {!open && item.sibling_branches && item.sibling_branches.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {item.sibling_branches.slice(0, 4).map((s, i) => (
+            <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${
+              s.urgency === 'ok' || s.urgency === 'watch'
+                ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                : 'bg-muted text-muted-foreground'
+            }`}>
+              <Building2 className="h-2.5 w-2.5" />
+              {s.branch_name}: {s.current_stock.toFixed(0)} u
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Expanded panel */}
       {open && (
         <div className="border-t mt-3 pt-3 space-y-3">
+
+          {/* Phase 1: estimation disclaimer */}
+          {isEstimate && (
+            <div className="flex items-start gap-2 p-2.5 rounded-lg
+              bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                <strong>Estimated</strong> stock via purchases − sales over {item.active_days}d.
+                Values may be inaccurate. Upload an inventory snapshot for exact data.
+              </p>
+            </div>
+          )}
+
+          {/* Phase 4: Cross-branch availability panel */}
+          {item.sibling_branches && item.sibling_branches.length > 0 && (
+            <div className="rounded-lg border border-indigo-100 dark:border-indigo-900 p-3 bg-indigo-50/30 dark:bg-indigo-950/20 space-y-2">
+              <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
+                <GitMerge className="h-3.5 w-3.5" />Same product in other branches
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {item.sibling_branches.map((s, i) => (
+                  <div key={i} className={`px-2.5 py-1.5 rounded-lg text-xs border flex items-center gap-1.5 ${
+                    s.urgency === 'ok' || s.urgency === 'watch'
+                      ? 'bg-emerald-50 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                      : s.urgency === 'immediate'
+                      ? 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+                      : 'bg-muted border-border text-muted-foreground'
+                  }`}>
+                    <Building2 className="h-3 w-3" />
+                    <span className="font-medium">{s.branch_name}</span>
+                    <span>· {s.current_stock.toFixed(0)} u</span>
+                    <span className="uppercase font-bold text-[9px]">({s.urgency})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Phase 4: Transfer suggestion */}
+          {item.transfer_suggestion && (
+            <div className="flex items-start gap-2 p-2.5 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950">
+              <GitMerge className="h-4 w-4 text-violet-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-violet-700 dark:text-violet-300">
+                  AI Transfer Suggestion: move {item.transfer_suggestion.qty} units from {item.transfer_suggestion.from_branch}
+                </p>
+                <p className="text-xs text-violet-600 dark:text-violet-400 mt-0.5">
+                  {item.transfer_suggestion.rationale}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Metrics grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
             {[
-              { label: 'Avg Daily Demand', value: `${item.avg_daily_demand.toFixed(2)} units/d` },
-              { label: 'Safety Stock',     value: `${item.safety_stock.toFixed(0)} units` },
-              { label: 'Revenue 90d',      value: formatCurrency(item.total_revenue_lyd) },
-              { label: 'Unit Revenue',     value: formatCurrency(item.revenue_per_unit_lyd) },
-              { label: 'Revenue Share',    value: `${item.revenue_pct.toFixed(2)}%` },
-              { label: 'Rev at Risk',      value: item.revenue_at_risk_lyd > 0 ? formatCurrency(item.revenue_at_risk_lyd) : '—' },
+              {
+                label: 'Avg Daily Demand',
+                value: `${item.avg_daily_demand.toFixed(2)} u/d`,
+              },
+              {
+                label: 'Safety Stock',
+                value: hasSeasonBoost
+                  ? `${item.safety_stock.toFixed(0)} u (×${item.season_multiplier!.toFixed(2)} season)`
+                  : `${item.safety_stock.toFixed(0)} u`,
+              },
+              {
+                label: `Revenue ${item.active_days ?? 90}d`,
+                value: formatCurrency(item.total_revenue_lyd),
+              },
+              {
+                label: 'Revenue/Unit',
+                value: formatCurrency(item.revenue_per_unit_lyd),
+              },
+              {
+                label: 'Revenue Share',
+                value: `${item.revenue_pct.toFixed(2)}% (cum. ${item.cumulative_pct.toFixed(1)}%)`,
+              },
+              {
+                label: 'Revenue at Risk',
+                value: item.revenue_at_risk_lyd > 0 ? formatCurrency(item.revenue_at_risk_lyd) : '—',
+              },
             ].map(({ label, value }) => (
               <div key={label} className="p-2 rounded bg-muted/50">
                 <p className="text-muted-foreground mb-0.5">{label}</p>
@@ -1280,20 +1726,48 @@ function StockItemCard({ item }: { item: StockItem }) {
             ))}
           </div>
 
+          {/* Seasonal safety stock breakdown */}
+          {hasSeasonBoost && (
+            <div className="flex items-start gap-2 p-2.5 rounded-lg
+              bg-indigo-50/50 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-900 text-xs">
+              <Calendar className="h-3.5 w-3.5 text-indigo-500 shrink-0 mt-0.5" />
+              <p className="text-indigo-600 dark:text-indigo-400">
+                Seasonal safety stock adjustment:{' '}
+                {item.safety_stock_raw!.toFixed(0)} u (base){' '}
+                → <strong>{item.safety_stock.toFixed(0)} u</strong>{' '}
+                (×{item.season_multiplier!.toFixed(2)} current month SI)
+              </p>
+            </div>
+          )}
+
+          {/* Phase 4: AI recommendation — now branch-scoped */}
           {item.ai_recommendation && (
             <div className="p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-950 border border-indigo-100 dark:border-indigo-900">
-              <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 mb-0.5">AI Recommendation</p>
+              <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 mb-0.5 flex items-center gap-1">
+                <Sparkles className="h-3 w-3" />
+                AI Recommendation — {item.branch_name}
+              </p>
               <p className="text-xs text-indigo-600 dark:text-indigo-400">{item.ai_recommendation}</p>
             </div>
           )}
 
+          {/* Order suggestion */}
           {item.order_suggestion?.quantity && (
             <div className="flex gap-2 p-2.5 rounded-lg border bg-muted/30 text-xs">
               <Target className="h-4 w-4 text-teal-500 shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold">Order {item.order_suggestion.quantity} units · {item.order_suggestion.timing}</p>
+                <p className="font-semibold">
+                  Order {item.order_suggestion.quantity} units · {item.order_suggestion.timing}
+                </p>
                 <p className="text-muted-foreground">{item.order_suggestion.rationale}</p>
               </div>
+            </div>
+          )}
+
+          {/* Confidence */}
+          {item.confidence && (
+            <div className="flex justify-end">
+              <ConfidencePill confidence={item.confidence} />
             </div>
           )}
         </div>
@@ -1302,7 +1776,9 @@ function StockItemCard({ item }: { item: StockItem }) {
   );
 }
 
-// ── 7. Revenue Predictor (SCRUM-30) ───────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. Revenue Predictor
+// ─────────────────────────────────────────────────────────────────────────────
 
 function PredictorSection() {
   const { data, loading, error, loadedAt, reload } =
@@ -1342,7 +1818,6 @@ function PredictorContent({ data }: { data: PredictorResult }) {
 
   return (
     <div className="space-y-5">
-      {/* Trend model */}
       <div className="flex flex-wrap gap-3 text-sm">
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted">
           {tm.direction === 'growing'   ? <TrendingUp  className="h-4 w-4 text-emerald-500" /> :
@@ -1356,19 +1831,17 @@ function PredictorContent({ data }: { data: PredictorResult }) {
         </div>
         {(data as any).model_type === 'holt_winters' && (
           <span className="px-2.5 py-1 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 text-xs font-medium"
-            title="Holt-Winters triple exponential smoothing with 1000 Monte Carlo simulations">
+            title="Holt-Winters triple exponential smoothing with Monte Carlo simulations">
             AI forecast model · {(data as any).monte_carlo_runs ?? 1000} simulations
           </span>
         )}
         <ConfidencePill confidence={data.confidence} />
       </div>
 
-      {/* Narrative */}
       {data.forecast_narrative && (
         <p className="text-sm text-muted-foreground leading-relaxed">{data.forecast_narrative}</p>
       )}
 
-      {/* Chart */}
       <div>
         <p className="text-xs font-semibold text-muted-foreground mb-2">3-Month Revenue Forecast (LYD)</p>
         <div className="h-48">
@@ -1397,7 +1870,6 @@ function PredictorContent({ data }: { data: PredictorResult }) {
         </div>
       </div>
 
-      {/* Monthly forecast table */}
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
@@ -1427,7 +1899,6 @@ function PredictorContent({ data }: { data: PredictorResult }) {
         </table>
       </div>
 
-      {/* Primary risk */}
       {data.primary_risk && (
         <div className="p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/50">
           <p className="text-xs font-semibold text-amber-700 dark:text-amber-300 mb-0.5 flex items-center gap-1">
@@ -1437,7 +1908,6 @@ function PredictorContent({ data }: { data: PredictorResult }) {
         </div>
       )}
 
-      {/* Cash flow */}
       {data.cash_flow_forecast?.monthly_projections?.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -1463,7 +1933,6 @@ function PredictorContent({ data }: { data: PredictorResult }) {
         </div>
       )}
 
-      {/* Recommendations */}
       {data.recommendations?.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Strategic Recommendations</p>
@@ -1488,7 +1957,9 @@ function PredictorContent({ data }: { data: PredictorResult }) {
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Main page
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function AIInsightsPage() {
   return (
@@ -1506,14 +1977,14 @@ export function AIInsightsPage() {
         </div>
       </div>
 
-      {/* SCRUM-35: Critical briefing always at top */}
+      {/* Critical briefing always at top */}
       <CriticalSection />
 
       {/* Tabbed modules */}
       <Tabs defaultValue="kpis" className="space-y-4">
         <div className="overflow-x-auto pb-1">
           <TabsList className="inline-flex h-10 min-w-max">
-            <TabsTrigger value="kpis"     className="gap-1.5 text-xs sm:text-sm">
+            <TabsTrigger value="kpis"      className="gap-1.5 text-xs sm:text-sm">
               <BarChart3 className="h-3.5 w-3.5" />KPIs
             </TabsTrigger>
             <TabsTrigger value="anomalies" className="gap-1.5 text-xs sm:text-sm">

@@ -250,6 +250,7 @@ export interface StockItem {
   branch_name:              string;
   abc_class:                'A' | 'B' | 'C';
   total_revenue_lyd:        number;
+  
   revenue_pct:              number;
   cumulative_pct:           number;
   current_stock:            number;
@@ -268,6 +269,12 @@ export interface StockItem {
   };
   revenue_at_risk_lyd:      number;
   confidence:               Confidence;
+  stock_source: 'real' | 'estimate';
+  safety_stock_raw?: number;       // safety stock without seasonal boost
+  season_multiplier?: number;      // current month SI multiplier applied
+  active_days: number;             // days between first/last sale used for demand calc
+  qty_sold: number;
+  transaction_count: number;
 }
 
 export interface StockResult {
