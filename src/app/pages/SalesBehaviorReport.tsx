@@ -25,6 +25,11 @@ import {
   ChevronRight, AlertTriangle, CheckCircle2, Layers,
 } from 'lucide-react';
 import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip as RTooltip, ResponsiveContainer, ReferenceLine, Cell,
+  AreaChart, Area,
+} from 'recharts';
+import {
   aiInsightsApi,
   type KPIResult, type AnomalyResult, type ChurnResult,
   type StockResult, type SeasonalResult, type PredictorResult,
@@ -279,7 +284,7 @@ function SectionChannel({ d }: { d: ReportData }) {
   );
 }
 
-// ─── Section C — Regional / Customer Segment ──────────────────────────────
+// ─── Section C — Customer Segment Behavior ───────────────────────────────────
 function SectionSegment({ d }: { d: ReportData }) {
   const churn = d.churn;
   if (!churn || !churn.predictions?.length) return <Empty text="No segment data — churn module returned no active customers" />;
@@ -287,16 +292,41 @@ function SectionSegment({ d }: { d: ReportData }) {
   const { summary, predictions } = churn;
   const critHighPreds = predictions.filter(p => p.churn_label === 'critical' || p.churn_label === 'high').slice(0, 8);
 
+  // Aggregate unique recommended actions across all critical/high customers (deduped)
+  const allActions: string[] = [];
+  const seen = new Set<string>();
+  critHighPreds.forEach(p => {
+    (p.recommended_actions ?? []).forEach(a => {
+      const key = a.slice(0, 60);
+      if (!seen.has(key)) { seen.add(key); allActions.push(a); }
+    });
+  });
+  const topActions = allActions.slice(0, 5);
+
+  // Key risk factors distribution
+  const factorMap: Record<string, number> = {};
+  critHighPreds.forEach(p => {
+    (p.key_risk_factors ?? []).forEach(f => {
+      const k = f.split(':')[0].trim();
+      factorMap[k] = (factorMap[k] ?? 0) + 1;
+    });
+  });
+  const topFactors = Object.entries(factorMap).sort((a, b) => b[1] - a[1]).slice(0, 4);
+
+  // Revenue at risk
+  const revenueAtRisk = critHighPreds.reduce((s, p) => s + (p.avg_monthly_revenue_lyd ?? 0) * 3, 0); // ~3 month exposure
+
   return (
     <div style={{ display: 'grid', gap: 14 }}>
+
       {/* Summary row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
         {[
-          { label: 'Total Tracked',  v: summary.total,    color: C.indigo },
-          { label: 'Critical Risk',  v: summary.critical, color: C.rose   },
-          { label: 'High Risk',      v: summary.high,     color: C.orange },
-          { label: 'Medium Risk',    v: summary.medium,   color: C.amber  },
-          { label: 'Avg Score',      v: `${(summary.avg_churn_score * 100).toFixed(0)}%`, color: C.violet },
+          { label: 'Total Tracked',    v: summary.total,    color: C.indigo },
+          { label: 'Critical Risk',    v: summary.critical, color: C.rose   },
+          { label: 'High Risk',        v: summary.high,     color: C.orange },
+          { label: 'Medium Risk',      v: summary.medium,   color: C.amber  },
+          { label: 'Avg Churn Score',  v: `${(summary.avg_churn_score * 100).toFixed(0)}%`, color: C.violet },
         ].map(({ label, v, color }) => (
           <div key={label} style={{ textAlign: 'center', padding: '10px', borderRadius: 10, background: `${color}08`, border: `1px solid ${color}20` }}>
             <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color }}>{v}</p>
@@ -305,25 +335,215 @@ function SectionSegment({ d }: { d: ReportData }) {
         ))}
       </div>
 
-      {/* At-risk customers */}
-      {critHighPreds.length > 0 && (
-        <div style={card}>
-          <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: css.cardFg }}>At-Risk Customers — Critical & High</p>
-          <div style={{ display: 'grid', gap: 8 }}>
-            {critHighPreds.map((p, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, border: `1px solid ${css.border}`, background: p.churn_label === 'critical' ? '#fee2e215' : '#fff7ed15' }}>
-                <SeverityDot s={p.churn_label} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: css.cardFg, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {p.customer_name || p.account_code}
-                  </p>
-                  <p style={{ margin: 0, fontSize: 10, color: css.mutedFg }}>
-                    Inactive {p.days_since_last_purchase}d · {fc(p.avg_monthly_revenue_lyd)}/mo avg
-                  </p>
+      {/* Revenue exposure banner */}
+      {revenueAtRisk > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderRadius: 10, background: '#fee2e225', border: `1px solid ${C.rose}40` }}>
+          <AlertTriangle size={15} style={{ color: C.rose, flexShrink: 0 }} />
+          <div>
+            <span style={{ fontSize: 12, fontWeight: 700, color: css.cardFg }}>Estimated 3-month revenue at risk: </span>
+            <span style={{ fontSize: 13, fontWeight: 800, color: C.rose }}>{fc(revenueAtRisk)}</span>
+            <span style={{ fontSize: 11, color: css.mutedFg, marginLeft: 8 }}>across {critHighPreds.length} critical/high accounts</span>
+          </div>
+        </div>
+      )}
+
+      {/* At-risk customers + risk factors side by side */}
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'start' }}>
+
+        {/* Customer list */}
+        {critHighPreds.length > 0 && (
+          <div style={card}>
+            <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: css.cardFg, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Users size={13} style={{ color: C.rose }} />At-Risk Customers — Critical & High
+            </p>
+            <div style={{ display: 'grid', gap: 7 }}>
+              {critHighPreds.map((p, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: `1px solid ${p.churn_label === 'critical' ? C.rose + '30' : C.orange + '30'}`, background: p.churn_label === 'critical' ? '#fee2e210' : '#fff7ed10' }}>
+                  <SeverityDot s={p.churn_label} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: css.cardFg, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.customer_name || p.account_code}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 10, color: css.mutedFg }}>
+                      Inactive {p.days_since_last_purchase}d · {fc(p.avg_monthly_revenue_lyd)}/mo avg
+                    </p>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+                    <SeverityBadge s={p.churn_label} />
+                    <span style={{ fontSize: 11, fontWeight: 800, color: p.churn_label === 'critical' ? C.rose : C.orange }}>{(p.churn_score * 100).toFixed(0)}%</span>
+                  </div>
                 </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <SeverityBadge s={p.churn_label} />
-                  <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 700, color: C.rose }}>{(p.churn_score * 100).toFixed(0)}%</p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Risk factors distribution */}
+        {topFactors.length > 0 && (
+          <div style={card}>
+            <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: css.cardFg, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <AlertTriangle size={13} style={{ color: C.orange }} />Common Risk Factors
+            </p>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {topFactors.map(([factor, count], i) => {
+                const maxCount = topFactors[0][1];
+                const w = Math.min(100, (count / maxCount) * 100);
+                return (
+                  <div key={i}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: css.cardFg }}>{factor}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: C.orange }}>{count} accounts</span>
+                    </div>
+                    <div style={{ height: 5, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', borderRadius: 999, width: `${w}%`, background: `linear-gradient(90deg,${C.orange}70,${C.orange})` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── AI Recommended Actions ── */}
+      {topActions.length > 0 && (
+        <div style={{ borderRadius: 12, border: `1px solid ${C.emerald}30`, overflow: 'hidden' }}>
+          {/* Header */}
+          <div style={{ padding: '10px 16px', background: `${C.emerald}12`, borderBottom: `1px solid ${C.emerald}25`, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Sparkles size={13} style={{ color: C.emerald }} />
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: C.emerald }}>AI Recommended Actions — Customer Retention</p>
+            <span style={{ marginLeft: 'auto', fontSize: 10, color: css.mutedFg }}>Based on churn signals from {critHighPreds.length} at-risk accounts</span>
+          </div>
+          {/* Actions list */}
+          <div style={{ padding: '12px 16px', display: 'grid', gap: 8 }}>
+            {topActions.map((action, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <div style={{ width: 22, height: 22, borderRadius: '50%', background: `${C.emerald}18`, color: C.emerald, fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                  {i + 1}
+                </div>
+                <p style={{ margin: 0, fontSize: 12, color: css.cardFg, lineHeight: 1.6 }}>{action}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Section D — Product Mix & Stock Signals ─────────────────────────────────
+function SectionProduct({ d }: { d: ReportData }) {
+  const stock = d.stock;
+  if (!stock || !stock.items?.length) return <Empty text="No stock data available" />;
+
+  const { summary, items } = stock;
+  const classA  = items.filter(i => i.abc_class === 'A').slice(0, 6);
+  const urgent  = items.filter(i => i.urgency === 'immediate' || i.urgency === 'soon').slice(0, 8);
+  const maxRev  = classA[0]?.total_revenue_lyd ?? 1;
+
+  const urgencyColor = (u: string) =>
+    u === 'immediate' ? { bg: '#fee2e2', fg: C.rose } : { bg: '#ffedd5', fg: C.orange };
+
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+
+      {/* KPI summary — wraps naturally, no overflow */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+        {[
+          { label: 'Class A SKUs',       v: summary.class_a_count,      color: C.indigo  },
+          { label: 'Class B SKUs',       v: summary.class_b_count,      color: C.cyan    },
+          { label: 'Class C SKUs',       v: summary.class_c_count,      color: css.mutedFg },
+          { label: 'Immediate Reorder',  v: summary.immediate_reorders, color: C.rose    },
+          { label: 'Soon Reorder',       v: summary.soon_reorders,      color: C.orange  },
+          { label: 'Revenue Covered',    v: fc(summary.total_revenue_covered_lyd), color: C.emerald },
+        ].map(({ label, v, color }) => (
+          <div key={label} style={{ textAlign: 'center', padding: '10px 8px', borderRadius: 10, background: `${color === css.mutedFg ? '#94a3b8' : color}08`, border: `1px solid ${color === css.mutedFg ? '#94a3b8' : color}20` }}>
+            <p style={{ margin: 0, fontSize: 17, fontWeight: 800, color: color === css.mutedFg ? '#94a3b8' : color }}>{v}</p>
+            <p style={{ margin: '3px 0 0', fontSize: 9.5, color: css.mutedFg, lineHeight: 1.3 }}>{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Class A — Top Revenue Drivers (full width) */}
+      <div style={card}>
+        <p style={{ margin: '0 0 14px', fontSize: 12, fontWeight: 700, color: css.cardFg, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Target size={13} style={{ color: C.indigo }} />Class A — Top Revenue Drivers
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: css.mutedFg }}>Pareto top 80%</span>
+        </p>
+        <div style={{ display: 'grid', gap: 9 }}>
+          {classA.length === 0 ? <Empty /> : classA.map((item, i) => {
+            const w = maxRev > 0 ? Math.min(100, (item.total_revenue_lyd / maxRev) * 100) : 0;
+            return (
+              <div key={i}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontSize: 9, fontWeight: 800, width: 16, color: i < 3 ? C.indigo : css.mutedFg, flexShrink: 0 }}>{i + 1}</span>
+                  {/* Name truncated with title tooltip — no overflow */}
+                  <span title={item.product_name} style={{ flex: 1, fontSize: 11.5, fontWeight: 600, color: css.cardFg, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                    {item.product_name}
+                  </span>
+                  <span style={{ fontSize: 10, color: css.mutedFg, flexShrink: 0 }}>{item.avg_daily_demand.toFixed(1)} u/d</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: C.indigo, flexShrink: 0 }}>{fc(item.total_revenue_lyd)}</span>
+                </div>
+                <div style={{ height: 4, borderRadius: 999, background: css.muted, overflow: 'hidden', marginLeft: 24 }}>
+                  <div style={{ height: '100%', borderRadius: 999, width: `${w}%`, background: `linear-gradient(90deg,${C.indigo}60,${C.indigo})` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Urgent Stock Alerts (full width) */}
+      <div style={card}>
+        <p style={{ margin: '0 0 14px', fontSize: 12, fontWeight: 700, color: css.cardFg, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <AlertTriangle size={13} style={{ color: C.rose }} />Urgent Stock Alerts
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: css.mutedFg }}>{urgent.length} products require action</span>
+        </p>
+        {urgent.length === 0 ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0', color: C.emerald, fontSize: 12 }}>
+            <CheckCircle2 size={15} />All products within safe stock levels
+          </div>
+        ) : (
+          /* Responsive 2-column grid for alerts — they stay in view */
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8 }}>
+            {urgent.map((item, i) => {
+              const { bg, fg } = urgencyColor(item.urgency);
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 8, background: bg + '25', border: `1px solid ${fg}30` }}>
+                  <span style={{ fontSize: 8, fontWeight: 800, padding: '2px 6px', borderRadius: 20, background: bg, color: fg, textTransform: 'uppercase', flexShrink: 0, letterSpacing: '0.04em' }}>
+                    {item.urgency}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p title={item.product_name} style={{ margin: 0, fontSize: 11, fontWeight: 600, color: css.cardFg, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.product_name}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 10, color: css.mutedFg }}>
+                      {item.estimated_days_to_stockout != null
+                        ? `${item.estimated_days_to_stockout}d left`
+                        : 'Stockout now'} · Class {item.abc_class}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* AI recommendations for Class A (full width, one per row) */}
+      {classA.filter(i => i.ai_recommendation).length > 0 && (
+        <div style={{ borderRadius: 12, border: `1px solid ${C.indigo}28`, overflow: 'hidden' }}>
+          <div style={{ padding: '9px 14px', background: `${C.indigo}10`, borderBottom: `1px solid ${C.indigo}22`, display: 'flex', alignItems: 'center', gap: 7 }}>
+            <Sparkles size={12} style={{ color: C.indigo }} />
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: C.indigo }}>AI Reorder Recommendations — Class A</p>
+          </div>
+          <div style={{ padding: '12px 14px', display: 'grid', gap: 10 }}>
+            {classA.filter(i => i.ai_recommendation).slice(0, 3).map((item, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <Package size={13} style={{ color: C.indigo, flexShrink: 0, marginTop: 2 }} />
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ margin: '0 0 2px', fontSize: 10, fontWeight: 700, color: C.indigo, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.product_name}>{item.product_name}</p>
+                  <p style={{ margin: 0, fontSize: 12, color: css.cardFg, lineHeight: 1.55 }}>{item.ai_recommendation}</p>
                 </div>
               </div>
             ))}
@@ -334,175 +554,201 @@ function SectionSegment({ d }: { d: ReportData }) {
   );
 }
 
-// ─── Section D — Product Mix ──────────────────────────────────────────────────
-function SectionProduct({ d }: { d: ReportData }) {
-  const stock = d.stock;
-  if (!stock || !stock.items?.length) return <Empty text="No stock data available" />;
-
-  const { summary, items } = stock;
-  const classA = items.filter(i => i.abc_class === 'A').slice(0, 6);
-  const urgent  = items.filter(i => i.urgency === 'immediate' || i.urgency === 'soon').slice(0, 6);
-
-  return (
-    <div style={{ display: 'grid', gap: 14 }}>
-      {/* Summary */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-        {[
-          { label: 'Class A SKUs',      v: summary.class_a_count,      color: C.indigo },
-          { label: 'Immediate Reorder', v: summary.immediate_reorders, color: C.rose   },
-          { label: 'Soon Reorder',      v: summary.soon_reorders,      color: C.orange },
-          { label: 'Revenue Covered',   v: fc(summary.total_revenue_covered_lyd), color: C.emerald },
-        ].map(({ label, v, color }) => (
-          <div key={label} style={{ textAlign: 'center', padding: '10px', borderRadius: 10, background: `${color}08`, border: `1px solid ${color}20` }}>
-            <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color }}>{v}</p>
-            <p style={{ margin: '3px 0 0', fontSize: 10, color: css.mutedFg }}>{label}</p>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        {/* Class A — top revenue drivers */}
-        <div style={card}>
-          <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: css.cardFg, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Target size={13} style={{ color: C.indigo }} />Class A — Top Revenue Drivers
-          </p>
-          {classA.length === 0 ? <Empty /> : classA.map((item, i) => {
-            const maxRev = classA[0]?.total_revenue_lyd ?? 1;
-            return <BarRow key={i} label={item.product_name} value={item.total_revenue_lyd} max={maxRev} accent={C.indigo}
-              sub={`${item.avg_daily_demand.toFixed(1)} u/d`} />;
-          })}
-        </div>
-
-        {/* Urgent reorders */}
-        <div style={card}>
-          <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: css.cardFg, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <AlertTriangle size={13} style={{ color: C.rose }} />Urgent Stock Alerts
-          </p>
-          {urgent.length === 0 ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.emerald, fontSize: 12 }}>
-              <CheckCircle2 size={14} />All products within safe stock levels
-            </div>
-          ) : urgent.map((item, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: `1px solid ${css.border}` }}>
-              <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 20, background: item.urgency === 'immediate' ? '#fee2e2' : '#ffedd5', color: item.urgency === 'immediate' ? C.rose : C.orange, textTransform: 'uppercase' }}>
-                {item.urgency}
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: 11, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.product_name}</p>
-                <p style={{ margin: 0, fontSize: 10, color: css.mutedFg }}>
-                  {item.estimated_days_to_stockout != null ? `${item.estimated_days_to_stockout}d left` : 'Stockout'} · Class {item.abc_class}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* AI recommendations for Class A */}
-      {classA.filter(i => i.ai_recommendation).slice(0, 2).map((item, i) => (
-        <div key={i} style={{ padding: '10px 14px', borderRadius: 10, border: `1px solid ${C.indigo}25`, background: `${C.indigo}05`, display: 'flex', gap: 10 }}>
-          <Sparkles size={13} style={{ color: C.indigo, flexShrink: 0, marginTop: 2 }} />
-          <div>
-            <p style={{ margin: '0 0 2px', fontSize: 10, fontWeight: 700, color: C.indigo }}>{item.product_name}</p>
-            <p style={{ margin: 0, fontSize: 12, color: css.cardFg }}>{item.ai_recommendation}</p>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ─── Section E — Time & Seasonal Patterns ────────────────────────────────────
 function SectionTime({ d }: { d: ReportData }) {
-  const sea = d.seasonal;
+  const sea  = d.seasonal;
   const fore = d.forecast;
   if (!sea && !fore) return <Empty />;
 
-  const indices = sea ? Object.values(sea.seasonality_indices ?? {}) : [];
-  const peaks   = sea?.peak_month_names ?? [];
-  const troughs = sea?.trough_month_names ?? [];
+  const indices  = sea ? Object.values(sea.seasonality_indices ?? {}) : [];
+  const peaks    = sea?.peak_month_names    ?? [];
+  const troughs  = sea?.trough_month_names  ?? [];
+
+  // Build recharts-compatible data for SI bar chart
+  const siChartData = indices
+    .filter(v => v.seasonality_index !== null)
+    .map(v => ({
+      name:  v.month_name?.slice(0, 3) ?? '',
+      si:    +(v.seasonality_index ?? 1).toFixed(3),
+      label: v.label,
+      avg:   v.avg_monthly_revenue_lyd ?? 0,
+    }));
+
+  // Forecast area chart data
+  const foreData = (fore?.revenue_forecast ?? []).slice(0, 3).map(m => ({
+    name:       m.period.replace(/\s\d{4}/, ''),
+    base:       Math.round(m.base_lyd     ?? 0),
+    optimistic: Math.round((m as any).p90_lyd ?? m.optimistic_lyd ?? 0),
+    pessimistic:Math.round((m as any).p10_lyd ?? m.pessimistic_lyd ?? 0),
+  }));
+
+  // Custom tooltip for SI chart
+  const SITooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+    const d = payload[0]?.payload;
+    return (
+      <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 9, padding: '10px 14px', fontSize: 12 }}>
+        <p style={{ fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>{label}</p>
+        <p style={{ color: '#94a3b8' }}>SI: <strong style={{ color: '#fff' }}>{d?.si?.toFixed(3)}</strong></p>
+        {d?.avg > 0 && <p style={{ color: '#94a3b8' }}>Avg rev: <strong style={{ color: '#a5b4fc' }}>{fc(d.avg)}</strong></p>}
+        <p style={{ color: d?.label === 'peak' ? C.amber : d?.label === 'trough' ? C.cyan : '#94a3b8', fontWeight: 700, marginTop: 4, textTransform: 'capitalize' }}>{d?.label}</p>
+      </div>
+    );
+  };
 
   return (
-    <div style={{ display: 'grid', gap: 14 }}>
-      {/* Seasonal summary */}
-      {sea && !sea.error && (
-        <>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-            <div style={{ padding: '6px 14px', borderRadius: 20, background: `${C.indigo}10`, border: `1px solid ${C.indigo}25`, fontSize: 12, fontWeight: 600, color: C.indigo }}>
-              {sea.current_season}
-            </div>
-            {sea.upcoming_peak_alert && (
-              <div style={{ padding: '6px 14px', borderRadius: 20, background: '#fef3c7', border: '1px solid #fde68a', fontSize: 11, fontWeight: 700, color: C.amber, display: 'flex', alignItems: 'center', gap: 5 }}>
-                <AlertTriangle size={11} />Peak season approaching — prepare stock
-              </div>
-            )}
-            <div style={{ padding: '5px 12px', borderRadius: 20, background: css.muted, fontSize: 11, color: css.mutedFg }}>
-              Trend: {sea.trend?.direction} ({sea.trend?.slope_pct_per_month > 0 ? '+' : ''}{sea.trend?.slope_pct_per_month?.toFixed(2)}%/mo)
-            </div>
-          </div>
+    <div style={{ display: 'grid', gap: 16 }}>
 
-          {/* Mini SI bar chart */}
-          {indices.length > 0 && (
-            <div style={card}>
-              <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: css.cardFg, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Calendar size={13} style={{ color: C.amber }} />Monthly Seasonality Index (1.0 = average)
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(13, 1fr)', gap: 3, alignItems: 'end', height: 80 }}>
-                {indices.map((v, i) => {
-                  const si = v.seasonality_index ?? 1;
-                  const h  = Math.min(100, Math.max(10, si * 55));
-                  const c  = v.label === 'peak' ? C.amber : v.label === 'trough' ? C.cyan : C.indigo;
-                  return (
-                    <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-                      <div style={{ width: '100%', height: `${h}%`, borderRadius: '3px 3px 0 0', background: c, opacity: 0.8, minHeight: 4 }} title={`${v.month_name}: ${si.toFixed(2)}`} />
-                      <span style={{ fontSize: 7, color: css.mutedFg, fontWeight: 600 }}>{v.month_name?.slice(0, 3)}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <div style={{ display: 'flex', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
-                {peaks.length > 0 && (
-                  <span style={{ fontSize: 11, color: C.amber, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: C.amber, flexShrink: 0 }} />
-                    Peak: {peaks.join(', ')}
-                  </span>
-                )}
-                {troughs.length > 0 && (
-                  <span style={{ fontSize: 11, color: C.cyan, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: C.cyan, flexShrink: 0 }} />
-                    Trough: {troughs.join(', ')}
-                  </span>
-                )}
-              </div>
+      {/* Status pills */}
+      {sea && !sea.error && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ padding: '6px 14px', borderRadius: 20, background: `${C.indigo}10`, border: `1px solid ${C.indigo}25`, fontSize: 12, fontWeight: 600, color: C.indigo }}>
+            {sea.current_season}
+          </div>
+          {sea.upcoming_peak_alert && (
+            <div style={{ padding: '6px 14px', borderRadius: 20, background: '#fef3c7', border: '1px solid #fde68a', fontSize: 11, fontWeight: 700, color: C.amber, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <AlertTriangle size={11} />Peak season approaching — prepare stock
             </div>
           )}
+          <div style={{ padding: '5px 12px', borderRadius: 20, background: css.muted, fontSize: 11, color: css.mutedFg }}>
+            Trend: {sea.trend?.direction} ({(sea.trend?.slope_pct_per_month ?? 0) >= 0 ? '+' : ''}{sea.trend?.slope_pct_per_month?.toFixed(2) ?? '0'}%/mo)
+          </div>
+        </div>
+      )}
 
+      {/* ── Recharts SI Bar Chart ── */}
+      {siChartData.length > 0 && (
+        <div style={card}>
+          <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 700, color: css.cardFg, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Calendar size={13} style={{ color: C.amber }} />Monthly Seasonality Index
+            <span style={{ marginLeft: 'auto', fontSize: 10, color: css.mutedFg }}>1.0 = average month</span>
+          </p>
+          <p style={{ margin: '0 0 14px', fontSize: 11, color: css.mutedFg }}>
+            Higher = above-average demand · lower = below-average · baseline dashed at 1.0
+          </p>
+
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={siChartData} margin={{ top: 10, right: 10, left: -15, bottom: 4 }} barCategoryGap="18%">
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false}
+                domain={[0, (dataMax: number) => Math.max(1.6, +(dataMax * 1.1).toFixed(1))]}
+                tickFormatter={v => v.toFixed(1)} />
+              <RTooltip content={<SITooltip />} cursor={{ fill: 'rgba(99,102,241,0.05)' }} />
+              <ReferenceLine y={1} stroke="#94a3b8" strokeDasharray="5 4" strokeWidth={1.5} />
+              <Bar dataKey="si" name="Seasonality Index" radius={[5, 5, 0, 0]}>
+                {siChartData.map((entry, i) => {
+                  const color = entry.label === 'peak' ? C.amber
+                              : entry.label === 'trough' ? C.cyan
+                              : C.indigo;
+                  return <Cell key={`cell-${i}`} fill={color} fillOpacity={0.85} />;
+                })}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+
+          {/* Legend */}
+          <div style={{ display: 'flex', gap: 18, marginTop: 8, flexWrap: 'wrap' }}>
+            {peaks.length > 0 && (
+              <span style={{ fontSize: 11, color: C.amber, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 3, background: C.amber, flexShrink: 0 }} />
+                Peak: {peaks.join(', ')}
+              </span>
+            )}
+            {troughs.length > 0 && (
+              <span style={{ fontSize: 11, color: C.cyan, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 3, background: C.cyan, flexShrink: 0 }} />
+                Trough: {troughs.join(', ')}
+              </span>
+            )}
+            <span style={{ fontSize: 11, color: C.indigo, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 3, background: C.indigo, flexShrink: 0 }} />
+              Normal
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Narrative + Ramadan row */}
+      {sea && (
+        <div style={{ display: 'grid', gridTemplateColumns: sea.ramadan_analysis?.detected ? '3fr 2fr' : '1fr', gap: 12 }}>
           {sea.seasonal_narrative && (
-            <div style={{ padding: '10px 14px', borderRadius: 10, border: `1px solid ${css.border}`, background: css.muted, fontSize: 12.5, color: css.cardFg, lineHeight: 1.65 }}>
+            <div style={{ padding: '12px 16px', borderRadius: 10, border: `1px solid ${css.border}`, background: css.muted, fontSize: 12.5, color: css.cardFg, lineHeight: 1.7 }}>
               {sea.seasonal_narrative}
             </div>
           )}
-
           {sea.ramadan_analysis?.detected && (
-            <div style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid #fde68a', background: '#fef3c7', fontSize: 12, color: '#92400e' }}>
-              🌙 <strong>Ramadan Effect:</strong> {sea.ramadan_analysis.dominant_effect} · avg index {sea.ramadan_analysis.avg_ramadan_index.toFixed(3)}
+            <div style={{ padding: '12px 16px', borderRadius: 10, border: '1px solid #fde68a', background: '#fefce8', fontSize: 12, color: '#78350f', lineHeight: 1.65 }}>
+              <p style={{ margin: '0 0 6px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                🌙 Ramadan Effect
+              </p>
+              <p style={{ margin: '0 0 4px' }}>{sea.ramadan_analysis.dominant_effect}</p>
+              <p style={{ margin: 0 }}>Avg index: <strong>{sea.ramadan_analysis.avg_ramadan_index.toFixed(3)}</strong></p>
+              <p style={{ margin: '4px 0 0', fontSize: 11 }}>{sea.ramadan_analysis.adjustment_note}</p>
             </div>
           )}
-        </>
+        </div>
       )}
 
-      {/* Forecast snippet */}
-      {fore && fore.revenue_forecast?.length > 0 && (
+      {/* ── Recharts Forecast Area Chart ── */}
+      {foreData.length > 0 && (
         <div style={card}>
-          <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: css.cardFg, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 700, color: css.cardFg, display: 'flex', alignItems: 'center', gap: 6 }}>
             <TrendingUp size={13} style={{ color: C.violet }} />3-Month Revenue Forecast
+            <span style={{ marginLeft: 'auto', fontSize: 10, color: css.mutedFg }}>P10 / Base / P90 · Holt-Winters model</span>
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-            {fore.revenue_forecast.slice(0, 3).map((m, i) => (
+          <p style={{ margin: '0 0 14px', fontSize: 11, color: css.mutedFg }}>
+            Shaded band = P10–P90 confidence range · solid line = base-case forecast
+          </p>
+
+          <ResponsiveContainer width="100%" height={160}>
+            <AreaChart data={foreData} margin={{ top: 8, right: 12, left: -10, bottom: 4 }}>
+              <defs>
+                <linearGradient id="gradBase" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor={C.violet} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={C.violet} stopOpacity={0.02} />
+                </linearGradient>
+                <linearGradient id="gradBand" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor={C.indigo} stopOpacity={0.10} />
+                  <stop offset="95%" stopColor={C.indigo} stopOpacity={0.01} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+              <RTooltip
+                contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 9, fontSize: 12 }}
+                labelStyle={{ color: '#f1f5f9', fontWeight: 700, marginBottom: 4 }}
+                formatter={(val: any, name: string) => [fc(val), name === 'base' ? 'Base Case' : name === 'optimistic' ? 'Optimistic (P90)' : 'Pessimistic (P10)']}
+              />
+              <Area type="monotone" dataKey="optimistic"   fill="url(#gradBand)" stroke={C.emerald} strokeDasharray="5 3" strokeWidth={1.5} />
+              <Area type="monotone" dataKey="base"         fill="url(#gradBase)" stroke={C.violet} strokeWidth={2.5} />
+              <Area type="monotone" dataKey="pessimistic"  fill="none"           stroke={C.rose}   strokeDasharray="5 3" strokeWidth={1.5} />
+            </AreaChart>
+          </ResponsiveContainer>
+
+          <div style={{ display: 'flex', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
+            {[
+              { color: C.emerald, label: 'Optimistic (P90)', dashed: true  },
+              { color: C.violet,  label: 'Base Case',        dashed: false },
+              { color: C.rose,    label: 'Pessimistic (P10)',dashed: true  },
+            ].map(({ color, label, dashed }) => (
+              <span key={label} style={{ fontSize: 11, color, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 18, height: 2, background: color, opacity: dashed ? 0.6 : 1, borderRadius: 1 }} />
+                {label}
+              </span>
+            ))}
+          </div>
+
+          {/* Forecast cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 14 }}>
+            {fore?.revenue_forecast?.slice(0, 3).map((m, i) => (
               <div key={i} style={{ textAlign: 'center', padding: '10px', borderRadius: 10, background: `${C.violet}06`, border: `1px solid ${C.violet}20` }}>
                 <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: css.mutedFg }}>{m.period}</p>
-                <p style={{ margin: '4px 0 0', fontSize: 14, fontWeight: 800, color: C.violet }}>{fc(m.base_lyd)}</p>
-                <p style={{ margin: '2px 0 0', fontSize: 10, color: css.mutedFg }}>P10: {fc(m.p10_lyd)} · P90: {fc(m.p90_lyd)}</p>
+                <p style={{ margin: '4px 0 2px', fontSize: 15, fontWeight: 800, color: C.violet }}>{fc(m.base_lyd)}</p>
+                <p style={{ margin: 0, fontSize: 10, color: css.mutedFg }}>
+                  P10 {fc((m as any).p10_lyd ?? 0)} · P90 {fc((m as any).p90_lyd ?? 0)}
+                </p>
               </div>
             ))}
           </div>
