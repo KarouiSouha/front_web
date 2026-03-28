@@ -1,17 +1,48 @@
+/**
+ * HighValueChurnPage.tsx — Redesigned to match DashboardPage aesthetic
+ */
+
 import { useEffect, useState } from 'react';
 import {
   AlertTriangle, RefreshCw, Loader2, TrendingDown, DollarSign,
   ShieldAlert, ChevronDown, ChevronUp, Clock, CheckCircle2,
-  Target, Zap, BarChart3, Users,
+  Target, Zap, BarChart3, Users, ArrowUpRight,
 } from 'lucide-react';
-import { Badge } from '../components/ui/badge';
-import { Button } from '../components/ui/button';
-import {
-  Card, CardContent, CardHeader, CardTitle,
-} from '../components/ui/card';
-import { Progress } from '../components/ui/progress';
 import { formatCurrency } from '../lib/utils';
-import { api } from '../lib/api';   // ← instance authentifiée du projet
+import { api } from '../lib/api';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Design system — mirrors DashboardPage exactly
+// ─────────────────────────────────────────────────────────────────────────────
+
+const C = {
+  indigo:  '#6366f1',
+  violet:  '#8b5cf6',
+  cyan:    '#0ea5e9',
+  teal:    '#14b8a6',
+  emerald: '#10b981',
+  amber:   '#f59e0b',
+  orange:  '#f97316',
+  rose:    '#f43f5e',
+};
+
+const css = {
+  card:    'hsl(var(--card))',
+  cardFg:  'hsl(var(--card-foreground))',
+  border:  'hsl(var(--border))',
+  muted:   'hsl(var(--muted))',
+  mutedFg: 'hsl(var(--muted-foreground))',
+  bg:      'hsl(var(--background))',
+  fg:      'hsl(var(--foreground))',
+};
+
+const cardStyle: React.CSSProperties = {
+  background:   css.card,
+  borderRadius: 16,
+  padding:      24,
+  boxShadow:    '0 1px 3px rgba(0,0,0,0.08), 0 4px 20px rgba(0,0,0,0.05)',
+  border:       `1px solid ${css.border}`,
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -24,86 +55,45 @@ function unwrap<T>(res: unknown): T {
 }
 
 interface PredictedOutcome {
-  scenario: string;
-  probability: number;
-  description: string;
-  revenue_impact_lyd: number;
-  time_to_materialize: string;
+  scenario: string; probability: number; description: string;
+  revenue_impact_lyd: number; time_to_materialize: string;
 }
-
 interface PlaybookAction {
-  priority: number;
-  action: string;
-  rationale: string;
-  owner: string;
-  deadline_days: number;
-  success_metric: string;
+  priority: number; action: string; rationale: string;
+  owner: string; deadline_days: number; success_metric: string;
 }
-
 interface HVCustomer {
-  customer_id: string | null;
-  account_code: string;
-  customer_name: string;          // ← nom réel du client (affichage uniquement)
-  annual_revenue_lyd: number;
-  monthly_revenue_lyd: number;
-  churn_score: number;
-  churn_label: 'medium' | 'high' | 'critical';
-  days_since_last_purchase: number;
-  purchase_count_12m: number;
-  avg_order_value_lyd: number;
-  revenue_trend: number;
-  aging_risk_score: string;
-  overdue_ratio: number;
-  total_receivable_lyd: number;
-  risk_summary: string;
-  early_warning_signals: string[];
-  predicted_outcomes: PredictedOutcome[];
-  retention_playbook: PlaybookAction[];
-  estimated_revenue_at_risk: number;
-  confidence: string;
+  customer_id: string | null; account_code: string; customer_name: string;
+  annual_revenue_lyd: number; monthly_revenue_lyd: number;
+  churn_score: number; churn_label: 'medium' | 'high' | 'critical';
+  days_since_last_purchase: number; purchase_count_12m: number;
+  avg_order_value_lyd: number; revenue_trend: number;
+  aging_risk_score: string; overdue_ratio: number; total_receivable_lyd: number;
+  risk_summary: string; early_warning_signals: string[];
+  predicted_outcomes: PredictedOutcome[]; retention_playbook: PlaybookAction[];
+  estimated_revenue_at_risk: number; confidence: string;
 }
-
 interface HVChurnResponse {
-  company_id: string;
-  threshold_lyd: number;
-  total_hv_customers: number;
-  at_risk_count: number;
-  total_revenue_at_risk: number;
-  ai_used: boolean;
-  cached: boolean;
-  customers: HVCustomer[];
+  company_id: string; threshold_lyd: number; total_hv_customers: number;
+  at_risk_count: number; total_revenue_at_risk: number;
+  ai_used: boolean; cached: boolean; customers: HVCustomer[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const churnColor = (label: string) => ({
-  medium:   'bg-amber-100 text-amber-800',
-  high:     'bg-orange-100 text-orange-800',
-  critical: 'bg-red-100 text-red-800',
-  low:      'bg-emerald-100 text-emerald-800',
-}[label] ?? 'bg-gray-100 text-gray-800');
-
-const churnBorder = (label: string) => ({
-  medium:   'border-l-amber-400',
-  high:     'border-l-orange-500',
-  critical: 'border-l-red-600',
-  low:      'border-l-emerald-400',
-}[label] ?? 'border-l-gray-300');
-
-const confidenceColor = (c: string) =>
-  ({ high: 'text-emerald-600', medium: 'text-amber-600', low: 'text-gray-400' }[c] ?? 'text-gray-400');
+const churnAccent = (label: string) =>
+  ({ critical: C.rose, high: C.orange, medium: C.amber, low: C.emerald }[label] ?? css.mutedFg);
 
 const trendDisplay = (trend: number) => {
   const pct = Math.abs((trend - 1) * 100).toFixed(0);
-  if (trend < 0.95) return { label: `▼ ${pct}%`, cls: 'text-red-600 font-semibold' };
-  if (trend > 1.05) return { label: `▲ ${pct}%`, cls: 'text-emerald-600 font-semibold' };
-  return { label: '→ Stable', cls: 'text-gray-500' };
+  if (trend < 0.95) return { label: `▼ ${pct}%`, color: C.rose };
+  if (trend > 1.05) return { label: `▲ ${pct}%`, color: C.emerald };
+  return { label: '→ Stable', color: css.mutedFg };
 };
 
-const priorityBg = (p: number) =>
-  (['', 'bg-red-600', 'bg-orange-500', 'bg-amber-500', 'bg-blue-500', 'bg-gray-400'][p] ?? 'bg-gray-400');
+const priorityColors = ['', C.rose, C.orange, C.amber, C.cyan, '#94a3b8'];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sub-components
@@ -111,49 +101,50 @@ const priorityBg = (p: number) =>
 
 function OutcomeBar({ outcome }: { outcome: PredictedOutcome }) {
   const isNeg = outcome.revenue_impact_lyd < 0;
+  const color = isNeg ? C.rose : C.emerald;
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between text-xs">
-        <span className="font-medium">{outcome.scenario}</span>
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">{outcome.time_to_materialize}</span>
-          <span className={`font-bold ${isNeg ? 'text-red-600' : 'text-emerald-600'}`}>
-            {isNeg ? `${formatCurrency(Math.abs(outcome.revenue_impact_lyd))} loss` : 'No loss'}
-          </span>
-          <span className="font-semibold w-10 text-right">{(outcome.probability * 100).toFixed(0)}%</span>
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: css.cardFg }}>{outcome.scenario}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 12, color: css.mutedFg }}>{outcome.time_to_materialize}</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color }}>{isNeg ? `${formatCurrency(Math.abs(outcome.revenue_impact_lyd))} loss` : 'No loss'}</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: css.cardFg, minWidth: 36, textAlign: 'right' }}>{(outcome.probability * 100).toFixed(0)}%</span>
         </div>
       </div>
-      <div className="relative h-2 bg-muted rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${isNeg ? 'bg-red-400' : 'bg-emerald-400'}`}
-          style={{ width: `${outcome.probability * 100}%` }} />
+      <div style={{ height: 6, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
+        <div style={{ height: '100%', borderRadius: 999, width: `${outcome.probability * 100}%`, background: `linear-gradient(90deg, ${color}60, ${color})`, transition: 'width 0.5s ease' }} />
       </div>
-      <p className="text-xs text-muted-foreground">{outcome.description}</p>
+      <p style={{ fontSize: 12, color: css.mutedFg, margin: '6px 0 0' }}>{outcome.description}</p>
     </div>
   );
 }
 
 function PlaybookStep({ step, index, total }: { step: PlaybookAction; index: number; total: number }) {
+  const color = priorityColors[step.priority] ?? '#94a3b8';
   return (
-    <div className="flex gap-3">
-      <div className="flex flex-col items-center">
-        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white text-xs font-bold ${priorityBg(step.priority)}`}>
+    <div style={{ display: 'flex', gap: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ width: 30, height: 30, borderRadius: 10, background: color, color: '#fff', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           {step.priority}
         </div>
-        {index < total - 1 && <div className="w-px flex-1 bg-border mt-1" style={{ minHeight: 16 }} />}
+        {index < total - 1 && <div style={{ width: 1, flex: 1, background: css.border, marginTop: 4, minHeight: 16 }} />}
       </div>
-      <div className="pb-4 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-medium leading-snug">{step.action}</p>
-          <span className="text-xs text-muted-foreground shrink-0 flex items-center gap-1">
-            <Clock className="h-3 w-3" />{step.deadline_days}d
+      <div style={{ paddingBottom: 20, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: css.cardFg, margin: 0, lineHeight: 1.4 }}>{step.action}</p>
+          <span style={{ fontSize: 11, color: css.mutedFg, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Clock size={11} />{step.deadline_days}d
           </span>
         </div>
-        <p className="text-xs text-muted-foreground mt-0.5">{step.rationale}</p>
-        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-          <Badge variant="outline" className="text-xs"><Users className="h-3 w-3 mr-1" />{step.owner}</Badge>
-          <Badge variant="outline" className="text-xs text-emerald-700 border-emerald-200 bg-emerald-50">
-            <Target className="h-3 w-3 mr-1" />{step.success_metric}
-          </Badge>
+        <p style={{ fontSize: 12, color: css.mutedFg, margin: '5px 0 10px' }}>{step.rationale}</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, border: `1px solid ${css.border}`, color: css.mutedFg, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Users size={11} />{step.owner}
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, border: `1px solid ${C.emerald}30`, color: C.emerald, background: `${C.emerald}10`, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Target size={11} />{step.success_metric}
+          </span>
         </div>
       </div>
     </div>
@@ -162,137 +153,142 @@ function PlaybookStep({ step, index, total }: { step: PlaybookAction; index: num
 
 function HVCustomerCard({ customer, rank }: { customer: HVCustomer; rank: number }) {
   const [expanded, setExpanded] = useState(false);
-  const trend = trendDisplay(customer.revenue_trend);
+  const trend    = trendDisplay(customer.revenue_trend);
+  const accent   = churnAccent(customer.churn_label);
+  const scorePct = customer.churn_score * 100;
 
   return (
-    <Card className={`border-l-4 ${churnBorder(customer.churn_label)} transition-shadow hover:shadow-md`}>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold">
+    <div style={{ ...cardStyle, borderLeft: `4px solid ${accent}`, padding: 0, overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '20px 24px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            {/* Rank badge */}
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: css.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: css.cardFg, flexShrink: 0 }}>
               #{rank}
             </div>
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* ✅ Affiche le vrai nom du client */}
-                <span className="font-semibold text-sm">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: css.cardFg }}>
                   {customer.customer_name || customer.account_code || `HVC-${String(rank).padStart(3, '0')}`}
                 </span>
                 {customer.customer_name && (
-                  <span className="font-mono text-xs text-muted-foreground">{customer.account_code}</span>
+                  <span style={{ fontSize: 12, color: css.mutedFg, fontFamily: 'monospace' }}>{customer.account_code}</span>
                 )}
-                <Badge className={`text-xs ${churnColor(customer.churn_label)}`}>
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, letterSpacing: '0.06em', textTransform: 'uppercase', color: accent, background: `${accent}15`, border: `1px solid ${accent}25` }}>
                   {customer.churn_label} risk
-                </Badge>
-                <span className={`text-xs ${confidenceColor(customer.confidence)}`}>
+                </span>
+                <span style={{ fontSize: 11, color: customer.confidence === 'high' ? C.emerald : customer.confidence === 'medium' ? C.amber : css.mutedFg }}>
                   AI confidence: {customer.confidence}
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5 max-w-xl leading-relaxed">
-                {customer.risk_summary}
-              </p>
+              <p style={{ fontSize: 13, color: css.mutedFg, margin: 0, maxWidth: 520, lineHeight: 1.5 }}>{customer.risk_summary}</p>
             </div>
           </div>
-          <div className="text-right shrink-0">
-            <div className="text-xs text-muted-foreground mb-0.5">Estimated revenue at risk</div>
-            <div className="text-lg font-bold text-red-600">
-              {formatCurrency(customer.estimated_revenue_at_risk)}
-            </div>
+          {/* Revenue at risk */}
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <p style={{ fontSize: 11, color: css.mutedFg, margin: '0 0 4px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Estimated revenue at risk</p>
+            <p style={{ fontSize: 22, fontWeight: 800, color: C.rose, margin: 0, letterSpacing: '-0.03em' }}>{formatCurrency(customer.estimated_revenue_at_risk)}</p>
           </div>
         </div>
-        <div className="space-y-1 mt-2">
-          <div className="flex justify-between text-xs">
-            <span className="text-muted-foreground">Churn probability</span>
-            <span className="font-bold">{(customer.churn_score * 100).toFixed(0)}%</span>
-          </div>
-          <Progress value={customer.churn_score * 100} className="h-2" />
-        </div>
-      </CardHeader>
 
-      <CardContent className="pt-0 space-y-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            {
-              icon: <DollarSign className="h-4 w-4 text-emerald-600" />,
-              label: 'Annual Revenue',
-              value: formatCurrency(customer.annual_revenue_lyd),
-              sub: `${formatCurrency(customer.monthly_revenue_lyd)}/mo`,
-              cls: '',
-            },
-            {
-              icon: <Clock className="h-4 w-4 text-amber-600" />,
-              label: 'Last Purchase',
-              value: `${customer.days_since_last_purchase}d ago`,
-              sub: `${customer.purchase_count_12m} orders / 12m`,
-              cls: customer.days_since_last_purchase > 90 ? 'text-red-600'
-                 : customer.days_since_last_purchase > 60 ? 'text-orange-500' : '',
-            },
-            {
-              icon: <BarChart3 className="h-4 w-4 text-blue-600" />,
-              label: 'Revenue Trend',
-              value: trend.label,
-              sub: 'Last 3m vs prior 3m',
-              cls: trend.cls,
-            },
-            {
-              icon: <ShieldAlert className="h-4 w-4 text-purple-600" />,
-              label: 'Payment Risk',
-              value: customer.aging_risk_score,
-              sub: `${(customer.overdue_ratio * 100).toFixed(0)}% overdue`,
-              cls: customer.aging_risk_score === 'critical' ? 'text-red-600'
-                 : customer.aging_risk_score === 'high' ? 'text-orange-500' : '',
-            },
-          ].map((kpi, i) => (
-            <div key={i} className="rounded-lg border bg-muted/40 px-3 py-2.5 space-y-0.5">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                {kpi.icon}{kpi.label}
-              </div>
-              <div className={`text-sm font-bold capitalize ${kpi.cls}`}>{kpi.value}</div>
-              <div className="text-xs text-muted-foreground">{kpi.sub}</div>
+        {/* Churn probability bar */}
+        <div style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
+            <span style={{ color: css.mutedFg, fontWeight: 600 }}>Churn probability</span>
+            <span style={{ fontWeight: 800, color: accent }}>{scorePct.toFixed(0)}%</span>
+          </div>
+          <div style={{ height: 8, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
+            <div style={{ height: '100%', borderRadius: 999, width: `${scorePct}%`, background: `linear-gradient(90deg, ${accent}70, ${accent})`, transition: 'width 0.6s ease' }} />
+          </div>
+        </div>
+      </div>
+
+      {/* KPI grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, borderTop: `1px solid ${css.border}`, background: css.border }}>
+        {[
+          {
+            icon: <DollarSign size={15} style={{ color: C.emerald }} />,
+            label: 'Annual Revenue', value: formatCurrency(customer.annual_revenue_lyd),
+            sub: `${formatCurrency(customer.monthly_revenue_lyd)}/mo`, color: '',
+          },
+          {
+            icon: <Clock size={15} style={{ color: C.amber }} />,
+            label: 'Last Purchase', value: `${customer.days_since_last_purchase}d ago`,
+            sub: `${customer.purchase_count_12m} orders / 12m`,
+            color: customer.days_since_last_purchase > 90 ? C.rose : customer.days_since_last_purchase > 60 ? C.orange : '',
+          },
+          {
+            icon: <BarChart3 size={15} style={{ color: C.cyan }} />,
+            label: 'Revenue Trend', value: trend.label,
+            sub: 'Last 3m vs prior 3m', color: trend.color,
+          },
+          {
+            icon: <ShieldAlert size={15} style={{ color: C.violet }} />,
+            label: 'Payment Risk', value: customer.aging_risk_score,
+            sub: `${(customer.overdue_ratio * 100).toFixed(0)}% overdue`,
+            color: customer.aging_risk_score === 'critical' ? C.rose : customer.aging_risk_score === 'high' ? C.orange : '',
+          },
+        ].map((kpi, i) => (
+          <div key={i} style={{ padding: '14px 18px', background: css.card }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              {kpi.icon}
+              <span style={{ fontSize: 11, color: css.mutedFg, fontWeight: 600 }}>{kpi.label}</span>
             </div>
+            <p style={{ fontSize: 14, fontWeight: 800, color: kpi.color || css.cardFg, margin: '0 0 3px', textTransform: 'capitalize', letterSpacing: '-0.02em' }}>{kpi.value}</p>
+            <p style={{ fontSize: 11, color: css.mutedFg, margin: 0 }}>{kpi.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Warning signals */}
+      {customer.early_warning_signals.length > 0 && (
+        <div style={{ padding: '14px 24px', borderTop: `1px solid ${css.border}`, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {customer.early_warning_signals.map((s, i) => (
+            <span key={i} style={{ fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 20, border: `1px solid ${C.amber}30`, color: C.amber, background: `${C.amber}10`, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <AlertTriangle size={11} />{s}
+            </span>
           ))}
         </div>
+      )}
 
-        {customer.early_warning_signals.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {customer.early_warning_signals.map((s, i) => (
-              <Badge key={i} variant="outline" className="text-xs text-amber-700 border-amber-300 bg-amber-50">
-                <AlertTriangle className="h-3 w-3 mr-1" />{s}
-              </Badge>
+      {/* Expand button */}
+      <div style={{ padding: '0 24px 20px' }}>
+        <button onClick={() => setExpanded(v => !v)} style={{
+          width: '100%', padding: '10px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600,
+          cursor: 'pointer', background: 'none', border: `1px dashed ${css.border}`,
+          color: css.mutedFg, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        }}>
+          {expanded
+            ? <><ChevronUp size={15} />Hide detailed analysis</>
+            : <><ChevronDown size={15} />View outcome predictions & retention playbook</>}
+        </button>
+      </div>
+
+      {/* Expanded panel */}
+      {expanded && (
+        <div style={{ borderTop: `1px solid ${css.border}`, padding: '24px' }}>
+          {/* Outcome predictions */}
+          <div style={{ marginBottom: 28 }}>
+            <h4 style={{ fontSize: 13, fontWeight: 700, color: css.cardFg, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <TrendingDown size={15} style={{ color: C.rose }} />
+              Predicted Outcomes — if no action is taken
+            </h4>
+            {customer.predicted_outcomes.map((o, i) => <OutcomeBar key={i} outcome={o} />)}
+          </div>
+
+          {/* Retention playbook */}
+          <div>
+            <h4 style={{ fontSize: 13, fontWeight: 700, color: css.cardFg, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Zap size={15} style={{ color: C.indigo }} />Retention Action Plan
+            </h4>
+            {customer.retention_playbook.map((step, i) => (
+              <PlaybookStep key={i} step={step} index={i} total={customer.retention_playbook.length} />
             ))}
           </div>
-        )}
-
-        <Button variant="ghost" size="sm" className="w-full text-xs border border-dashed"
-          onClick={() => setExpanded(v => !v)}>
-          {expanded
-            ? <><ChevronUp className="h-4 w-4 mr-1" />Hide detailed analysis</>
-            : <><ChevronDown className="h-4 w-4 mr-1" />View outcome predictions & retention playbook</>}
-        </Button>
-
-        {expanded && (
-          <div className="space-y-6 pt-3 border-t">
-            <div>
-              <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                <TrendingDown className="h-4 w-4 text-red-500" />
-                Predicted Outcomes — if no action is taken
-              </h4>
-              <div className="space-y-3">
-                {customer.predicted_outcomes.map((o, i) => <OutcomeBar key={i} outcome={o} />)}
-              </div>
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                <Zap className="h-4 w-4 text-indigo-500" />Retention Action Plan
-              </h4>
-              {customer.retention_playbook.map((step, i) => (
-                <PlaybookStep key={i} step={step} index={i} total={customer.retention_playbook.length} />
-              ))}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -304,205 +300,178 @@ export function HighValueChurnPage() {
   const [data, setData]           = useState<HVChurnResponse | null>(null);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
-  const [threshold, setThreshold] = useState(100_000);  // 100K LYD/an — adapté aux données réelles
+  const [threshold, setThreshold] = useState(100_000);
 
   const load = async (refresh = false) => {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
-      const raw  = await api.get(
-        `/ai-insights/churn/high-value/?threshold=${threshold}&top_n=10&refresh=${refresh}`
-      );
-      const data = unwrap<HVChurnResponse>(raw);
-      setData(data);
+      const raw  = await api.get(`/ai-insights/churn/high-value/?threshold=${threshold}&top_n=10&refresh=${refresh}`);
+      setData(unwrap<HVChurnResponse>(raw));
     } catch (e) {
-      console.error('[HighValueChurnPage] Load error:', e);
       setError('Failed to load data. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Re-fetch when threshold changes
-  useEffect(() => { if (data) load(); }, [threshold]);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, []); // eslint-disable-line
+  useEffect(() => { if (data) load(); }, [threshold]); // eslint-disable-line
 
   const criticalCount = data?.customers.filter(c => c.churn_label === 'critical').length ?? 0;
   const highCount     = data?.customers.filter(c => c.churn_label === 'high').length ?? 0;
 
   return (
-    <div className="space-y-6">
+    <div style={{ background: css.bg, minHeight: '100vh', padding: '32px 28px' }}>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 28 }}>
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <ShieldAlert className="h-8 w-8 text-red-600" />
-            High-Value Customer Churn
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Customers with annual revenue ≥{' '}
-            <span className="font-semibold">{formatCurrency(threshold)}</span>{' '}
-            at risk of churning · AI outcome predictions + retention playbooks
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 14, background: `linear-gradient(135deg, ${C.rose}, ${C.orange})`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 4px 16px ${C.rose}40` }}>
+              <ShieldAlert size={20} color="#fff" />
+            </div>
+            <div>
+              <h1 style={{ fontSize: 24, fontWeight: 800, color: css.fg, letterSpacing: '-0.03em', margin: 0 }}>
+                High-Value Customer Churn
+              </h1>
+              <p style={{ fontSize: 13, color: css.mutedFg, marginTop: 3 }}>
+                Customers ≥ <strong>{formatCurrency(threshold)}</strong>/year at risk · AI outcome predictions + retention playbooks
+              </p>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <select
-            className="h-9 rounded-md border bg-background px-3 text-sm"
-            value={threshold}
-            onChange={e => setThreshold(Number(e.target.value))}
-            disabled={loading}
-          >
+
+        {/* Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <select value={threshold} onChange={e => setThreshold(Number(e.target.value))} disabled={loading}
+            style={{ height: 38, borderRadius: 10, border: `1px solid ${css.border}`, background: css.card, color: css.cardFg, padding: '0 12px', fontSize: 13, cursor: 'pointer' }}>
             <option value={10_000}>≥ 10K LYD / year</option>
             <option value={50_000}>≥ 50K LYD / year</option>
             <option value={100_000}>≥ 100K LYD / year</option>
             <option value={500_000}>≥ 500K LYD / year</option>
             <option value={1_000_000}>≥ 1M LYD / year</option>
           </select>
-          <Button variant="outline" size="sm" onClick={() => load(false)} disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            <span className="ml-2">Refresh</span>
-          </Button>
-          <Button variant="destructive" size="sm" onClick={() => load(true)} disabled={loading}>
+          <button onClick={() => load(false)} disabled={loading} style={{
+            display: 'flex', alignItems: 'center', gap: 7, height: 38, padding: '0 16px', borderRadius: 10,
+            border: `1px solid ${css.border}`, background: css.card, color: css.cardFg, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+          }}>
+            <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />Refresh
+          </button>
+          <button onClick={() => load(true)} disabled={loading} style={{
+            display: 'flex', alignItems: 'center', gap: 7, height: 38, padding: '0 16px', borderRadius: 10,
+            border: 'none', background: C.rose, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+          }}>
             Force Refresh
-          </Button>
+          </button>
         </div>
       </div>
 
       {/* Info banner */}
-      <Card className="border-red-200 bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-950 dark:to-orange-950">
-        <CardContent className="p-5">
-          <div className="flex items-start gap-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-600 shrink-0">
-              <ShieldAlert className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h3 className="font-semibold mb-1">High-Value Customer Protection Engine</h3>
-              <p className="text-sm text-muted-foreground">
-                Monitors accounts above the revenue threshold for behavioral churn signals.
-                AI generates outcome scenarios and a prioritized, role-assigned retention playbook.
-                Customer names are shown for display — only anonymized behavioral data is sent to AI.
-              </p>
-              <div className="flex gap-2 mt-3 flex-wrap">
-                <Badge className="bg-red-600">Revenue Screening</Badge>
-                <Badge className="bg-orange-600">Outcome Prediction</Badge>
-                <Badge className="bg-indigo-600">Retention Playbooks</Badge>
-                <Badge variant="outline">Anonymized AI</Badge>
-                <Badge variant="outline">Cached 6h</Badge>
-              </div>
+      <div style={{ ...cardStyle, marginBottom: 24, borderTop: `3px solid ${C.rose}`, background: `linear-gradient(135deg, ${C.rose}08, ${C.orange}06)` }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: C.rose, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <ShieldAlert size={20} color="#fff" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: css.cardFg, margin: '0 0 6px' }}>High-Value Customer Protection Engine</h3>
+            <p style={{ fontSize: 13, color: css.mutedFg, margin: '0 0 14px', lineHeight: 1.6 }}>
+              Monitors accounts above the revenue threshold for behavioral churn signals.
+              AI generates outcome scenarios and a prioritized, role-assigned retention playbook.
+              Customer names are shown for display — only anonymized behavioral data is sent to AI.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {[
+                { label: 'Revenue Screening', color: C.rose },
+                { label: 'Outcome Prediction', color: C.orange },
+                { label: 'Retention Playbooks', color: C.indigo },
+                { label: 'Anonymized AI', color: css.mutedFg },
+                { label: 'Cached 6h', color: css.mutedFg },
+              ].map(({ label, color }) => (
+                <span key={label} style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 20, color, background: `${color}15`, border: `1px solid ${color}25` }}>{label}</span>
+              ))}
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Loading */}
       {loading && (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-red-600" />
-          <div className="ml-4">
-            <p className="font-semibold">Analyzing high-value accounts…</p>
-            <p className="text-sm text-muted-foreground">
-              AI is generating outcome predictions and retention playbooks
-            </p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 0' }}>
+          <Loader2 size={28} style={{ color: C.rose, animation: 'spin 1s linear infinite' }} />
+          <div style={{ marginLeft: 16 }}>
+            <p style={{ fontSize: 15, fontWeight: 700, color: css.cardFg, margin: 0 }}>Analyzing high-value accounts…</p>
+            <p style={{ fontSize: 13, color: css.mutedFg, marginTop: 4 }}>AI is generating outcome predictions and retention playbooks</p>
           </div>
         </div>
       )}
 
       {/* Error */}
       {error && !loading && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="p-5 text-center text-red-700">
-            <AlertTriangle className="h-8 w-8 mx-auto mb-2" />
-            <p className="font-medium mb-3">{error}</p>
-            <Button variant="outline" size="sm" onClick={() => load()}>
-              <RefreshCw className="h-4 w-4 mr-2" />Retry
-            </Button>
-          </CardContent>
-        </Card>
+        <div style={{ ...cardStyle, borderTop: `3px solid ${C.rose}`, textAlign: 'center', padding: '40px 24px' }}>
+          <AlertTriangle size={32} style={{ color: C.rose, marginBottom: 12 }} />
+          <p style={{ fontSize: 15, fontWeight: 600, color: css.cardFg, marginBottom: 16 }}>{error}</p>
+          <button onClick={() => load()} style={{
+            padding: '8px 20px', borderRadius: 10, border: `1px solid ${css.border}`,
+            background: css.card, color: css.cardFg, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', gap: 7,
+          }}>
+            <RefreshCw size={14} />Retry
+          </button>
+        </div>
       )}
 
       {/* Results */}
       {data && !loading && !error && (
         <>
           {/* KPI cards */}
-          <div className="grid gap-4 md:grid-cols-4">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
             {[
-              {
-                label: 'Accounts Above Threshold',
-                value: data.total_hv_customers,
-                sub: `Annual revenue ≥ ${formatCurrency(data.threshold_lyd)}`,
-                icon: <Users className="h-5 w-5 text-blue-600" />,
-                cls: '',
-              },
-              {
-                label: 'At-Risk Accounts',
-                value: data.at_risk_count,
-                sub: `${criticalCount} critical · ${highCount} high risk`,
-                icon: <AlertTriangle className="h-5 w-5 text-orange-500" />,
-                cls: data.at_risk_count > 0 ? 'text-orange-600' : 'text-emerald-600',
-              },
-              {
-                label: 'Estimated Revenue at Risk',
-                value: formatCurrency(data.total_revenue_at_risk),
-                sub: 'Probability-weighted 12-month estimate',
-                icon: <DollarSign className="h-5 w-5 text-red-600" />,
-                cls: 'text-red-600',
-              },
-              {
-                label: 'Analysis Status',
-                value: data.cached ? '⚡ Cached' : '🔄 Live',
-                sub: data.ai_used ? 'AI outcome predictions active' : 'Rule-based scoring only',
-                icon: <CheckCircle2 className="h-5 w-5 text-emerald-600" />,
-                cls: '',
-              },
+              { label: 'Accounts Above Threshold', value: data.total_hv_customers, sub: `Annual revenue ≥ ${formatCurrency(data.threshold_lyd)}`, icon: Users, accent: C.cyan },
+              { label: 'At-Risk Accounts', value: data.at_risk_count, sub: `${criticalCount} critical · ${highCount} high risk`, icon: AlertTriangle, accent: data.at_risk_count > 0 ? C.orange : C.emerald },
+              { label: 'Revenue at Risk', value: formatCurrency(data.total_revenue_at_risk), sub: 'Probability-weighted 12-month', icon: DollarSign, accent: C.rose },
+              { label: 'Analysis Status', value: data.cached ? '⚡ Cached' : '🔄 Live', sub: data.ai_used ? 'AI outcome predictions active' : 'Rule-based scoring only', icon: CheckCircle2, accent: C.emerald },
             ].map((k, i) => (
-              <Card key={i}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                    {k.icon}{k.label}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className={`text-xl font-bold ${k.cls}`}>{k.value}</div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{k.sub}</p>
-                </CardContent>
-              </Card>
+              <div key={i} style={{ ...cardStyle, position: 'relative', overflow: 'hidden', borderTop: `3px solid ${k.accent}`, paddingTop: 20 }}>
+                <div style={{ position: 'absolute', bottom: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: k.accent, opacity: 0.06 }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: `${k.accent}15`, border: `1px solid ${k.accent}25`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <k.icon size={15} style={{ color: k.accent }} />
+                  </div>
+                </div>
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: css.mutedFg, margin: 0 }}>{k.label}</p>
+                <p style={{ fontSize: 20, fontWeight: 800, color: css.cardFg, margin: '5px 0 4px', letterSpacing: '-0.03em', lineHeight: 1 }}>{k.value}</p>
+                <p style={{ fontSize: 11, color: css.mutedFg, margin: '0 0 12px' }}>{k.sub}</p>
+                <div style={{ height: 3, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 999, width: '64%', background: `linear-gradient(90deg, ${k.accent}60, ${k.accent})` }} />
+                </div>
+              </div>
             ))}
           </div>
 
           {/* Customer list or empty state */}
           {data.customers.length === 0 ? (
-            <Card>
-              <CardContent className="py-16 text-center">
-                <CheckCircle2 className="h-12 w-12 mx-auto mb-3 text-emerald-500 opacity-60" />
-                <p className="font-semibold text-lg">No high-value accounts at churn risk</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  All accounts above {formatCurrency(data.threshold_lyd)} / year show healthy engagement.
-                </p>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Try lowering the revenue threshold to include more accounts.
-                </p>
-              </CardContent>
-            </Card>
+            <div style={{ ...cardStyle, textAlign: 'center', padding: '60px 24px' }}>
+              <CheckCircle2 size={48} style={{ color: C.emerald, marginBottom: 14, opacity: 0.6 }} />
+              <p style={{ fontSize: 18, fontWeight: 700, color: css.cardFg, margin: '0 0 8px' }}>No high-value accounts at churn risk</p>
+              <p style={{ fontSize: 14, color: css.mutedFg, margin: 0 }}>All accounts above {formatCurrency(data.threshold_lyd)} / year show healthy engagement.</p>
+              <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 6 }}>Try lowering the revenue threshold to include more accounts.</p>
+            </div>
           ) : (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="font-semibold text-lg">
-                    At-Risk Accounts ({data.customers.length})
-                  </h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Sorted by churn probability · Expand to view outcome predictions & action plan
-                  </p>
-                </div>
+            <div>
+              <div style={{ marginBottom: 16 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 800, color: css.fg, margin: 0, letterSpacing: '-0.02em' }}>
+                  At-Risk Accounts ({data.customers.length})
+                </h2>
+                <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 4 }}>
+                  Sorted by churn probability · Expand to view outcome predictions & action plan
+                </p>
               </div>
-              {data.customers.map((customer, i) => (
-                <HVCustomerCard
-                  key={customer.account_code || i}
-                  customer={customer}
-                  rank={i + 1}
-                />
-              ))}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {data.customers.map((customer, i) => (
+                  <HVCustomerCard key={customer.account_code || i} customer={customer} rank={i + 1} />
+                ))}
+              </div>
             </div>
           )}
         </>
