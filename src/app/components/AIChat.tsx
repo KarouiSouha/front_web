@@ -1,32 +1,23 @@
 /**
- * AIChat.tsx — Decision Advisor v4.0
+ * AIChat.tsx — Decision Advisor v4.2
  * ====================================
- * NEW FEATURES:
- *   1. Voice-to-Chat + Voice Response
- *      - Web Speech API (live transcription while recording)
- *      - OpenAI Whisper fallback (accurate transcription on send)
- *      - OpenAI TTS response playback (nova voice, streaming MP3)
- *      - Waveform visualizer during recording
- *
- *   2. "Explain My Decision" — AI Reasoning Trace
- *      - "Why?" button on every AI message
- *      - Calls POST /api/ai-insights/chat/explain/
- *      - Displays reasoning chain: steps, weights, data sources,
- *        signals ignored, alternative conclusions, confidence breakdown
- *
- * Design: matches DashboardPage aesthetic exactly (cardStyle, C.*, css vars)
- * Language: English only
+ * FIX v4.2:
+ *   - useTTS uses refs (not state) to track isSpeaking + speakingMessageId
+ *     inside the speak() callback → no more stale closure bug
+ *   - TTS is NEVER auto-triggered. Only fires when user clicks "Listen".
+ *   - Clicking "Listen" on the active message → pause
+ *   - Clicking "Listen" on another message → stop current, start new
  */
 
 import {
   Sparkles, Send, ChevronRight, ThumbsUp, ThumbsDown,
-  Brain, CheckCircle, Clock, User, RefreshCw, Zap,
+  Brain, CheckCircle, Clock, User, RefreshCw,
   TrendingUp, Package, Users, BarChart3, DollarSign,
-  AlertTriangle, ArrowRight, Loader, MessageSquare,
-  Activity, Target, X, Mic, MicOff, Volume2, VolumeX,
+  ArrowRight, Loader,
+  Activity, X, Mic, MicOff, Volume2, VolumeX,
   HelpCircle, ChevronDown, ChevronUp, Database, GitBranch,
-  Lightbulb, AlertCircle, CheckCircle2, XCircle, Layers,
-  Eye, EyeOff,
+  Lightbulb, AlertCircle, Layers,
+  EyeOff,
 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, KeyboardEvent } from 'react';
 import { api } from '../lib/api';
@@ -60,9 +51,9 @@ const css = {
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-type Role    = 'user' | 'ai';
-type Topic   = 'credit' | 'stock' | 'churn' | 'forecast' | 'revenue' | 'general';
-type Urgency = 'critical' | 'high' | 'medium' | 'low';
+type Role      = 'user' | 'ai';
+type Topic     = 'credit' | 'stock' | 'churn' | 'forecast' | 'revenue' | 'general';
+type Urgency   = 'critical' | 'high' | 'medium' | 'low';
 type VoiceState = 'idle' | 'recording' | 'processing' | 'speaking';
 
 interface DecisionOption { label: string; pros: string; cons: string; }
@@ -199,9 +190,9 @@ const WEIGHT_COLORS: Record<string, string> = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function useVoiceRecorder() {
-  const [voiceState,   setVoiceState]   = useState<VoiceState>('idle');
-  const [liveText,     setLiveText]     = useState('');
-  const [audioLevels,  setAudioLevels]  = useState<number[]>(Array(20).fill(0));
+  const [voiceState,  setVoiceState]  = useState<VoiceState>('idle');
+  const [liveText,    setLiveText]    = useState('');
+  const [audioLevels, setAudioLevels] = useState<number[]>(Array(20).fill(0));
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef        = useRef<Blob[]>([]);
@@ -209,7 +200,6 @@ function useVoiceRecorder() {
   const animFrameRef     = useRef<number>(0);
   const recognitionRef   = useRef<any>(null);
 
-  // Waveform animation
   const startWaveform = (stream: MediaStream) => {
     const ctx      = new AudioContext();
     const src      = ctx.createMediaStreamSource(stream);
@@ -217,12 +207,10 @@ function useVoiceRecorder() {
     analyser.fftSize = 64;
     src.connect(analyser);
     analyserRef.current = analyser;
-
     const tick = () => {
       const data = new Uint8Array(analyser.frequencyBinCount);
       analyser.getByteFrequencyData(data);
-      const levels = Array.from(data.slice(0, 20)).map(v => v / 255);
-      setAudioLevels(levels);
+      setAudioLevels(Array.from(data.slice(0, 20)).map(v => v / 255));
       animFrameRef.current = requestAnimationFrame(tick);
     };
     tick();
@@ -233,24 +221,19 @@ function useVoiceRecorder() {
     setLiveText('');
     setVoiceState('recording');
 
-    // Web Speech API for live transcription (best-effort)
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
       const rec = new SpeechRecognition();
-      rec.continuous     = true;
-      rec.interimResults = true;
-      rec.lang           = 'en-US';
+      rec.continuous = true; rec.interimResults = true; rec.lang = 'en-US';
       rec.onresult = (e: any) => {
         let t = '';
-        for (let i = e.resultIndex; i < e.results.length; i++)
-          t += e.results[i][0].transcript;
+        for (let i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript;
         setLiveText(t);
       };
       rec.start();
       recognitionRef.current = rec;
     }
 
-    // MediaRecorder for Whisper fallback
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     startWaveform(stream);
     const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' });
@@ -261,46 +244,85 @@ function useVoiceRecorder() {
   }, [voiceState]);
 
   const stopRecording = useCallback((): Promise<Blob> => {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       recognitionRef.current?.stop();
       cancelAnimationFrame(animFrameRef.current);
       setAudioLevels(Array(20).fill(0));
-
       const mr = mediaRecorderRef.current;
       if (!mr) { resolve(new Blob()); return; }
-
-      mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        resolve(blob);
-      };
+      mr.onstop = () => resolve(new Blob(chunksRef.current, { type: 'audio/webm' }));
       mr.stop();
       mr.stream.getTracks().forEach(t => t.stop());
     });
   }, []);
 
-  return {
-    voiceState, setVoiceState, liveText, setLiveText,
-    audioLevels, startRecording, stopRecording,
-  };
+  return { voiceState, setVoiceState, liveText, setLiveText, audioLevels, startRecording, stopRecording };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TTS player hook
+// TTS hook v4.2
+// KEY FIX: all live state is tracked in refs so the speak() useCallback
+// never reads stale closure values — eliminating the "auto-starts on new
+// message" bug caused by React re-creating closures mid-flight.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function useTTS() {
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [ttsEnabled, setTtsEnabled] = useState(true);
-  const audioRef    = useRef<HTMLAudioElement | null>(null);
+  // State — drives UI re-renders only
+  const [isSpeaking,        setIsSpeaking]        = useState(false);
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [ttsEnabled,        setTtsEnabled]        = useState(true);
 
-  const speak = useCallback(async (text: string) => {
-    if (!ttsEnabled || !text) return;
-    // Stop current playback
+  // Refs — always hold the current live value, readable inside callbacks
+  const audioRef        = useRef<HTMLAudioElement | null>(null);
+  const isSpeakingRef   = useRef(false);
+  const speakingIdRef   = useRef<string | null>(null);
+  const ttsEnabledRef   = useRef(true);
+
+  // Sync refs whenever state changes
+  useEffect(() => { isSpeakingRef.current = isSpeaking; },        [isSpeaking]);
+  useEffect(() => { speakingIdRef.current = speakingMessageId; },  [speakingMessageId]);
+  useEffect(() => { ttsEnabledRef.current = ttsEnabled; },         [ttsEnabled]);
+
+  /** Stop audio and reset all state + refs. */
+  const _stop = useCallback(() => {
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    setIsSpeaking(false);
+    setSpeakingMessageId(null);
+    isSpeakingRef.current = false;
+    speakingIdRef.current = null;
+  }, []);
+
+  /**
+   * speak(text, messageId)
+   *
+   * Behaviour:
+   *   • ttsEnabled OFF  → do nothing (button is still shown; user must enable)
+   *   • same message currently playing → pause/stop (toggle)
+   *   • different message (or nothing playing) → stop current, fetch & play new
+   *
+   * Uses refs for the guard checks so it NEVER accidentally triggers from a
+   * stale closure created before the latest message arrived.
+   */
+  const speak = useCallback(async (text: string, messageId: string) => {
+    // Guard: TTS disabled globally
+    if (!ttsEnabledRef.current || !text) return;
+
+    // Guard: same message already playing → toggle off
+    if (speakingIdRef.current === messageId && isSpeakingRef.current) {
+      _stop();
+      return;
+    }
+
+    // Stop whatever is playing right now
+    _stop();
+
+    // Immediately mark as "playing this message" so button state updates
     setIsSpeaking(true);
+    setSpeakingMessageId(messageId);
+    isSpeakingRef.current = true;
+    speakingIdRef.current = messageId;
 
     try {
-      // Clean text: remove markdown, truncate to 500 chars for speed
       const clean = text
         .replace(/\*\*/g, '')
         .replace(/\n/g, ' ')
@@ -309,31 +331,35 @@ function useTTS() {
 
       const token = localStorage.getItem('fasi_access_token') || '';
       const resp  = await fetch('/api/ai-insights/voice/speak/', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ text: clean, voice: 'nova' }),
+        body:    JSON.stringify({ text: clean, voice: 'nova' }),
       });
-
       if (!resp.ok) throw new Error('TTS failed');
 
-      const blob = await resp.blob();
-      const url  = URL.createObjectURL(blob);
+      // Guard: user may have clicked pause while the request was in-flight
+      if (speakingIdRef.current !== messageId) return;
+
+      const blob  = await resp.blob();
+      const url   = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audioRef.current = audio;
-      audio.onended = () => { setIsSpeaking(false); URL.revokeObjectURL(url); };
-      audio.onerror = () => { setIsSpeaking(false); };
+
+      audio.onended = () => { _stop(); URL.revokeObjectURL(url); };
+      audio.onerror = () => { _stop(); };
+
+      // Final guard before playing
+      if (speakingIdRef.current !== messageId) { URL.revokeObjectURL(url); return; }
+
       audio.play();
     } catch {
-      setIsSpeaking(false);
+      _stop();
     }
-  }, [ttsEnabled]);
+  }, [_stop]); // ← _stop is the only dep; live state is read through refs
 
-  const stopSpeaking = useCallback(() => {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    setIsSpeaking(false);
-  }, []);
+  const stopSpeaking = useCallback(() => { _stop(); }, [_stop]);
 
-  return { isSpeaking, ttsEnabled, setTtsEnabled, speak, stopSpeaking };
+  return { isSpeaking, speakingMessageId, ttsEnabled, setTtsEnabled, speak, stopSpeaking };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -341,9 +367,9 @@ function useTTS() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ExplainPanel({ answer, onClose }: { answer: string; onClose: () => void }) {
-  const [loading, setLoading] = useState(true);
-  const [result,  setResult]  = useState<ExplainResult | null>(null);
-  const [error,   setError]   = useState<string | null>(null);
+  const [loading,  setLoading]  = useState(true);
+  const [result,   setResult]   = useState<ExplainResult | null>(null);
+  const [error,    setError]    = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>('steps');
 
   useEffect(() => {
@@ -352,9 +378,9 @@ function ExplainPanel({ answer, onClose }: { answer: string; onClose: () => void
       try {
         const token = localStorage.getItem('fasi_access_token') || '';
         const resp  = await fetch('/api/ai-insights/chat/explain/', {
-          method: 'POST',
+          method:  'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ answer }),
+          body:    JSON.stringify({ answer }),
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
@@ -379,7 +405,9 @@ function ExplainPanel({ answer, onClose }: { answer: string; onClose: () => void
       }}>
         <Icon size={13} style={{ color, flexShrink: 0 }} />
         <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: expanded === id ? color : css.cardFg }}>{label}</span>
-        {expanded === id ? <ChevronUp size={13} style={{ color: css.mutedFg }} /> : <ChevronDown size={13} style={{ color: css.mutedFg }} />}
+        {expanded === id
+          ? <ChevronUp size={13} style={{ color: css.mutedFg }} />
+          : <ChevronDown size={13} style={{ color: css.mutedFg }} />}
       </button>
       {expanded === id && (
         <div style={{ padding: '0 14px 14px', borderTop: `1px solid ${css.border}` }}>
@@ -390,25 +418,10 @@ function ExplainPanel({ answer, onClose }: { answer: string; onClose: () => void
   );
 
   return (
-    <div style={{
-      marginTop: 12, borderRadius: 14,
-      border: `1px solid ${C.violet}30`,
-      background: `${C.violet}05`,
-      overflow: 'hidden',
-    }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '12px 16px',
-        background: `linear-gradient(135deg, ${C.indigo}15, ${C.violet}15)`,
-        borderBottom: `1px solid ${C.violet}20`,
-      }}>
+    <div style={{ marginTop: 12, borderRadius: 14, border: `1px solid ${C.violet}30`, background: `${C.violet}05`, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: `linear-gradient(135deg, ${C.indigo}15, ${C.violet}15)`, borderBottom: `1px solid ${C.violet}20` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: 8,
-            background: `linear-gradient(135deg, ${C.indigo}, ${C.violet})`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: `linear-gradient(135deg, ${C.indigo}, ${C.violet})`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Brain size={13} color="#fff" />
           </div>
           <div>
@@ -428,24 +441,20 @@ function ExplainPanel({ answer, onClose }: { answer: string; onClose: () => void
             <span style={{ fontSize: 13 }}>Reconstructing my reasoning chain…</span>
           </div>
         )}
-
         {error && (
           <div style={{ padding: 12, borderRadius: 10, background: `${C.rose}08`, color: C.rose, fontSize: 12 }}>
             Could not load reasoning: {error}
           </div>
         )}
-
         {result && (
           <>
-            {/* Confidence breakdown — always visible */}
             {result.confidence_breakdown && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, marginBottom: 12 }}>
                 {Object.entries(result.confidence_breakdown).map(([key, val]) => {
                   const color = val === 'high' ? C.emerald : val === 'medium' ? C.amber : C.rose;
-                  const label = key.replace(/_/g, ' ');
                   return (
                     <div key={key} style={{ padding: '8px 10px', borderRadius: 8, background: `${color}10`, border: `1px solid ${color}25` }}>
-                      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: css.mutedFg, margin: '0 0 3px' }}>{label}</p>
+                      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: css.mutedFg, margin: '0 0 3px' }}>{key.replace(/_/g, ' ')}</p>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
                         <span style={{ fontSize: 11, fontWeight: 700, color, textTransform: 'capitalize' }}>{val}</span>
@@ -455,41 +464,28 @@ function ExplainPanel({ answer, onClose }: { answer: string; onClose: () => void
                 })}
               </div>
             )}
-
-            {/* Key assumption */}
             {result.key_assumption && (
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', borderRadius: 10, background: `${C.amber}08`, border: `1px solid ${C.amber}25`, marginBottom: 10 }}>
                 <Lightbulb size={13} style={{ color: C.amber, flexShrink: 0, marginTop: 1 }} />
                 <p style={{ fontSize: 11, color: css.cardFg, margin: 0, lineHeight: 1.5 }}>
-                  <span style={{ fontWeight: 700, color: C.amber }}>Key assumption: </span>
-                  {result.key_assumption}
+                  <span style={{ fontWeight: 700, color: C.amber }}>Key assumption: </span>{result.key_assumption}
                 </p>
               </div>
             )}
-
-            {/* Reasoning steps */}
             <Section id="steps" label={`Reasoning chain (${result.reasoning_steps?.length ?? 0} steps)`} icon={GitBranch} color={C.indigo}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
-                {result.reasoning_steps?.map((step) => {
+                {result.reasoning_steps?.map(step => {
                   const wc = WEIGHT_COLORS[step.weight] ?? css.mutedFg;
                   return (
                     <div key={step.step} style={{ display: 'flex', gap: 10 }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, flexShrink: 0 }}>
-                        <div style={{
-                          width: 22, height: 22, borderRadius: '50%', fontSize: 10, fontWeight: 800,
-                          background: `${C.indigo}20`, color: C.indigo,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                        }}>{step.step}</div>
-                        {step.step < (result.reasoning_steps?.length ?? 0) && (
-                          <div style={{ width: 1, flex: 1, minHeight: 12, background: `${css.border}`, margin: '2px 0' }} />
-                        )}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+                        <div style={{ width: 22, height: 22, borderRadius: '50%', fontSize: 10, fontWeight: 800, background: `${C.indigo}20`, color: C.indigo, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{step.step}</div>
+                        {step.step < (result.reasoning_steps?.length ?? 0) && <div style={{ width: 1, flex: 1, minHeight: 12, background: css.border, margin: '2px 0' }} />}
                       </div>
                       <div style={{ flex: 1, paddingBottom: 8 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                           <span style={{ fontSize: 12, fontWeight: 700, color: css.cardFg }}>{step.label}</span>
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 20, color: wc, background: `${wc}15`, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                            {step.weight}
-                          </span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 20, color: wc, background: `${wc}15`, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{step.weight}</span>
                         </div>
                         <div style={{ padding: '6px 10px', borderRadius: 8, background: `${C.indigo}06`, border: `1px solid ${C.indigo}15`, marginBottom: 4 }}>
                           <p style={{ fontSize: 11, fontFamily: 'monospace', color: C.indigo, margin: 0 }}>{step.data_point}</p>
@@ -501,8 +497,6 @@ function ExplainPanel({ answer, onClose }: { answer: string; onClose: () => void
                 })}
               </div>
             </Section>
-
-            {/* Data sources */}
             {result.data_sources_used?.length > 0 && (
               <Section id="sources" label="Data sources used" icon={Database} color={C.teal}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
@@ -512,8 +506,6 @@ function ExplainPanel({ answer, onClose }: { answer: string; onClose: () => void
                 </div>
               </Section>
             )}
-
-            {/* Signals ignored */}
             {result.signals_ignored?.length > 0 && (
               <Section id="ignored" label="Signals considered but deprioritized" icon={EyeOff} color={C.amber}>
                 <div style={{ marginTop: 10 }}>
@@ -525,8 +517,6 @@ function ExplainPanel({ answer, onClose }: { answer: string; onClose: () => void
                 </div>
               </Section>
             )}
-
-            {/* Alternative conclusions */}
             {result.alternative_conclusions?.length > 0 && (
               <Section id="alt" label="Alternative conclusions I could have drawn" icon={Layers} color={C.violet}>
                 <div style={{ marginTop: 10 }}>
@@ -557,8 +547,7 @@ function WaveformBar({ levels }: { levels: number[] }) {
           width: 3, borderRadius: 2,
           height: `${Math.max(6, v * 28)}px`,
           background: `linear-gradient(to top, ${C.rose}, ${C.violet})`,
-          transition: 'height 0.05s ease',
-          flexShrink: 0,
+          transition: 'height 0.05s ease', flexShrink: 0,
         }} />
       ))}
     </div>
@@ -596,15 +585,9 @@ function DecisionCardView({ card, onSelectOption }: { card: DecisionCard; onSele
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {card.options.map((opt, i) => (
               <button key={i} onClick={() => { setSelected(i); onSelectOption(`Tell me more about option: "${opt.label}"`); }}
-                style={{
-                  width: '100%', textAlign: 'left', padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
-                  border: `1px solid ${selected === i ? C.indigo : css.border}`,
-                  background: selected === i ? `${C.indigo}08` : css.card,
-                }}>
+                style={{ width: '100%', textAlign: 'left', padding: '12px 14px', borderRadius: 10, cursor: 'pointer', border: `1px solid ${selected === i ? C.indigo : css.border}`, background: selected === i ? `${C.indigo}08` : css.card }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <span style={{ fontSize: 10, fontWeight: 800, color: C.indigo, width: 18, height: 18, borderRadius: 6, background: `${C.indigo}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {String.fromCharCode(65 + i)}
-                  </span>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: C.indigo, width: 18, height: 18, borderRadius: 6, background: `${C.indigo}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{String.fromCharCode(65 + i)}</span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: css.cardFg }}>{opt.label}</span>
                   {selected === i && <CheckCircle size={13} style={{ color: C.indigo, marginLeft: 'auto' }} />}
                 </div>
@@ -657,14 +640,17 @@ function TypingIndicator({ phrase }: { phrase: string }) {
 // Message bubble
 // ─────────────────────────────────────────────────────────────────────────────
 
-function MessageBubble({ message, onFollowup, onSpeak, isSpeaking }: {
+function MessageBubble({ message, onFollowup, onSpeak, speakingMessageId }: {
   message: ChatMessage;
   onFollowup: (q: string) => void;
-  onSpeak: (text: string) => void;
-  isSpeaking: boolean;
+  onSpeak: (text: string, messageId: string) => void;
+  speakingMessageId: string | null;
 }) {
   const isUser = message.role === 'user';
   const [showExplain, setShowExplain] = useState(false);
+
+  // true only when THIS specific message is being read
+  const isThisPlaying = speakingMessageId === message.id;
 
   const renderContent = (text: string) =>
     text.split('\n').map((line, i, arr) => {
@@ -708,8 +694,8 @@ function MessageBubble({ message, onFollowup, onSpeak, isSpeaking }: {
         <div style={{ width: 30, height: 30, borderRadius: 10, flexShrink: 0, background: `linear-gradient(135deg, ${C.indigo}, ${C.violet})`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>
           <Sparkles size={13} color="#fff" />
         </div>
-
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+
           {/* Meta badges */}
           {(topic || urgency !== 'low') && !message.loading && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -724,7 +710,9 @@ function MessageBubble({ message, onFollowup, onSpeak, isSpeaking }: {
                   {urgencyCfg.label}
                 </span>
               )}
-              {message.fallback && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, color: C.amber, background: `${C.amber}12` }}>offline</span>}
+              {message.fallback && (
+                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, color: C.amber, background: `${C.amber}12` }}>offline</span>
+              )}
             </div>
           )}
 
@@ -734,32 +722,37 @@ function MessageBubble({ message, onFollowup, onSpeak, isSpeaking }: {
             {message.decision_card && <DecisionCardView card={message.decision_card} onSelectOption={onFollowup} />}
           </div>
 
-          {/* Action bar — speak + explain */}
+          {/* Action bar: Listen (manual) + Why? */}
           {!message.loading && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {/* TTS button */}
-              <button onClick={() => onSpeak(message.content)}
-                title={isSpeaking ? 'Speaking…' : 'Read aloud'}
+
+              {/* Listen / Pause — purely manual, zero auto-trigger */}
+              <button
+                onClick={() => onSpeak(message.content, message.id)}
+                title={isThisPlaying ? 'Pause' : 'Listen'}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
-                  borderRadius: 8, border: `1px solid ${css.border}`,
-                  background: isSpeaking ? `${C.teal}15` : 'none',
-                  color: isSpeaking ? C.teal : css.mutedFg, fontSize: 11, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '4px 10px', borderRadius: 8,
+                  border: `1px solid ${isThisPlaying ? C.teal + '60' : css.border}`,
+                  background: isThisPlaying ? `${C.teal}15` : 'none',
+                  color: isThisPlaying ? C.teal : css.mutedFg,
+                  fontSize: 11, cursor: 'pointer', transition: 'all 0.15s',
                 }}>
-                {isSpeaking
-                  ? <><Volume2 size={12} /><span>Speaking</span></>
-                  : <><Volume2 size={12} /><span>Listen</span></>
-                }
+                <Volume2 size={12} />
+                <span>{isThisPlaying ? 'Pause' : 'Listen'}</span>
               </button>
 
-              {/* Explain button */}
-              <button onClick={() => setShowExplain(prev => !prev)}
+              {/* Why? */}
+              <button
+                onClick={() => setShowExplain(prev => !prev)}
                 title="Show AI reasoning chain"
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
-                  borderRadius: 8, border: `1px solid ${showExplain ? C.violet + '60' : css.border}`,
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '4px 10px', borderRadius: 8,
+                  border: `1px solid ${showExplain ? C.violet + '60' : css.border}`,
                   background: showExplain ? `${C.violet}12` : 'none',
-                  color: showExplain ? C.violet : css.mutedFg, fontSize: 11, cursor: 'pointer',
+                  color: showExplain ? C.violet : css.mutedFg,
+                  fontSize: 11, cursor: 'pointer', transition: 'all 0.15s',
                 }}>
                 <HelpCircle size={12} />
                 <span>Why?</span>
@@ -767,7 +760,6 @@ function MessageBubble({ message, onFollowup, onSpeak, isSpeaking }: {
             </div>
           )}
 
-          {/* Explain panel */}
           {showExplain && <ExplainPanel answer={message.content} onClose={() => setShowExplain(false)} />}
 
           {/* Suggested followups */}
@@ -784,8 +776,7 @@ function MessageBubble({ message, onFollowup, onSpeak, isSpeaking }: {
                     onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = C.indigo; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = css.border; }}
                   >
-                    <ArrowRight size={11} style={{ color: C.indigo, flexShrink: 0 }} />
-                    {q}
+                    <ArrowRight size={11} style={{ color: C.indigo, flexShrink: 0 }} />{q}
                   </button>
                 ))}
               </div>
@@ -804,14 +795,10 @@ function MessageBubble({ message, onFollowup, onSpeak, isSpeaking }: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function VoiceButton({ voiceState, audioLevels, onClick }: {
-  voiceState: VoiceState;
-  audioLevels: number[];
-  onClick: () => void;
+  voiceState: VoiceState; audioLevels: number[]; onClick: () => void;
 }) {
-  const isRec = voiceState === 'recording';
+  const isRec  = voiceState === 'recording';
   const isProc = voiceState === 'processing';
-  const accent = isRec ? C.rose : isProc ? C.amber : C.indigo;
-
   return (
     <button onClick={onClick} title={isRec ? 'Stop recording' : 'Start voice input'}
       style={{
@@ -820,22 +807,14 @@ function VoiceButton({ voiceState, audioLevels, onClick }: {
         cursor: isProc ? 'not-allowed' : 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         position: 'relative', overflow: 'hidden',
-        boxShadow: isRec ? `0 0 0 3px ${C.rose}30` : 'none',
-        transition: 'all 0.2s',
+        boxShadow: isRec ? `0 0 0 3px ${C.rose}30` : 'none', transition: 'all 0.2s',
       }}>
-      {isRec && (
-        <div style={{
-          position: 'absolute', inset: 0, borderRadius: 12,
-          animation: 'voicePulse 1.2s ease infinite',
-          background: `${C.rose}20`,
-        }} />
-      )}
+      {isRec && <div style={{ position: 'absolute', inset: 0, borderRadius: 12, animation: 'voicePulse 1.2s ease infinite', background: `${C.rose}20` }} />}
       {isProc
         ? <Loader size={16} style={{ color: C.amber, animation: 'chatSpin 1s linear infinite' }} />
         : isRec
         ? <MicOff size={16} style={{ color: C.rose, zIndex: 1 }} />
-        : <Mic size={16} style={{ color: C.indigo }} />
-      }
+        : <Mic size={16} style={{ color: C.indigo }} />}
     </button>
   );
 }
@@ -887,14 +866,13 @@ export function AIChat({ className = '' }: AIChatProps) {
     return () => clearInterval(t);
   }, [sending]);
 
-  // Load conversation history
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
         const res = await api.get<{ count: number; conversations: StoredConversationSummary[] }>('/ai-insights/conversations/');
         const latest = res.conversations?.[0];
-        if (!latest) { if (mounted) { setMessages([INITIAL_MESSAGE]); } return; }
+        if (!latest) { if (mounted) setMessages([INITIAL_MESSAGE]); return; }
         const hist = await api.get<{ count: number; messages: StoredConversationMessage[] }>(`/ai-insights/conversations/${latest.id}/messages/`);
         const mapped = (hist.messages || []).map((m): ChatMessage => ({
           id: m.id, role: m.role === 'assistant' ? 'ai' : 'user', content: m.content,
@@ -904,16 +882,17 @@ export function AIChat({ className = '' }: AIChatProps) {
           topic: m.metadata?.topic, fallback: m.metadata?.fallback,
         }));
         if (mounted) { setConversationId(latest.id); setMessages(mapped.length ? mapped : [INITIAL_MESSAGE]); }
-      } catch { if (mounted) { setMessages([INITIAL_MESSAGE]); } }
+      } catch { if (mounted) setMessages([INITIAL_MESSAGE]); }
       finally { if (mounted) setLoadingHistory(false); }
     })();
     return () => { mounted = false; };
   }, []);
 
-  // ── Send message ────────────────────────────────────────────────────────────
+  // ── Send — TTS intentionally NOT called here ───────────────────────────────
   const send = useCallback(async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || sending) return;
+
     const userMsg: ChatMessage = { id: uid(), role: 'user', content: trimmed, time: now() };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
@@ -934,34 +913,31 @@ export function AIChat({ className = '' }: AIChatProps) {
         ...(conversationId ? { conversation_id: conversationId } : {}),
       });
       if (res.conversation_id) setConversationId(res.conversation_id);
-      const aiMsg: ChatMessage = {
+
+      setMessages(prev => [...prev, {
         id: uid(), role: 'ai', content: res.answer, time: now(),
         decision_needed: res.decision_needed, decision_card: res.decision_card,
         suggested_followups: res.suggested_followups, urgency: res.urgency,
         topic: res.topic, fallback: res.fallback,
-      };
-      setMessages(prev => [...prev, aiMsg]);
-      // Auto-speak response
-      if (tts.ttsEnabled) tts.speak(res.answer);
+        // ← NO tts.speak() call here — user controls playback via "Listen" button
+      }]);
     } catch {
       setMessages(prev => [...prev, {
-        id: uid(), role: 'ai', content: "I'm temporarily unavailable. Please check your dashboard panels.",
+        id: uid(), role: 'ai',
+        content: "I'm temporarily unavailable. Please check your dashboard panels.",
         time: now(), error: true,
         suggested_followups: ["What are my top business risks?", "Which customers need urgent attention?"],
       }]);
     } finally {
       setSending(false);
     }
-  }, [messages, sending, conversationId, tts]);
+  }, [messages, sending, conversationId]);
 
-  // ── Voice handler ──────────────────────────────────────────────────────────
   const handleVoice = useCallback(async () => {
     if (voice.voiceState === 'recording') {
-      // Stop and transcribe
       voice.setVoiceState('processing');
       const blob = await voice.stopRecording();
 
-      // If Web Speech API got something, use it directly
       if (voice.liveText.trim()) {
         voice.setVoiceState('idle');
         send(voice.liveText.trim());
@@ -969,15 +945,12 @@ export function AIChat({ className = '' }: AIChatProps) {
         return;
       }
 
-      // Whisper fallback
       try {
         const formData = new FormData();
         formData.append('audio', blob, 'audio.webm');
         const token = localStorage.getItem('fasi_access_token') || '';
         const resp = await fetch('/api/ai-insights/voice/transcribe/', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
+          method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData,
         });
         if (resp.ok) {
           const data = await resp.json();
@@ -988,45 +961,36 @@ export function AIChat({ className = '' }: AIChatProps) {
             return;
           }
         }
-      } catch { /* ignore, fallback to liveText */ }
+      } catch { /* fall through */ }
 
       voice.setVoiceState('idle');
-      if (voice.liveText.trim()) {
-        send(voice.liveText.trim());
-        voice.setLiveText('');
-      }
+      if (voice.liveText.trim()) { send(voice.liveText.trim()); voice.setLiveText(''); }
+
     } else if (voice.voiceState === 'idle') {
-      try {
-        await voice.startRecording();
-      } catch {
-        alert('Microphone access denied. Please allow microphone access in your browser settings.');
-      }
+      try { await voice.startRecording(); }
+      catch { alert('Microphone access denied. Please allow microphone access in your browser settings.'); }
     }
   }, [voice, send]);
 
-  const handleKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKey   = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); }
   };
+  const handleClear = () => {
+    setMessages([INITIAL_MESSAGE]); setActiveTopic(null); setConversationId(null); tts.stopSpeaking();
+  };
 
-  const handleClear = () => { setMessages([INITIAL_MESSAGE]); setActiveTopic(null); setConversationId(null); };
-
-  const topicData = activeTopic ? TOPICS[activeTopic] : null;
+  const topicData   = activeTopic ? TOPICS[activeTopic] : null;
   const isRecording = voice.voiceState === 'recording';
 
   return (
-    <div style={{
-      background: css.card, borderRadius: 16,
-      border: `1px solid ${css.border}`,
-      boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 4px 20px rgba(0,0,0,0.05)',
-      overflow: 'hidden', display: 'flex', flexDirection: 'column', height: 800,
-    }}>
+    <div style={{ background: css.card, borderRadius: 16, border: `1px solid ${css.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 4px 20px rgba(0,0,0,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column', height: 800 }}>
       <style>{`
         @keyframes chatBounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-5px)} }
-        @keyframes chatSpin { to{transform:rotate(360deg)} }
+        @keyframes chatSpin   { to{transform:rotate(360deg)} }
         @keyframes voicePulse { 0%,100%{opacity:0.4;transform:scale(1)} 50%{opacity:0.8;transform:scale(1.05)} }
       `}</style>
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: `1px solid ${css.border}`, background: css.card }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 36, height: 36, borderRadius: 11, background: `linear-gradient(135deg, ${C.indigo}, ${C.violet})`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 3px 10px ${C.indigo}40` }}>
@@ -1043,9 +1007,8 @@ export function AIChat({ className = '' }: AIChatProps) {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* TTS toggle */}
           <button onClick={() => { tts.stopSpeaking(); tts.setTtsEnabled(p => !p); }}
-            title={tts.ttsEnabled ? 'Disable voice response' : 'Enable voice response'}
+            title={tts.ttsEnabled ? 'Disable voice responses' : 'Enable voice responses'}
             style={{ width: 32, height: 32, borderRadius: 9, border: `1px solid ${css.border}`, background: tts.ttsEnabled ? `${C.teal}12` : 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: tts.ttsEnabled ? C.teal : css.mutedFg }}>
             {tts.ttsEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
           </button>
@@ -1058,7 +1021,7 @@ export function AIChat({ className = '' }: AIChatProps) {
         </div>
       </div>
 
-      {/* ── Topic filter bar ── */}
+      {/* Topic filter bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderBottom: `1px solid ${css.border}`, overflowX: 'auto', background: css.muted + '30' }}>
         <button onClick={() => setActiveTopic(null)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `1px solid ${!activeTopic ? C.indigo + '40' : 'transparent'}`, background: !activeTopic ? `${C.indigo}10` : 'transparent', color: !activeTopic ? C.indigo : css.mutedFg, flexShrink: 0 }}>
           <Activity size={12} />All
@@ -1074,16 +1037,14 @@ export function AIChat({ className = '' }: AIChatProps) {
         })}
       </div>
 
-      {/* ── Topic quick questions ── */}
+      {/* Topic quick questions */}
       {topicData && (
         <div style={{ padding: '12px 16px', borderBottom: `1px solid ${css.border}`, background: `${topicData.accent}06` }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: topicData.accent, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
               <topicData.icon size={12} />{topicData.label}
             </p>
-            <button onClick={() => setActiveTopic(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: css.mutedFg, padding: 2 }}>
-              <X size={13} />
-            </button>
+            <button onClick={() => setActiveTopic(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: css.mutedFg, padding: 2 }}><X size={13} /></button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {topicData.questions.map((q, i) => (
@@ -1095,7 +1056,7 @@ export function AIChat({ className = '' }: AIChatProps) {
         </div>
       )}
 
-      {/* ── Messages ── */}
+      {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
         {loadingHistory ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: css.mutedFg, fontSize: 13 }}>
@@ -1106,14 +1067,14 @@ export function AIChat({ className = '' }: AIChatProps) {
           messages.map(msg =>
             msg.loading
               ? <TypingIndicator key={msg.id} phrase={loadingPhrase} />
-              : <MessageBubble key={msg.id} message={msg} onFollowup={send} onSpeak={tts.speak} isSpeaking={tts.isSpeaking} />
+              : <MessageBubble key={msg.id} message={msg} onFollowup={send} onSpeak={tts.speak} speakingMessageId={tts.speakingMessageId} />
           )
         )}
         {sending && <TypingIndicator phrase={loadingPhrase} />}
         <div ref={bottomRef} />
       </div>
 
-      {/* ── Voice recording indicator ── */}
+      {/* Voice recording indicator */}
       {isRecording && (
         <div style={{ padding: '10px 16px', background: `${C.rose}08`, borderTop: `1px solid ${C.rose}20`, display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
@@ -1129,23 +1090,22 @@ export function AIChat({ className = '' }: AIChatProps) {
         </div>
       )}
 
-      {/* ── Input area ── */}
+      {/* Input area */}
       <div style={{ padding: '12px 16px', borderTop: `1px solid ${css.border}`, background: css.card }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-          {/* Voice button */}
-          <VoiceButton
-            voiceState={voice.voiceState}
-            audioLevels={voice.audioLevels}
-            onClick={handleVoice}
-          />
-
-          {/* Text input */}
-          <div style={{ flex: 1, position: 'relative' }}>
+          <VoiceButton voiceState={voice.voiceState} audioLevels={voice.audioLevels} onClick={handleVoice} />
+          <div style={{ flex: 1 }}>
             <textarea
               ref={inputRef}
               rows={1}
               value={isRecording ? (voice.liveText || '') : input}
-              onChange={e => { if (!isRecording) { setInput(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; } }}
+              onChange={e => {
+                if (!isRecording) {
+                  setInput(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                }
+              }}
               onKeyDown={handleKey}
               placeholder={isRecording ? 'Listening… speak your question' : 'Ask a business question or press the mic…'}
               disabled={sending || isRecording}
@@ -1155,36 +1115,31 @@ export function AIChat({ className = '' }: AIChatProps) {
                 border: `1px solid ${isRecording ? C.rose + '60' : css.border}`,
                 background: isRecording ? `${C.rose}04` : css.muted + '60',
                 color: css.cardFg, fontSize: 13, lineHeight: 1.5,
-                outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
-                transition: 'border-color 0.15s',
+                outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', transition: 'border-color 0.15s',
               }}
               onFocus={e => { if (!isRecording) e.target.style.borderColor = C.indigo; }}
-              onBlur={e => { if (!isRecording) e.target.style.borderColor = css.border; }}
+              onBlur={e =>  { if (!isRecording) e.target.style.borderColor = css.border; }}
             />
           </div>
-
-          {/* Send button */}
           <button
             onClick={() => isRecording ? handleVoice() : send(input)}
             disabled={(!input.trim() && !isRecording) || sending || voice.voiceState === 'processing'}
             style={{
               width: 44, height: 44, borderRadius: 12, border: 'none',
-              background: isRecording ? `linear-gradient(135deg, ${C.rose}, ${C.orange})` :
-                          (!input.trim() || sending) ? css.muted :
-                          `linear-gradient(135deg, ${C.indigo}, ${C.violet})`,
+              background: isRecording
+                ? `linear-gradient(135deg, ${C.rose}, ${C.orange})`
+                : (!input.trim() || sending) ? css.muted
+                : `linear-gradient(135deg, ${C.indigo}, ${C.violet})`,
               color: ((!input.trim() && !isRecording) || sending) ? css.mutedFg : '#fff',
               cursor: ((!input.trim() && !isRecording) || sending) ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               transition: 'all 0.15s',
-              boxShadow: isRecording ? `0 3px 10px ${C.rose}40` :
-                         (!input.trim() || sending) ? 'none' : `0 3px 10px ${C.indigo}40`,
+              boxShadow: isRecording ? `0 3px 10px ${C.rose}40` : (!input.trim() || sending) ? 'none' : `0 3px 10px ${C.indigo}40`,
             }}>
             {voice.voiceState === 'processing'
               ? <Loader size={16} style={{ animation: 'chatSpin 1s linear infinite' }} />
-              : isRecording
-              ? <Send size={16} />
-              : sending
-              ? <Loader size={16} style={{ animation: 'chatSpin 1s linear infinite' }} />
+              : isRecording ? <Send size={16} />
+              : sending    ? <Loader size={16} style={{ animation: 'chatSpin 1s linear infinite' }} />
               : <Send size={16} />}
           </button>
         </div>
