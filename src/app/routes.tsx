@@ -18,7 +18,7 @@ import { ProfilePage } from './pages/ProfilePage';
 import { TeamPage } from './pages/TeamPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { CompetitiveBenchmarkPage } from './pages/CompetitiveBenchmarkPage';
-
+import { AlertHistoryTab } from './components/AlertHistoryTab';
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -96,7 +96,10 @@ export const router = createBrowserRouter([
         path: 'profile',
         element: <ProfilePage />,
       },
-
+        {
+        path: 'alert-history',
+        element: <AlertHistoryTab />,
+      },
     ],
   },
 ]);

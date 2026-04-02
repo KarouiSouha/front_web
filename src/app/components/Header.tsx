@@ -1,6 +1,10 @@
-import { Bell, User, Moon, Sun, UserPlus, Shield, LogOut } from 'lucide-react';
+/**
+ * src/app/components/Header.tsx  (updated)
+ * Replace the static bell with the real NotificationBell component.
+ */
+
+import { User, Moon, Sun, UserPlus, Shield, LogOut } from 'lucide-react';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,9 +18,10 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { CreateUserDialog } from './CreateUserDialog';
 import { ManagePermissionsDialog } from './ManagePermissionsDialog';
+import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router';
-
+import { AlertHistoryTab } from './AlertHistoryTab';
 interface HeaderProps {
   onMenuClick: () => void;
 }
@@ -30,7 +35,6 @@ interface UserAccountData {
   tempPassword?: string;
 }
 
-// ── Inline WEEG logo mark ──────────────────────────────────────────────────
 function WeegMark({ size = 32 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -54,7 +58,6 @@ export function Header({ onMenuClick }: HeaderProps) {
   const { theme, setTheme } = useTheme();
   const { user, users, logout, createAgent, updateUserPermissions } = useAuth();
   const navigate = useNavigate();
-  const alertCount = 6;
   const [createUserOpen, setCreateUserOpen] = useState(false);
   const [managePermissionsOpen, setManagePermissionsOpen] = useState(false);
 
@@ -111,60 +114,10 @@ export function Header({ onMenuClick }: HeaderProps) {
               <span className="sr-only">Toggle theme</span>
             </Button>
 
-            {/* Notifications */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="relative rounded-full p-2 hover:bg-accent transition-colors">
-                  <Bell className="h-5 w-5" />
-                  {alertCount > 0 && (
-                    <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-orange-500 text-white text-xs">
-                      {alertCount}
-                    </Badge>
-                  )}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80">
-                <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <div className="max-h-96 overflow-y-auto">
-                  <DropdownMenuItem className="flex flex-col items-start gap-1 p-3">
-                    <div className="flex items-center gap-2 w-full">
-                      <span className="text-red-500">🔴</span>
-                      <span className="text-sm font-medium flex-1">Low Stock Alert</span>
-                      <span className="text-xs text-muted-foreground">2h ago</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground pl-6">
-                      Desk Office Chair stock below minimum threshold
-                    </p>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="flex flex-col items-start gap-1 p-3">
-                    <div className="flex items-center gap-2 w-full">
-                      <span className="text-orange-500">💰</span>
-                      <span className="text-sm font-medium flex-1">Overdue Payment</span>
-                      <span className="text-xs text-muted-foreground">5h ago</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground pl-6">
-                      Digital Services LLC has overdue payment
-                    </p>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="flex flex-col items-start gap-1 p-3">
-                    <div className="flex items-center gap-2 w-full">
-                      <span className="text-sky-500">📈</span>
-                      <span className="text-sm font-medium flex-1">High Sales</span>
-                      <span className="text-xs text-muted-foreground">1d ago</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground pl-6">
-                      AirPods Pro sales increased by 300%
-                    </p>
-                  </DropdownMenuItem>
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="justify-center text-sky-600 cursor-pointer">
-                  View all notifications
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
+            {/* ── Real notification bell — replaces the static mock ── */}
+<NotificationBell 
+  onViewAll={() => navigate('/dashboard/alert-history')} 
+/>
             {/* User Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -187,7 +140,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                       <UserPlus className="h-4 w-4" />
                       Create User Account
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setManagePermissionsOpen(true)} className="gap-2">
+                    <DropdownMenuItem onClick={() => setManagePermissionsDialog(true)} className="gap-2">
                       <Shield className="h-4 w-4" />
                       Manage Permissions
                     </DropdownMenuItem>
@@ -218,4 +171,8 @@ export function Header({ onMenuClick }: HeaderProps) {
       />
     </>
   );
+
+  function setManagePermissionsDialog(v: boolean) {
+    setManagePermissionsOpen(v);
+  }
 }

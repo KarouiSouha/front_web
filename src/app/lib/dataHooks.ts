@@ -29,7 +29,8 @@ import {
   type KPIData,
   type QueryParams,
 } from "./dataApi";
-
+import { notificationsApi } from "./notificationsApi";
+import { toast } from 'sonner';
 // ─────────────────────────────────────────────────────────────────────────────
 // Movement-type normaliser
 //
@@ -426,3 +427,130 @@ export function useCreditKPI(params?: { report_date?: string }) {
 
 // Also re-export the new types for convenience:
 export type { SalesKPIData, StockKPIData, CreditKPIData };
+
+// ─────────────────────────────────────────────
+// Notifications / Alerts
+// ─────────────────────────────────────────────
+
+
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  detail?: string;
+  severity: 'low' | 'medium' | 'critical';
+  alert_type: string;
+  is_read: boolean;
+  created_at: string;
+  read_at?: string | null;
+  metadata?: {
+    product_code?: string;
+    id?: string;
+    [key: string]: any;
+  };
+}
+ 
+// ─────────────────────────────────────────────────────────────────────────────
+// Déduplication — même logique que AlertHistoryTab
+// Clé logique par type pour éviter l'affichage de doublons dans la cloche
+// pendant que la DB est encore en cours de nettoyage.
+// ─────────────────────────────────────────────────────────────────────────────
+function deduplicateNotifications(items: Notification[]): Notification[] {
+  const seen = new Map<string, Notification>();
+ 
+  // Trier du plus récent au plus ancien
+  const sorted = [...items].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+ 
+  for (const n of sorted) {
+    let key: string;
+ 
+    if (n.alert_type === 'low_stock' && n.metadata?.product_code) {
+      key = `low_stock::${n.metadata.product_code}`;
+    } else if (n.alert_type === 'risk' && n.metadata?.id) {
+      key = `risk::${n.metadata.id}`;
+    } else if (n.alert_type === 'dso') {
+      key = 'dso';
+    } else {
+      key = `${n.alert_type}::${n.title.trim()}`;
+    }
+ 
+    // On garde le plus récent (premier dans le tri descendant)
+    if (!seen.has(key)) {
+      seen.set(key, n);
+    }
+  }
+ 
+  return Array.from(seen.values()).sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+}
+ 
+export function useNotifications() {
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+ 
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await notificationsApi.list({ page: 1 });
+      const data = res as any;
+      const raw: Notification[] = data.results ?? [];
+ 
+      // Dédupliquer avant affichage
+      const unique = deduplicateNotifications(raw);
+ 
+      setNotifications(unique.slice(0, 15));
+ 
+      // Recalculer unread_count localement — le count backend est faussé
+      // par les doublons tant que la DB n'est pas nettoyée
+      setUnreadCount(unique.filter(n => !n.is_read).length);
+    } catch (err) {
+      console.error('[useNotifications] load error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+ 
+  useEffect(() => {
+    load();
+    // 30s au lieu de 12s — moins agressif, évite les appels inutiles
+    const interval = setInterval(load, 30_000);
+    return () => clearInterval(interval);
+  }, [load]);
+ 
+  const markAsRead = useCallback(async (id: string) => {
+    try {
+      await notificationsApi.markRead({ ids: [id] });
+      setNotifications(prev =>
+        prev.map(n => n.id === id ? { ...n, is_read: true, read_at: new Date().toISOString() } : n)
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error('[useNotifications] markAsRead error:', err);
+    }
+  }, []);
+ 
+  const markAllAsRead = useCallback(async () => {
+    try {
+      await notificationsApi.markRead({ all: true });
+      setNotifications(prev =>
+        prev.map(n => ({ ...n, is_read: true, read_at: new Date().toISOString() }))
+      );
+      setUnreadCount(0);
+    } catch (err) {
+      console.error('[useNotifications] markAllAsRead error:', err);
+    }
+  }, []);
+ 
+  return {
+    notifications,
+    unreadCount,
+    loading,
+    refetch: load,
+    markAsRead,
+    markAllAsRead,
+  };
+}

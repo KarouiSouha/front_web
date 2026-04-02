@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   Sparkles, CheckCircle2, RefreshCw, Loader2, TrendingDown,
   AlertTriangle, Users, RotateCcw, ShieldAlert, DollarSign,
@@ -22,6 +22,7 @@ import {
 } from '../lib/dataHooks';
 import { formatCurrency, formatDate, toNum } from '../lib/utils';
 import { api } from '../lib/api';
+import { notificationsApi, type AlertSyncItem } from '../lib/notificationsApi';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -343,10 +344,15 @@ export function AlertsPage() {
   const [hvLoading, setHvLoading]     = useState(false);
   const [hvLoaded, setHvLoaded]       = useState(false);
   const [hvError, setHvError]         = useState<string | null>(null);
-  // Default threshold: 100K LYD/year = ~8,333 LYD/month — fits real data
   const [hvThreshold, setHvThreshold] = useState(100_000);
 
   const [mainTab, setMainTab] = useState<'alerts' | 'churn' | 'hv-churn'>('alerts');
+
+  // ── FIX: Ref pour éviter les syncs redondants ─────────────────────────────
+  // syncAlerts ne sera appelé que si le set d'IDs d'alertes a réellement changé.
+  // Sans ce guard, le useEffect se déclenchait à chaque render/poll (12s),
+  // créant des centaines de doublons en DB.
+  const lastSyncHashRef = useRef<string>('');
 
   const { data: agingRiskRes, loading: riskLoading, refetch: refetchRisk } = useAgingRisk({ limit: 10 });
   const { data: agingListRes, loading: agingLoading }  = useAgingList({ page_size: 100 });
@@ -358,13 +364,12 @@ export function AlertsPage() {
   const isLoading = riskLoading || agingLoading || invLoading || summaryLoading;
 
   useEffect(() => {
-    // Single API call — load resolved alert IDs on mount
     (api.get('/ai-insights/alerts/resolutions/') as Promise<ApiResponse<{ resolved_ids: string[] }>>)
       .then(res => setResolvedIds(new Set(res.data?.resolved_ids ?? [])))
       .catch(() => {});
   }, []);
 
-  // ── Alert generation — ONE alert per customer (merged overdue+risk) ────────
+  // ── Alert generation ──────────────────────────────────────────────────────
   const rawAlerts = useMemo<SmartAlert[]>(() => {
     const out: SmartAlert[] = [];
     const topRisk = agingRiskRes?.top_risk ?? [];
@@ -375,7 +380,6 @@ export function AlertsPage() {
       const isCritical = ['critical', 'high'].includes(r.risk_score);
 
       if (hasOverdue && isCritical) {
-        // ✅ MERGED: single alert combining overdue + credit risk info
         const overduePct = r.total > 0 ? ((r.overdue_total / r.total) * 100).toFixed(0) : '0';
         out.push({
           id: `combined-${r.id}`,
@@ -460,13 +464,9 @@ export function AlertsPage() {
         }
       }
     }
-    // ── DSO Alert (Days Sales Outstanding) ──────────────────────────────────────
-    // DSO = weighted average days to collect, computed from aging bucket midpoints.
-    // Formula: Σ(bucket_midpoint × bucket_amount) / total_overdue
-    // Thresholds: warning >60 days, critical >90 days
+
     const allRecords = agingListRes?.records ?? [];
     if (allRecords.length > 0) {
-      // Explicit bucket access — avoids index signature error on AgingRecord
       const getBucket = (r: typeof allRecords[0], key: string): number => {
         const map: Record<string, number> = {
           d1_30:   Number(r.d1_30   ?? 0), d31_60:  Number(r.d31_60  ?? 0),
@@ -508,9 +508,6 @@ export function AlertsPage() {
       }
     }
 
-    // ── Client Concentration Risk ─────────────────────────────────────────────
-    // Triggers when top 3 clients represent more than 50% of total receivables.
-    // High concentration = single client departure causes a cash-flow crisis.
     const allAging = agingListRes?.records ?? [];
     if (allAging.length >= 4) {
       const sorted = [...allAging].sort((a, b) => Number(b.total) - Number(a.total));
@@ -538,6 +535,41 @@ export function AlertsPage() {
     return out;
   }, [agingRiskRes, agingListRes, inventoryRes, summaryRes, snapshotsRes, latestSnapDate]);
 
+  // ── FIX: Sync alertes → backend avec protection contre les doublons ────────
+  // Le useRef `lastSyncHashRef` stocke un hash des IDs d'alertes du dernier
+  // sync. Si le hash n'a pas changé (même set d'alertes), on skip l'appel API.
+  //
+  // AVANT ce fix : syncAlerts était appelé à chaque render + chaque poll de
+  // 12s de useNotifications → des centaines de doublons en DB par session.
+  //
+  // APRÈS ce fix : syncAlerts n'est appelé qu'une seule fois par changement
+  // réel du set d'alertes (nouveau chargement de données, refresh manuel).
+  useEffect(() => {
+    if (rawAlerts.length === 0) return;
+
+    const pendingAlerts = rawAlerts.filter(a => !resolvedIds.has(a.id));
+    if (pendingAlerts.length === 0) return;
+
+    // Hash stable basé sur les IDs triés — indépendant de l'ordre du tableau
+    const hash = pendingAlerts.map(a => a.id).sort().join('|');
+    if (hash === lastSyncHashRef.current) return; // rien de nouveau → skip
+    lastSyncHashRef.current = hash;
+
+    const payload: AlertSyncItem[] = pendingAlerts.map(a => ({
+      frontend_id: a.id,
+      alert_type:  a.type as AlertSyncItem['alert_type'],
+      severity:    a.severity,
+      title:       a.message.length > 90 ? a.message.slice(0, 87) + '…' : a.message,
+      message:     a.message,
+      detail:      a.detail,
+      metadata:    a.metadata,
+    }));
+
+    notificationsApi.syncAlerts(payload).catch(() => {
+      // Sync best-effort — ne bloque jamais l'UI
+    });
+  }, [rawAlerts, resolvedIds]);
+
   const alerts   = rawAlerts.map(a => ({ ...a, status: resolvedIds.has(a.id) ? ('resolved' as const) : ('pending' as const) }));
   const filtered = alerts.filter(a => alertFilter === 'all' ? true : a.status === alertFilter);
   const filteredSearched = alertSearch.trim()
@@ -551,13 +583,13 @@ export function AlertsPage() {
         );
       })
     : filtered;
-  const counts   = {
+  const counts = {
     all: alerts.length, pending: alerts.filter(a => a.status === 'pending').length,
     resolved: alerts.filter(a => a.status === 'resolved').length,
     critical: alerts.filter(a => a.severity === 'critical').length,
   };
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleResolve = async (alert: SmartAlert) => {
     setResolvingId(alert.id);
@@ -589,16 +621,10 @@ export function AlertsPage() {
       }
     } catch (err) {
       console.error('[AlertsPage] AI explain error:', err);
-      // Smart fallback using actual alert data
       const meta = alert.metadata as Record<string, number>;
       const total   = Number(meta?.total   ?? 0);
       const overdue = Number(meta?.overdue_total ?? 0);
       const pct     = total > 0 ? ((overdue / total) * 100).toFixed(0) : '0';
-      // ── Severity trend (cat. 2) ────────────────────────────────────────────────
-      // Inferred from overdue ratio vs risk classification:
-      //   critical risk + high overdue → deteriorating
-      //   medium risk + low overdue   → improving
-      //   otherwise                   → stable
       const riskScore  = String(meta?.risk_score ?? alert.severity);
       const overdueRat = total > 0 ? overdue / total : 0;
       let trendLabel: string;
@@ -612,13 +638,6 @@ export function AlertsPage() {
       } else {
         trendLabel = 'Stable risk level';     trendIcon = '→';
       }
-
-      // ── Predicted escalation date (cat. 2) ───────────────────────────────────
-      // Uses a simplified linear model:
-      //   - If overdue > 75%: estimate 30 days to irrecoverability threshold
-      //   - If overdue 50-75%: estimate 60 days
-      //   - If overdue 25-50%: estimate 90 days
-      //   - Below 25%: no imminent risk
       let escalationMsg: string;
       if (overdueRat > 0.75) {
         const d = new Date(); d.setDate(d.getDate() + 30);
@@ -632,7 +651,6 @@ export function AlertsPage() {
       } else {
         escalationMsg = 'No imminent escalation risk based on current overdue ratio.';
       }
-
       setAiExplanation({
         summary: `${trendIcon} ${trendLabel} — ${alert.message}`,
         root_cause: `${overdue > 0 ? `Outstanding balance of ${formatCurrency(overdue)} (${pct}% of total receivable of ${formatCurrency(total)}) exceeds payment terms.` : alert.detail} ${escalationMsg}`,
@@ -806,7 +824,6 @@ export function AlertsPage() {
           <p className="text-xs text-muted-foreground mt-0.5">{(row.overdue_ratio * 100).toFixed(0)}% overdue</p>
         </div>
       )},
-
   ];
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -821,7 +838,7 @@ export function AlertsPage() {
             Real-time risk alerts · Persistent resolutions · AI-powered churn prediction
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={refetchRisk} disabled={isLoading}>
+        <Button variant="outline" size="sm" onClick={() => { refetchRisk(); }} disabled={isLoading}>
           {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           <span className="ml-2">Refresh Data</span>
         </Button>
@@ -868,81 +885,79 @@ export function AlertsPage() {
             </div>
           ) : (
             <>
-            {/* ── What are Smart Alerts? ── */}
-            <Card className="border-indigo-200 bg-indigo-50/50 dark:bg-indigo-950/20">
-              <CardContent className="p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <Sparkles className="h-4 w-4 text-indigo-600 shrink-0" />
-                  <p className="text-sm font-semibold text-foreground">What are Smart Alerts?</p>
-                </div>
-                <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-                  Alerts are generated automatically from your live data — no manual input required.
-                  Each alert is triggered by a specific financial signal detected across aging, inventory and sales data.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                  {[
-                    { code: 'OVD',  label: 'Overdue Payment',    desc: 'Client has unpaid balance past due date',           color: 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800' },
-                    { code: 'RISK', label: 'Credit Risk',         desc: 'More than 50% of receivables are overdue',          color: 'bg-orange-50 border-orange-200 dark:bg-orange-950/30 dark:border-orange-800' },
-                    { code: 'REC',  label: 'High Receivables',    desc: 'Amounts overdue for more than 6 months',            color: 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800' },
-                    { code: 'DSO',  label: 'DSO Alert',           desc: 'Average collection period exceeds 60 days',         color: 'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800' },
-                    { code: 'CONC', label: 'Concentration Risk',  desc: 'Top 3 clients hold more than 50% of exposure',      color: 'bg-purple-50 border-purple-200 dark:bg-purple-950/30 dark:border-purple-800' },
-                    { code: 'STK',  label: 'Low Stock',           desc: 'Product out of stock or fewer than 5 units',        color: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800' },
-                    { code: 'REV',  label: 'Sales Drop',          desc: 'Revenue declined more than 15% month-over-month',   color: 'bg-pink-50 border-pink-200 dark:bg-pink-950/30 dark:border-pink-800' },
-                    { code: 'AI',   label: 'AI Explain',          desc: 'Click any alert for deep analysis with trend & escalation forecast', color: 'bg-indigo-50 border-indigo-200 dark:bg-indigo-950/30 dark:border-indigo-800' },
-                  ].map(item => (
-                    <div key={item.code} className={`rounded-lg border p-3 space-y-1.5 ${item.color}`}>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono font-bold bg-white/70 dark:bg-black/20 px-1.5 py-0.5 rounded text-foreground">{item.code}</span>
-                        <span className="text-xs font-semibold text-foreground">{item.label}</span>
+              <Card className="border-indigo-200 bg-indigo-50/50 dark:bg-indigo-950/20">
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Sparkles className="h-4 w-4 text-indigo-600 shrink-0" />
+                    <p className="text-sm font-semibold text-foreground">What are Smart Alerts?</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+                    Alerts are generated automatically from your live data — no manual input required.
+                    Each alert is triggered by a specific financial signal detected across aging, inventory and sales data.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    {[
+                      { code: 'OVD',  label: 'Overdue Payment',    desc: 'Client has unpaid balance past due date',           color: 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800' },
+                      { code: 'RISK', label: 'Credit Risk',         desc: 'More than 50% of receivables are overdue',          color: 'bg-orange-50 border-orange-200 dark:bg-orange-950/30 dark:border-orange-800' },
+                      { code: 'REC',  label: 'High Receivables',    desc: 'Amounts overdue for more than 6 months',            color: 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800' },
+                      { code: 'DSO',  label: 'DSO Alert',           desc: 'Average collection period exceeds 60 days',         color: 'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800' },
+                      { code: 'CONC', label: 'Concentration Risk',  desc: 'Top 3 clients hold more than 50% of exposure',      color: 'bg-purple-50 border-purple-200 dark:bg-purple-950/30 dark:border-purple-800' },
+                      { code: 'STK',  label: 'Low Stock',           desc: 'Product out of stock or fewer than 5 units',        color: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800' },
+                      { code: 'REV',  label: 'Sales Drop',          desc: 'Revenue declined more than 15% month-over-month',   color: 'bg-pink-50 border-pink-200 dark:bg-pink-950/30 dark:border-pink-800' },
+                      { code: 'AI',   label: 'AI Explain',          desc: 'Click any alert for deep analysis with trend & escalation forecast', color: 'bg-indigo-50 border-indigo-200 dark:bg-indigo-950/30 dark:border-indigo-800' },
+                    ].map(item => (
+                      <div key={item.code} className={`rounded-lg border p-3 space-y-1.5 ${item.color}`}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-bold bg-white/70 dark:bg-black/20 px-1.5 py-0.5 rounded text-foreground">{item.code}</span>
+                          <span className="text-xs font-semibold text-foreground">{item.label}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-snug">{item.desc}</p>
                       </div>
-                      <p className="text-xs text-muted-foreground leading-snug">{item.desc}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <CardTitle>Alert Management</CardTitle>
-                    <CardDescription>
-                      Alerts generated from live aging, inventory and sales data ·
-                      Resolutions persist across sessions
-                    </CardDescription>
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <CardTitle>Alert Management</CardTitle>
+                      <CardDescription>
+                        Alerts generated from live aging, inventory and sales data ·
+                        Resolutions persist across sessions
+                      </CardDescription>
+                    </div>
+                    <Tabs value={alertFilter} onValueChange={v => setAlertFilter(v as typeof alertFilter)}>
+                      <TabsList>
+                        <TabsTrigger value="all">All ({counts.all})</TabsTrigger>
+                        <TabsTrigger value="pending">Pending ({counts.pending})</TabsTrigger>
+                        <TabsTrigger value="resolved">Resolved ({counts.resolved})</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
                   </div>
-                  <Tabs value={alertFilter} onValueChange={v => setAlertFilter(v as typeof alertFilter)}>
-                    <TabsList>
-                      <TabsTrigger value="all">All ({counts.all})</TabsTrigger>
-                      <TabsTrigger value="pending">Pending ({counts.pending})</TabsTrigger>
-                      <TabsTrigger value="resolved">Resolved ({counts.resolved})</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {/* Search input — filters message, detail, type, severity */}
-                <div className="relative mb-4 w-full sm:w-80">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    type="search"
-                    placeholder="Search alerts…"
-                    value={alertSearch}
-                    onChange={e => setAlertSearch(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent pl-10 pr-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  />
-                </div>
-                {filteredSearched.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <CheckCircle2 className="h-12 w-12 mx-auto mb-3 text-emerald-500 opacity-60" />
-                    <p className="font-medium">{alertSearch ? 'No alerts match your search' : 'No alerts in this category'}</p>
+                </CardHeader>
+                <CardContent>
+                  <div className="relative mb-4 w-full sm:w-80">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="search"
+                      placeholder="Search alerts…"
+                      value={alertSearch}
+                      onChange={e => setAlertSearch(e.target.value)}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent pl-10 pr-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
                   </div>
-                ) : (
-                  <DataTable data={filteredSearched} columns={alertColumns} searchable={false} exportable={false} pageSize={10} />
-                )}
-              </CardContent>
-            </Card>
+                  {filteredSearched.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <CheckCircle2 className="h-12 w-12 mx-auto mb-3 text-emerald-500 opacity-60" />
+                      <p className="font-medium">{alertSearch ? 'No alerts match your search' : 'No alerts in this category'}</p>
+                    </div>
+                  ) : (
+                    <DataTable data={filteredSearched} columns={alertColumns} searchable={false} exportable={false} pageSize={10} />
+                  )}
+                </CardContent>
+              </Card>
             </>
           )}
         </TabsContent>
@@ -954,9 +969,7 @@ export function AlertsPage() {
               <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
               <div className="ml-4">
                 <p className="font-semibold">Running churn analysis…</p>
-                <p className="text-sm text-muted-foreground">
-                  AI is evaluating behavioral signals for each customer
-                </p>
+                <p className="text-sm text-muted-foreground">AI is evaluating behavioral signals for each customer</p>
               </div>
             </div>
           ) : churnError ? (
@@ -972,7 +985,6 @@ export function AlertsPage() {
             </Card>
           ) : churnLoaded ? (
             <>
-              {/* What does this page do? */}
               <Card className="border-indigo-200 bg-indigo-50/50 dark:bg-indigo-950/20">
                 <CardContent className="p-4 flex items-start gap-3">
                   <TrendingDown className="h-5 w-5 text-indigo-600 mt-0.5 shrink-0" />
@@ -1037,7 +1049,6 @@ export function AlertsPage() {
                 </CardContent>
               </Card>
 
-              {/* Detailed AI insights — high & critical only */}
               {churnPredictions.filter(c => ['high', 'critical'].includes(c.churn_label)).length > 0 && (
                 <div className="space-y-3">
                   <div>
@@ -1051,19 +1062,13 @@ export function AlertsPage() {
                       <CardContent className="p-5">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 space-y-3">
-                            {/* Header */}
                             <div className="flex items-center gap-2 flex-wrap">
                               <Badge className={riskBadge(c.churn_label)}>{c.churn_label}</Badge>
                               <span className="font-medium text-sm">{c.customer_name || c.account_code}</span>
                               <span className="font-mono text-xs text-muted-foreground">{c.account_code}</span>
                               <span className="text-sm font-bold">{(c.churn_score * 100).toFixed(0)}% churn probability</span>
-
                             </div>
-
-                            {/* AI explanation */}
                             <p className="text-sm text-muted-foreground leading-relaxed">{c.ai_explanation}</p>
-
-                            {/* Risk factors */}
                             {c.key_risk_factors.length > 0 && (
                               <div>
                                 <p className="text-xs font-semibold mb-1.5 uppercase tracking-wide text-muted-foreground">Risk Factors</p>
@@ -1074,8 +1079,6 @@ export function AlertsPage() {
                                 </div>
                               </div>
                             )}
-
-                            {/* Recommended actions */}
                             {c.recommended_actions.length > 0 && (
                               <div>
                                 <p className="text-xs font-semibold mb-1.5 uppercase tracking-wide text-muted-foreground">Recommended Actions</p>
@@ -1090,8 +1093,6 @@ export function AlertsPage() {
                               </div>
                             )}
                           </div>
-
-                          {/* Side metrics */}
                           <div className="text-right text-xs text-muted-foreground shrink-0 space-y-2 min-w-[130px]">
                             <div>
                               <div className="font-semibold text-foreground text-sm">{c.days_since_last_purchase} days</div>
@@ -1120,8 +1121,7 @@ export function AlertsPage() {
               <TrendingDown className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="font-medium text-lg">Churn Prediction</p>
               <p className="text-sm mt-1 max-w-sm mx-auto">
-                Click this tab to run the churn analysis. Results are cached for 6 hours
-                to minimize API costs.
+                Click this tab to run the churn analysis. Results are cached for 6 hours to minimize API costs.
               </p>
             </div>
           )}
@@ -1159,9 +1159,7 @@ export function AlertsPage() {
               <Loader2 className="h-8 w-8 animate-spin text-red-600" />
               <div className="ml-4">
                 <p className="font-semibold">Analyzing high-value accounts…</p>
-                <p className="text-sm text-muted-foreground">
-                  AI is generating outcome predictions and action plans
-                </p>
+                <p className="text-sm text-muted-foreground">AI is generating outcome predictions and action plans</p>
               </div>
             </div>
           )}
@@ -1183,34 +1181,10 @@ export function AlertsPage() {
             <>
               <div className="grid gap-4 md:grid-cols-4">
                 {[
-                  {
-                    label: 'Accounts Above Threshold',
-                    value: hvData.total_hv_customers,
-                    sub: `Annual revenue ≥ ${formatCurrency(hvData.threshold_lyd)}`,
-                    icon: <TrendingUp className="h-5 w-5 text-blue-600" />,
-                    cls: '',
-                  },
-                  {
-                    label: 'At-Risk Accounts',
-                    value: hvData.at_risk_count,
-                    sub: `${hvData.customers.filter(c => c.churn_label === 'critical').length} critical · ${hvData.customers.filter(c => c.churn_label === 'high').length} high risk`,
-                    icon: <AlertTriangle className="h-5 w-5 text-orange-500" />,
-                    cls: hvData.at_risk_count > 0 ? 'text-orange-600' : 'text-emerald-600',
-                  },
-                  {
-                    label: 'Estimated Revenue at Risk',
-                    value: formatCurrency(hvData.total_revenue_at_risk),
-                    sub: 'Probability-weighted 12-month estimate',
-                    icon: <DollarSign className="h-5 w-5 text-red-600" />,
-                    cls: 'text-red-600',
-                  },
-                  {
-                    label: 'Analysis Status',
-                    value: hvData.cached ? 'Cached' : 'Live',
-                    sub: hvData.ai_used ? 'AI outcome predictions active' : 'Rule-based scoring only',
-                    icon: <Sparkles className="h-5 w-5 text-indigo-600" />,
-                    cls: '',
-                  },
+                  { label: 'Accounts Above Threshold', value: hvData.total_hv_customers, sub: `Annual revenue ≥ ${formatCurrency(hvData.threshold_lyd)}`, icon: <TrendingUp className="h-5 w-5 text-blue-600" />, cls: '' },
+                  { label: 'At-Risk Accounts', value: hvData.at_risk_count, sub: `${hvData.customers.filter(c => c.churn_label === 'critical').length} critical · ${hvData.customers.filter(c => c.churn_label === 'high').length} high risk`, icon: <AlertTriangle className="h-5 w-5 text-orange-500" />, cls: hvData.at_risk_count > 0 ? 'text-orange-600' : 'text-emerald-600' },
+                  { label: 'Estimated Revenue at Risk', value: formatCurrency(hvData.total_revenue_at_risk), sub: 'Probability-weighted 12-month estimate', icon: <DollarSign className="h-5 w-5 text-red-600" />, cls: 'text-red-600' },
+                  { label: 'Analysis Status', value: hvData.cached ? 'Cached' : 'Live', sub: hvData.ai_used ? 'AI outcome predictions active' : 'Rule-based scoring only', icon: <Sparkles className="h-5 w-5 text-indigo-600" />, cls: '' },
                 ].map((k, i) => (
                   <Card key={i}>
                     <CardHeader className="pb-2">
@@ -1241,11 +1215,9 @@ export function AlertsPage() {
                 </Card>
               ) : (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold">At-Risk Accounts ({hvData.customers.length})</h3>
-                      <p className="text-xs text-muted-foreground mt-0.5">Sorted by churn probability — expand to view outcome predictions and action plan</p>
-                    </div>
+                  <div>
+                    <h3 className="font-semibold">At-Risk Accounts ({hvData.customers.length})</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">Sorted by churn probability — expand to view outcome predictions and action plan</p>
                   </div>
                   {hvData.customers.map((customer, i) => (
                     <HVCustomerCard key={customer.account_code || i} customer={customer} rank={i + 1} />
@@ -1261,7 +1233,6 @@ export function AlertsPage() {
               <p className="font-medium text-lg">High-Value Account Protection</p>
               <p className="text-sm mt-1 max-w-sm mx-auto">
                 Select a revenue threshold above and click an account to run the analysis.
-                gpt-4o-mini will generate outcome predictions and a personalized action plan for each at-risk account.
               </p>
             </div>
           )}
@@ -1282,7 +1253,6 @@ export function AlertsPage() {
 
           {selectedAlert && (
             <div className="space-y-4 pt-2">
-              {/* Alert card */}
               <div className="p-4 rounded-lg bg-muted/40 border">
                 <div className="flex items-start gap-3">
                   <span className="text-xs font-mono bg-muted px-2 py-1 rounded text-muted-foreground font-medium">{TYPE_ICONS[selectedAlert.type]}</span>
@@ -1297,7 +1267,6 @@ export function AlertsPage() {
                 </div>
               </div>
 
-              {/* AI loading */}
               {aiLoading ? (
                 <div className="flex items-center justify-center py-10">
                   <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
@@ -1312,7 +1281,6 @@ export function AlertsPage() {
                     </div>
                   )}
 
-                  {/* Summary */}
                   <div className="p-3 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900">
                     <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 mb-1 flex items-center gap-1">
                       <Sparkles className="h-3 w-3" />Summary
@@ -1320,7 +1288,6 @@ export function AlertsPage() {
                     <p className="text-sm leading-relaxed">{aiExplanation.summary}</p>
                   </div>
 
-                  {/* Intelligence strip — severity trend + escalation date */}
                   {selectedAlert.type !== 'low_stock' && selectedAlert.type !== 'sales_drop' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900">
@@ -1335,11 +1302,9 @@ export function AlertsPage() {
                           </p>
                         </div>
                       </div>
-
                     </div>
                   )}
 
-                  {/* Root cause + urgency */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="p-3 rounded-lg border bg-muted/30">
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Root Cause</p>
@@ -1351,7 +1316,6 @@ export function AlertsPage() {
                     </div>
                   </div>
 
-                  {/* Recommended actions */}
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Recommended Actions</p>
                     <div className="space-y-2">
@@ -1366,7 +1330,6 @@ export function AlertsPage() {
                     </div>
                   </div>
 
-                  {/* Footer */}
                   <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-3">
                     <span>
                       AI Confidence:{' '}
@@ -1379,7 +1342,6 @@ export function AlertsPage() {
                 </div>
               ) : null}
 
-              {/* Actions */}
               <div className="flex gap-3 pt-1">
                 {selectedAlert.status === 'pending' && (
                   <Button className="flex-1" onClick={() => handleResolve(selectedAlert)} disabled={resolvingId === selectedAlert.id}>
