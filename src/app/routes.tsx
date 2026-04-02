@@ -17,6 +17,7 @@ import { AdminVerificationPage } from './pages/AdminVerificationPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { TeamPage } from './pages/TeamPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { CompetitiveBenchmarkPage } from './pages/CompetitiveBenchmarkPage';
 
 export const router = createBrowserRouter([
   {
@@ -34,6 +35,10 @@ export const router = createBrowserRouter([
   {
     path: '/forgot-password',
     element: <ForgotPasswordPage />,
+  },
+  {
+    path: '/benchmark',
+    element: <CompetitiveBenchmarkPage />,
   },
   {
     path: '/dashboard',
