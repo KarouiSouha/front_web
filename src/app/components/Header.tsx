@@ -21,7 +21,7 @@ import { ManagePermissionsDialog } from './ManagePermissionsDialog';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router';
-import { AlertHistoryTab } from './AlertHistoryTab';
+
 interface HeaderProps {
   onMenuClick: () => void;
 }
@@ -116,7 +116,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
             {/* ── Real notification bell — replaces the static mock ── */}
 <NotificationBell 
-  onViewAll={() => navigate('/dashboard/alert-history')} 
+  onViewAll={() => navigate('/dashboard/alerts')} 
 />
             {/* User Menu */}
             <DropdownMenu>

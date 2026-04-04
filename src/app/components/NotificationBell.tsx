@@ -31,13 +31,13 @@ const ALERT_TYPE_ICON: Record<string, string> = {
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
+  const mins  = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  if (mins < 1) return 'à l\'instant';
-  if (mins < 60) return `${mins} min`;
-  if (hours < 24) return `${hours} h`;
-  return `${days} j`;
+  const days  = Math.floor(diff / 86400000);
+  if (mins < 1)   return 'just now';
+  if (mins < 60)  return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
 }
 
 interface NotificationBellProps {
@@ -49,9 +49,13 @@ export function NotificationBell({ onViewAll }: NotificationBellProps) {
   const { notifications, unreadCount, loading, refetch, markAsRead, markAllAsRead } = useNotifications();
   const [open, setOpen] = useState(false);
 
+  // ── Show ONLY critical alerts in the bell dropdown ──────────────────────
+  const criticalNotifs = notifications.filter(n => n.severity === 'critical');
+  const criticalUnread = criticalNotifs.filter(n => !n.is_read).length;
+
   const handleViewAll = () => {
     setOpen(false);
-    onViewAll ? onViewAll() : navigate('/dashboard/alert-history');
+    onViewAll ? onViewAll() : navigate('/dashboard/alerts');
   };
 
   return (
@@ -62,9 +66,9 @@ export function NotificationBell({ onViewAll }: NotificationBellProps) {
           aria-label="Notifications"
         >
           <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
-            <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-orange-500 text-white text-xs font-bold border-2 border-background">
-              {unreadCount > 99 ? '99+' : unreadCount}
+          {criticalUnread > 0 && (
+            <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-red-600 text-white text-xs font-bold border-2 border-background">
+              {criticalUnread > 99 ? '99+' : criticalUnread}
             </Badge>
           )}
         </button>
@@ -74,23 +78,27 @@ export function NotificationBell({ onViewAll }: NotificationBellProps) {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <div>
-            <p className="font-semibold">Notifications</p>
-            {unreadCount > 0 && (
-              <p className="text-xs text-muted-foreground">{unreadCount} non lue{unreadCount > 1 ? 's' : ''}</p>
+            <p className="font-semibold">Critical Alerts</p>
+            {criticalUnread > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {criticalUnread} unread critical alert{criticalUnread > 1 ? 's' : ''}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">All critical alerts reviewed</p>
             )}
           </div>
           <div className="flex gap-2 items-center">
             <button
               onClick={refetch}
-              title="Rafraîchir"
+              title="Refresh"
               className="p-1.5 rounded-md hover:bg-accent transition-colors"
             >
               <RefreshCw className={`h-4 w-4 text-muted-foreground ${loading ? 'animate-spin' : ''}`} />
             </button>
-            {unreadCount > 0 && (
+            {criticalUnread > 0 && (
               <button
                 onClick={markAllAsRead}
-                title="Tout marquer lu"
+                title="Mark all as read"
                 className="p-1.5 rounded-md hover:bg-accent transition-colors"
               >
                 <CheckCheck className="h-4 w-4 text-muted-foreground" />
@@ -99,19 +107,20 @@ export function NotificationBell({ onViewAll }: NotificationBellProps) {
           </div>
         </div>
 
-        {/* Liste */}
+        {/* List — critical only */}
         <div className="max-h-[420px] overflow-y-auto">
-          {notifications.length === 0 ? (
+          {criticalNotifs.length === 0 ? (
             <div className="py-12 text-center text-muted-foreground">
               <Bell className="mx-auto h-12 w-12 opacity-30 mb-3" />
-              <p className="text-sm">Aucune notification pour le moment</p>
+              <p className="text-sm font-medium">No critical alerts</p>
+              <p className="text-xs mt-1 opacity-70">You're all clear</p>
             </div>
           ) : (
-            notifications.map((notif) => (
+            criticalNotifs.map((notif) => (
               <div
                 key={notif.id}
                 className={`px-4 py-3.5 border-b last:border-0 hover:bg-accent/50 cursor-pointer border-l-4 transition-colors ${SEVERITY_RING[notif.severity]} ${
-                  !notif.is_read ? 'bg-accent/10' : ''
+                  !notif.is_read ? 'bg-red-50/40 dark:bg-red-950/10' : ''
                 }`}
                 onClick={() => markAsRead(notif.id)}
               >
@@ -128,11 +137,11 @@ export function NotificationBell({ onViewAll }: NotificationBellProps) {
                     </p>
                     <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                       <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${SEVERITY_DOT[notif.severity]}`} />
-                      <span className="capitalize">{notif.severity}</span>
+                      <span className="capitalize font-medium text-red-600">{notif.severity}</span>
                       <span>·</span>
                       <span>{timeAgo(notif.created_at)}</span>
                       {!notif.is_read && (
-                        <span className="text-sky-600 font-medium ml-auto">Nouveau</span>
+                        <span className="text-red-600 font-semibold ml-auto">New</span>
                       )}
                     </div>
                   </div>
@@ -151,7 +160,7 @@ export function NotificationBell({ onViewAll }: NotificationBellProps) {
             className="w-full py-2 text-sm text-sky-600 hover:text-sky-700 font-medium flex items-center justify-center gap-2 rounded-xl hover:bg-sky-50 dark:hover:bg-sky-950 transition-colors"
           >
             <ExternalLink className="h-4 w-4" />
-            Voir tout l'historique
+            View full alert history
           </button>
         </div>
       </DropdownMenuContent>
