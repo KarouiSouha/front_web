@@ -1,36 +1,35 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ApiError } from "./api";
 import {
-  salesKpiApi,
-  stockKpiApi,
-  creditKpiApi,
-  SalesKPIData,
-  StockKPIData,
-  CreditKPIData,
-  productsApi,
-  customersApi,
-  inventoryApi,
-  transactionsApi,
-  agingApi,
-  kpiApi,
-  MOVEMENT_TYPES,
-  type Product,
-  type Customer,
-  type InventorySnapshot,
-  type InventorySnapshotLine,
-  type InventoryLinesResponse,
-  type Movement,
-  type AgingRecord,
-  type AgingRiskItem,
-  type AgingDistributionItem,
-  type MonthlySummaryItem,
-  type BranchSummary,
-  type CategoryBreakdown,
-  type KPIData,
-  type QueryParams,
+    salesKpiApi,
+    stockKpiApi,
+    creditKpiApi,
+    SalesKPIData,
+    StockKPIData,
+    CreditKPIData,
+    productsApi,
+    customersApi,
+    inventoryApi,
+    transactionsApi,
+    agingApi,
+    kpiApi,
+    MOVEMENT_TYPES,
+    type Product,
+    type Customer,
+    type InventorySnapshot,
+    type InventorySnapshotLine,
+    type InventoryLinesResponse,
+    type Movement,
+    type AgingRecord,
+    type AgingRiskItem,
+    type AgingDistributionItem,
+    type MonthlySummaryItem,
+    type BranchSummary,
+    type CategoryBreakdown,
+    type KPIData,
+    type QueryParams,
 } from "./dataApi";
 import { notificationsApi } from "./notificationsApi";
-import { toast } from 'sonner';
 // ─────────────────────────────────────────────────────────────────────────────
 // Movement-type normaliser
 //
@@ -492,9 +491,12 @@ export function useNotifications() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
  
-  const load = useCallback(async () => {
+  const load = useCallback(async (withDetect = false) => {
     try {
       setLoading(true);
+      if (withDetect) {
+        await notificationsApi.detect().catch(() => {});
+      }
       const res = await notificationsApi.list({ page: 1 });
       const data = res as any;
       const raw: Notification[] = data.results ?? [];
@@ -515,10 +517,19 @@ export function useNotifications() {
   }, []);
  
   useEffect(() => {
-    load();
+    load(true);
     // 30s au lieu de 12s — moins agressif, évite les appels inutiles
-    const interval = setInterval(load, 30_000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => load(false), 30_000);
+
+    const onManualRefresh = () => {
+      load(false);
+    };
+    window.addEventListener('weeg-notifications-refresh', onManualRefresh);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('weeg-notifications-refresh', onManualRefresh);
+    };
   }, [load]);
  
   const markAsRead = useCallback(async (id: string) => {

@@ -1,26 +1,27 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
-  ShoppingCart, Package, TrendingUp,
-  AlertTriangle, Wallet, Loader2,
-  ArrowUpRight,
+    ShoppingCart, Package, TrendingUp,
+    AlertTriangle, Wallet, Loader2,
+    ArrowUpRight,
 } from 'lucide-react';
 import {
-  AreaChart, Area, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, Cell,
+    AreaChart, Area, BarChart, Bar,
+    XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+    ResponsiveContainer, Cell,
 } from 'recharts';
 import {
-  useKPIs,
-  useTransactionSummary,
-  useAgingDistribution,
-  useAgingRisk,
-  useBranchSummary,
-  useBranchBreakdown,
-  useCategoryBreakdown,
-  useBranchMonthly,
-  MOVEMENT_TYPES,
-  useTypeBreakdown,
+    useKPIs,
+    useTransactionSummary,
+    useAgingDistribution,
+    useAgingRisk,
+    useBranchSummary,
+    useBranchBreakdown,
+    useCategoryBreakdown,
+    useBranchMonthly,
+    MOVEMENT_TYPES,
+    useTypeBreakdown,
 } from '../lib/dataHooks';
+import { notificationsApi } from '../lib/notificationsApi';
 import { formatCurrency } from '../lib/utils';
 
 // ── Brand palette ─────────────────────────────────────────────────────────
@@ -467,6 +468,22 @@ function CategoryBars({
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export function DashboardPage() {
+  useEffect(() => {
+    let mounted = true;
+
+    notificationsApi.detect()
+      .then(() => {
+        if (mounted) {
+          window.dispatchEvent(new Event('weeg-notifications-refresh'));
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const kpi               = useKPIs();
   const summary           = useTransactionSummary();
   const agingDist         = useAgingDistribution();
