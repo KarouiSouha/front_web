@@ -21,9 +21,11 @@ import {
   useTypeBreakdown,
   useBranchMonthly,
   useBranchSummary,
+  useAgingSnapshots,
   useAgingList,
   type MonthlySummaryItem,
 } from '../lib/dataHooks';
+import { inventoryApi } from '../lib/dataApi';
 import { formatCurrency, formatNumber } from '../lib/utils';
 
 // ── Brand palette ──────────────────────────────────────────────────────────
@@ -157,13 +159,13 @@ function SectionHeader({ title }: { title: string }) {
 
 // ── Period helpers ─────────────────────────────────────────────────────────
 
-type PeriodKey = 'last_month' | 'last_3' | 'last_6' | 'last_12' | 'ytd';
+type PeriodKey = 'last_month' | 'last_3' | 'last_6' | 'last_year' | 'ytd';
 
 const PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
   { key: 'last_month', label: 'Last Month' },
   { key: 'last_3',     label: 'Last 3 Months' },
   { key: 'last_6',     label: 'Last 6 Months' },
-  { key: 'last_12',    label: 'Last 12 Months' },
+  { key: 'last_year',  label: 'Last Year' },
   { key: 'ytd',        label: 'Year to Date' },
 ];
 
@@ -177,7 +179,10 @@ function periodToDates(key: PeriodKey): { dateFrom: string; dateTo: string } {
   }
   if (key === 'last_3')  { const f = new Date(today); f.setMonth(f.getMonth() - 3);    return { dateFrom: fmt(f), dateTo }; }
   if (key === 'last_6')  { const f = new Date(today); f.setMonth(f.getMonth() - 6);    return { dateFrom: fmt(f), dateTo }; }
-  if (key === 'last_12') { const f = new Date(today); f.setFullYear(f.getFullYear()-1); return { dateFrom: fmt(f), dateTo }; }
+  if (key === 'last_year') {
+    const y = today.getFullYear() - 1;
+    return { dateFrom: `${y}-01-01`, dateTo: `${y}-12-31` };
+  }
   return { dateFrom: `${today.getFullYear()}-01-01`, dateTo };
 }
 
@@ -317,6 +322,8 @@ function BranchMonthlyChart({ branchFilter, dateFrom, dateTo }: { branchFilter: 
 export function KPIEnginePage() {
   const [period,       setPeriod]       = useState<PeriodKey>('ytd');
   const [branchFilter, setBranchFilter] = useState('');
+  const currentYear = new Date().getFullYear();
+  const targetYear = period === 'last_year' ? currentYear - 1 : currentYear;
 
   const { dateFrom, dateTo } = useMemo(() => periodToDates(period), [period]);
 
@@ -340,27 +347,136 @@ export function KPIEnginePage() {
     branch:    branchFilter || undefined,
   });
 
-  // ✅ Stock Value filtré par branch via /inventory/branch-summary/?branch=X
-  const { data: branchStockRes, refetch: refetchBranchStock } = useBranchSummary({
-    branch: branchFilter || undefined,
-  });
+  // Stock / receivables cards are global and year-based.
+  const [targetInventorySnapshotId, setTargetInventorySnapshotId] = useState<string | null>(null);
 
-  // Total Receivables — aging n'a pas de dimension branch → toujours global
-  const { data: agingRes } = useAgingList({ page_size: 1 });
-  const totalReceivables = agingRes?.grand_total ?? 0;
+  useEffect(() => {
+    let mounted = true;
 
-  // ✅ Stock value sommé des branches filtrées
-  const stockValue = useMemo(
-    () => (branchStockRes?.branches ?? []).reduce((s, b) => s + b.total_value, 0),
-    [branchStockRes],
+    const resolveSnapshotForYear = async () => {
+      try {
+        let page = 1;
+        const pageSize = 100;
+        let totalPages = 1;
+        let foundId: string | null = null;
+        const allSnapshots: Array<{
+          id: string;
+          snapshot_date?: string | null;
+          fiscal_year?: string | null;
+          uploaded_at?: string | null;
+        }> = [];
+
+        const extractYear = (raw?: string | null): number | null => {
+          if (!raw) return null;
+          const asDate = new Date(raw);
+          if (!Number.isNaN(asDate.getTime())) return asDate.getFullYear();
+          const m = String(raw).match(/(19|20)\d{2}/);
+          return m ? parseInt(m[0], 10) : null;
+        };
+
+        while (page <= totalPages) {
+          const res = await inventoryApi.listSnapshots({ page, page_size: pageSize });
+          totalPages = res.total_pages ?? 1;
+          allSnapshots.push(...(res.items ?? []));
+
+          for (const s of res.items ?? []) {
+            const ySnapshot = extractYear(s.snapshot_date);
+            const yFiscal = extractYear(String(s.fiscal_year ?? ''));
+            const yUpload = extractYear(s.uploaded_at);
+            const year = ySnapshot ?? yFiscal ?? yUpload;
+            if (year === targetYear) {
+              foundId = s.id;
+              break;
+            }
+          }
+
+          if (foundId) break;
+          page += 1;
+        }
+
+        if (!foundId && allSnapshots.length > 0) {
+          const sortByBestDateDesc = [...allSnapshots].sort((a, b) => {
+            const da = new Date(String(a.snapshot_date ?? a.uploaded_at ?? '')).getTime();
+            const db = new Date(String(b.snapshot_date ?? b.uploaded_at ?? '')).getTime();
+            return db - da;
+          });
+
+          if (period === 'last_year') {
+            // Fallback: if year tags are missing, use the snapshot just before the latest one.
+            foundId = sortByBestDateDesc[1]?.id ?? null;
+          } else {
+            foundId = sortByBestDateDesc[0]?.id ?? null;
+          }
+        }
+
+        if (mounted) setTargetInventorySnapshotId(foundId);
+      } catch {
+        if (mounted) setTargetInventorySnapshotId(null);
+      }
+    };
+
+    resolveSnapshotForYear();
+
+    return () => {
+      mounted = false;
+    };
+  }, [period, targetYear]);
+
+  const branchStockGlobal = useBranchSummary(
+    targetInventorySnapshotId
+      ? { snapshot_id: targetInventorySnapshotId, branch: branchFilter || undefined }
+      : undefined,
   );
+
+  const stockValue = useMemo(
+    () =>
+      targetInventorySnapshotId
+        ? (branchStockGlobal.data?.branches ?? []).reduce((sum, b) => sum + b.total_value, 0)
+        : 0,
+    [branchStockGlobal.data, targetInventorySnapshotId],
+  );
+
+  const agingSnapshots = useAgingSnapshots();
+  const targetAgingSnapshotId = useMemo(() => {
+    const items = agingSnapshots.data?.items ?? [];
+    const yearItems = items.filter((s) => {
+      const source = String(s.report_date ?? s.uploaded_at ?? "");
+      const parsed = new Date(source);
+      if (!Number.isNaN(parsed.getTime())) return parsed.getFullYear() === targetYear;
+      return source.includes(String(targetYear));
+    });
+    yearItems.sort((a, b) => {
+      const da = new Date(String(a.report_date ?? a.uploaded_at)).getTime();
+      const db = new Date(String(b.report_date ?? b.uploaded_at)).getTime();
+      return db - da;
+    });
+    if (yearItems[0]?.id) return yearItems[0].id;
+
+    const sortedAll = [...items].sort((a, b) => {
+      const da = new Date(String(a.report_date ?? a.uploaded_at)).getTime();
+      const db = new Date(String(b.report_date ?? b.uploaded_at)).getTime();
+      return db - da;
+    });
+
+    if (period === 'last_year') return sortedAll[1]?.id;
+    return sortedAll[0]?.id;
+  }, [agingSnapshots.data, period, targetYear]);
+
+  const agingGlobal = useAgingList(
+    targetAgingSnapshotId
+      ? { snapshot_id: targetAgingSnapshotId, page_size: 1 }
+      : { page_size: 1 },
+  );
+  const totalReceivables = targetAgingSnapshotId ? (agingGlobal.data?.grand_total ?? 0) : 0;
 
   const refetchAll = () => {
     refetchSummary();
     refetchBranchSales();
     refetchBranchPurchases();
     refetchTypeBreakdown();
-    refetchBranchStock();
+    branchStockGlobal.refetch();
+    agingSnapshots.refetch();
+    agingGlobal.refetch();
   };
 
   // ── Données dérivées ───────────────────────────────────────────────────
@@ -477,7 +593,7 @@ export function KPIEnginePage() {
                 value={formatCurrency(stockValue)}
                 icon={Package}
                 accent={C.cyan}
-                sub={branchFilter ? `Branch: ${branchFilter}` : 'All branches · Latest snapshot'}
+                sub={branchFilter ? `Branch: ${branchFilter} · ${targetYear}` : `All branches · ${targetYear}`}
               />
 
               {/* ⚠️ Non filtrable par branch (aging = dimension client, pas branch) */}
@@ -486,8 +602,8 @@ export function KPIEnginePage() {
                 value={formatCurrency(totalReceivables)}
                 icon={BarChart3}
                 accent={C.violet}
-                sub="All branches · Latest aging report"
-                globalOnly={!!branchFilter}
+                sub={`Global · ${targetYear}`}
+                globalOnly
               />
 
               {/* ✅ Filtré par period + branch */}

@@ -1,33 +1,34 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ApiError } from "./api";
 import {
-    salesKpiApi,
-    stockKpiApi,
-    creditKpiApi,
-    SalesKPIData,
-    StockKPIData,
-    CreditKPIData,
-    productsApi,
-    customersApi,
-    inventoryApi,
-    transactionsApi,
-    agingApi,
-    kpiApi,
-    MOVEMENT_TYPES,
-    type Product,
-    type Customer,
-    type InventorySnapshot,
-    type InventorySnapshotLine,
-    type InventoryLinesResponse,
-    type Movement,
-    type AgingRecord,
-    type AgingRiskItem,
-    type AgingDistributionItem,
-    type MonthlySummaryItem,
-    type BranchSummary,
-    type CategoryBreakdown,
-    type KPIData,
-    type QueryParams,
+  salesKpiApi,
+  stockKpiApi,
+  creditKpiApi,
+  SalesKPIData,
+  StockKPIData,
+  CreditKPIData,
+  productsApi,
+  customersApi,
+  inventoryApi,
+  transactionsApi,
+  agingApi,
+  kpiApi,
+  MOVEMENT_TYPES,
+  type Product,
+  type Customer,
+  type InventorySnapshot,
+  type InventorySnapshotLine,
+  type InventoryLinesResponse,
+  type Movement,
+  type AgingRecord,
+  type AgingSnapshotItem,
+  type AgingRiskItem,
+  type AgingDistributionItem,
+  type MonthlySummaryItem,
+  type BranchSummary,
+  type CategoryBreakdown,
+  type KPIData,
+  type QueryParams,
 } from "./dataApi";
 import { notificationsApi } from "./notificationsApi";
 // ─────────────────────────────────────────────────────────────────────────────
@@ -298,6 +299,10 @@ export function useAgingDates() {
   return useAsync(() => agingApi.dates(), []);
 }
 
+export function useAgingSnapshots() {
+  return useAsync(() => agingApi.snapshots(), []);
+}
+
 export function useAgingRisk(params?: {
   report_date?: string;
   risk?: string;
@@ -333,6 +338,7 @@ export type {
   InventoryLinesResponse,
   Movement,
   AgingRecord,
+  AgingSnapshotItem,
   AgingRiskItem,
   AgingDistributionItem,
   MonthlySummaryItem,

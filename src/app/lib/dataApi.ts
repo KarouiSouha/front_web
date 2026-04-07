@@ -587,9 +587,18 @@ export interface AgingDistributionItem {
   midpoint_days: number;
 }
 
+export interface AgingSnapshotItem {
+  id: string;
+  report_date: string | null;
+  uploaded_at: string;
+}
+
 export const agingApi = {
   list: (params?: QueryParams & { report_date?: string; risk?: string }) =>
     api.get<AgingListResponse>(`/aging/${qs(params)}`),
+
+  snapshots: () =>
+    api.get<{ count: number; items: AgingSnapshotItem[] }>("/aging/snapshots/"),
 
   get: (id: string) => api.get<AgingRecord>(`/aging/${id}/`),
 

@@ -3,20 +3,18 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import {
-  Search, RefreshCw, Loader2, AlertCircle, Download,
+  RefreshCw, Loader2, AlertCircle, Download,
   TrendingUp, AlertTriangle, CheckCircle2, Clock,
-  ChevronDown as ChevronDownIcon, BarChart3, Users,
-  Wallet, ArrowUpRight, ArrowDownRight, Building2,
-  Target, Activity,
+  ChevronDown as ChevronDownIcon, ArrowUpRight, ArrowDownRight, Building2,
+  Target, Activity
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie,
-  AreaChart, Area, LineChart, Line, Legend,
-  ComposedChart,
+  AreaChart, Area, Legend
 } from 'recharts';
 import { useAgingDates, type AgingRow } from '../lib/dataHooks';
-import { formatCurrency, formatNumber } from '../lib/utils';
+import { formatCurrency } from '../lib/utils';
 import { DataTable } from '../components/DataTable';
 import { AgingHistoricalTrend } from '../components/AgingHistoricalTrend';
 
@@ -46,6 +44,13 @@ function periodToDates(period: string): { date_from?: string; date_to?: string }
   const pad = (n: number) => String(n).padStart(2, '0');
   const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const dateTo = fmt(today);
+  if (period === 'ytd') {
+    return { date_from: `${today.getFullYear()}-01-01`, date_to: dateTo };
+  }
+  if (period === 'last_year') {
+    const y = today.getFullYear() - 1;
+    return { date_from: `${y}-01-01`, date_to: `${y}-12-31` };
+  }
   const days = parseInt(period);
   if (!isNaN(days)) {
     const f = new Date(today); f.setDate(f.getDate() - days);
@@ -112,11 +117,11 @@ const BUCKET_COLORS = [
 ];
 
 const PERIOD_OPTIONS = [
-  { key: 'all', label: 'All Periods'    },
+  { key: 'ytd', label: 'Year to Date'   },
   { key: '30',  label: 'Last 30 Days'   },
   { key: '90',  label: 'Last 90 Days'   },
   { key: '180', label: 'Last 6 Months'  },
-  { key: '365', label: 'Last 12 Months' },
+  { key: 'last_year', label: 'Last Year' },
 ];
 
 const RISK_OPTIONS = [
@@ -321,7 +326,7 @@ export function AgingReceivablePage() {
   const { data: datesData } = useAgingDates();
 
   // ✅ All 4 filters
-  const [period,       setPeriod]       = useState<string>('all');
+  const [period,       setPeriod]       = useState<string>('ytd');
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [riskFilter,   setRiskFilter]   = useState<string>('all');
   const [branchFilter, setBranchFilter] = useState<string>('all');
@@ -505,16 +510,12 @@ export function AgingReceivablePage() {
   };
 
   // ── Dropdown options ──────────────────────────────────────────────────────
-  const dateOptions = [
-    { key: '__latest__', label: 'Latest available' },
-    ...(datesData?.dates ?? []).map(d => ({ key: d, label: d })),
-  ];
   const branchOptions = [
     { key: 'all', label: 'All Branches' },
     ...availableBranches.map(b => ({ key: b, label: b })),
   ];
 
-  const isFiltered = period !== 'all' || selectedDate !== '' || riskFilter !== 'all' || branchFilter !== 'all';
+  const isFiltered = period !== 'ytd' || selectedDate !== '' || riskFilter !== 'all' || branchFilter !== 'all';
 
   // ── Table columns ─────────────────────────────────────────────────────────
   const columns = useMemo(() => [
@@ -607,7 +608,6 @@ export function AgingReceivablePage() {
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <StyledDropdown label="Period"      options={PERIOD_OPTIONS} value={period}        onChange={v => setPeriod(v)}                                    isOpen={openDropdown === 'period'} onToggle={() => setOpenDropdown(o => o === 'period' ? null : 'period')} onClose={() => setOpenDropdown(null)} />
-          <StyledDropdown label="Report Date" options={dateOptions}    value={selectedDate || '__latest__'} onChange={v => setSelectedDate(v === '__latest__' ? '' : v)} isOpen={openDropdown === 'date'}   onToggle={() => setOpenDropdown(o => o === 'date'   ? null : 'date')}   onClose={() => setOpenDropdown(null)} />
           <StyledDropdown label="Risk Level"  options={RISK_OPTIONS}   value={riskFilter}    onChange={v => setRiskFilter(v)}                               isOpen={openDropdown === 'risk'}   onToggle={() => setOpenDropdown(o => o === 'risk'   ? null : 'risk')}   onClose={() => setOpenDropdown(null)} />
           <StyledDropdown label="Branch"      options={branchOptions}  value={branchFilter}  onChange={v => setBranchFilter(v)}                             isOpen={openDropdown === 'branch'} onToggle={() => setOpenDropdown(o => o === 'branch' ? null : 'branch')} onClose={() => setOpenDropdown(null)} minWidth={180} />
           {branchFilterLoading && (
@@ -619,7 +619,7 @@ export function AgingReceivablePage() {
             <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
               <div style={{ height: 23 }} />
               <button
-                onClick={() => { setPeriod('all'); setSelectedDate(''); setRiskFilter('all'); setBranchFilter('all'); }}
+                onClick={() => { setPeriod('ytd'); setSelectedDate(''); setRiskFilter('all'); setBranchFilter('all'); }}
                 style={{ height: 38, padding: '0 14px', borderRadius: 10, border: `1px solid ${css.border}`, background: css.card, color: css.mutedFg, fontSize: 13, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', whiteSpace: 'nowrap' }}>
                 Reset all
               </button>
@@ -629,7 +629,7 @@ export function AgingReceivablePage() {
         {/* Active filter badges */}
         {isFiltered && (
           <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {period !== 'all' && (
+            {period !== 'ytd' && (
               <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: `${C.indigo}10`, color: C.indigo, border: `1px solid ${C.indigo}25` }}>
                 {PERIOD_OPTIONS.find(o => o.key === period)?.label}
               </span>
@@ -703,7 +703,7 @@ export function AgingReceivablePage() {
           </div>
 
           {/* ── Branch Revenue — ✅ filtered by period + branch ── */}
-          <SectionTitle title="Revenue by Branch (Monthly)" sub={`${branchFilter !== 'all' ? `Branch: ${branchFilter} · ` : ''}${period !== 'all' ? PERIOD_OPTIONS.find(o => o.key === period)?.label : 'All time'}`} />
+          <SectionTitle title="Revenue by Branch (Monthly)" sub={`${branchFilter !== 'all' ? `Branch: ${branchFilter} · ` : ''}${PERIOD_OPTIONS.find(o => o.key === period)?.label ?? 'Year to Date'}`} />
           <Panel title="Branch Revenue Trend" sub={`${visibleBranchTrendBranches.length} branches · last ${branchTrend.length} months`}>
             {branchTrendLoading ? (
               <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: css.mutedFg }}>
@@ -874,7 +874,20 @@ export function AgingReceivablePage() {
           {/* ── Collection Rate Trend ── */}
           <SectionTitle title="Collection Rate" sub="Historical trend across all snapshots" />
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
-            <AgingHistoricalTrend snapshotCount={period === 'all' ? undefined : period === '30' ? 1 : period === '90' ? 2 : period === '180' ? 3 : 6} branch={branchFilter !== 'all' ? branchFilter : undefined} />
+            <AgingHistoricalTrend
+              snapshotCount={
+                period === '30'
+                  ? 1
+                  : period === '90'
+                    ? 2
+                    : period === '180'
+                      ? 3
+                      : period === 'last_year'
+                        ? 12
+                        : new Date().getMonth() + 1
+              }
+              branch={branchFilter !== 'all' ? branchFilter : undefined}
+            />
             {/* Current period summary */}
             <div style={cardStyle}>
               <div style={{ marginBottom: 20 }}>

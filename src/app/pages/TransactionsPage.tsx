@@ -4,8 +4,8 @@ import { createPortal } from 'react-dom';
 import { DataTable } from '../components/DataTable';
 import { formatCurrency, formatDate, formatNumber } from '../lib/utils';
 import {
-  ArrowUpRight, ArrowDownLeft, ArrowLeftRight,
-  Loader2, AlertTriangle, ChevronDown, RefreshCw,
+    ArrowUpRight, ArrowDownLeft, ArrowLeftRight,
+    Loader2, AlertTriangle, ChevronDown, RefreshCw,
 } from 'lucide-react';
 import axios from 'axios';
 import { isSaleType, isPurchaseType } from '../lib/dataApi';
@@ -33,7 +33,10 @@ function periodToDates(period: string): { date_from?: string; date_to?: string }
   if (period === '1m')  { const f = new Date(today); f.setMonth(f.getMonth() - 1);         return { date_from: fmt(f), date_to: dateTo }; }
   if (period === '3m')  { const f = new Date(today); f.setMonth(f.getMonth() - 3);         return { date_from: fmt(f), date_to: dateTo }; }
   if (period === '6m')  { const f = new Date(today); f.setMonth(f.getMonth() - 6);         return { date_from: fmt(f), date_to: dateTo }; }
-  if (period === '12m') { const f = new Date(today); f.setFullYear(f.getFullYear() - 1);   return { date_from: fmt(f), date_to: dateTo }; }
+  if (period === 'last_year') {
+    const y = today.getFullYear() - 1;
+    return { date_from: `${y}-01-01`, date_to: `${y}-12-31` };
+  }
   if (period === 'ytd') return { date_from: `${today.getFullYear()}-01-01`, date_to: dateTo };
   return {};
 }
@@ -292,7 +295,7 @@ export function TransactionsPage() {
   const [availableBranches, setAvailableBranches] = useState<string[]>([]);
 
   // ✅ All 3 filters — each one re-fetches both KPIs and table data
-  const [selectedPeriod, setSelectedPeriod] = useState('12m');
+  const [selectedPeriod, setSelectedPeriod] = useState('ytd');
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [selectedType,   setSelectedType]   = useState('all');
   const [openDropdown,   setOpenDropdown]   = useState<'period' | 'type' | 'branch' | null>(null);
@@ -375,14 +378,13 @@ export function TransactionsPage() {
   const netFlow    = grandTotalOut - grandTotalIn;
   const totalPages = Math.ceil(totalCount / pageSize);
 
-  const isFiltered = selectedPeriod !== '12m' || selectedBranch !== 'all' || selectedType !== 'all';
+  const isFiltered = selectedPeriod !== 'ytd' || selectedBranch !== 'all' || selectedType !== 'all';
 
   const periodOptions = [
-    { key: 'all', label: 'All Time'        },
     { key: '1m',  label: 'Last Month'      },
     { key: '3m',  label: 'Last 3 Months'  },
     { key: '6m',  label: 'Last 6 Months'  },
-    { key: '12m', label: 'Last 12 Months' },
+    { key: 'last_year', label: 'Last Year' },
     { key: 'ytd', label: 'Year to Date'   },
   ];
   const typeOptions   = [{ key: 'all', label: 'All Types'    }, ...availableTypes.map(t => ({ key: t, label: t }))];
@@ -595,7 +597,7 @@ export function TransactionsPage() {
             <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
               <div style={{ height: 23 }} />
               <button
-                onClick={() => { setSelectedPeriod('12m'); setSelectedBranch('all'); setSelectedType('all'); setPage(1); }}
+                onClick={() => { setSelectedPeriod('ytd'); setSelectedBranch('all'); setSelectedType('all'); setPage(1); }}
                 style={{ height: 38, padding: '0 14px', borderRadius: 10, border: `1px solid ${css.border}`, background: css.card, color: css.mutedFg, fontSize: 13, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', whiteSpace: 'nowrap' }}
               >
                 Reset filters
@@ -606,7 +608,7 @@ export function TransactionsPage() {
         {/* Active filter badges */}
         {isFiltered && (
           <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {selectedPeriod !== '12m' && (
+            {selectedPeriod !== 'ytd' && (
               <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: `${C.indigo}10`, color: C.indigo, border: `1px solid ${C.indigo}25` }}>
                 {periodOptions.find(o => o.key === selectedPeriod)?.label}
               </span>

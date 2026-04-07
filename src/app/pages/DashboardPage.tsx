@@ -1,26 +1,27 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-    ShoppingCart, Package, TrendingUp,
-    AlertTriangle, Wallet, Loader2,
-    ArrowUpRight,
+  ShoppingCart, Package, TrendingUp,
+  AlertTriangle, Wallet, Loader2,
+  ArrowUpRight,
 } from 'lucide-react';
 import {
-    AreaChart, Area, BarChart, Bar,
-    XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-    ResponsiveContainer, Cell,
+  AreaChart, Area, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, Cell,
 } from 'recharts';
 import {
-    useKPIs,
-    useTransactionSummary,
-    useAgingDistribution,
-    useAgingRisk,
-    useBranchSummary,
-    useBranchBreakdown,
-    useCategoryBreakdown,
-    useBranchMonthly,
-    MOVEMENT_TYPES,
-    useTypeBreakdown,
+  useTransactionSummary,
+  useAgingDistribution,
+  useAgingRisk,
+  useAgingDates,
+  useBranchSummary,
+  useBranchBreakdown,
+  useCategoryBreakdown,
+  useBranchMonthly,
+  MOVEMENT_TYPES,
+  useTypeBreakdown,
 } from '../lib/dataHooks';
+import { inventoryApi } from '../lib/dataApi';
 import { notificationsApi } from '../lib/notificationsApi';
 import { formatCurrency } from '../lib/utils';
 
@@ -468,6 +469,10 @@ function CategoryBars({
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export function DashboardPage() {
+  const currentYear = new Date().getFullYear();
+  const yearStart = `${currentYear}-01-01`;
+  const yearEnd = `${currentYear}-12-31`;
+
   useEffect(() => {
     let mounted = true;
 
@@ -484,22 +489,115 @@ export function DashboardPage() {
     };
   }, []);
 
-  const kpi               = useKPIs();
-  const summary           = useTransactionSummary();
-  const agingDist         = useAgingDistribution();
-  const agingRisk         = useAgingRisk({ limit: 5 });
-  const categoryBreakdown = useCategoryBreakdown();
-  const typeBreakdown     = useTypeBreakdown();
-  const branchMonthly     = useBranchMonthly({ movement_type: MOVEMENT_TYPES.SALE });
-  const branchStockSummary = useBranchSummary();
-  const branchSales        = useBranchBreakdown({ movement_type: MOVEMENT_TYPES.SALE });
+  const agingDates = useAgingDates();
+  const [currentYearSnapshotId, setCurrentYearSnapshotId] = useState<string | null>(null);
 
-  const kpiData = kpi.data;
+  useEffect(() => {
+    let mounted = true;
+
+    const resolveSnapshotForYear = async () => {
+      try {
+        let page = 1;
+        const pageSize = 100;
+        let totalPages = 1;
+        let foundId: string | null = null;
+        const allSnapshots: Array<{
+          id: string;
+          snapshot_date?: string | null;
+          fiscal_year?: string | null;
+          uploaded_at?: string | null;
+        }> = [];
+
+        const extractYear = (raw?: string | null): number | null => {
+          if (!raw) return null;
+          const asDate = new Date(raw);
+          if (!Number.isNaN(asDate.getTime())) return asDate.getFullYear();
+          const m = String(raw).match(/(19|20)\d{2}/);
+          return m ? parseInt(m[0], 10) : null;
+        };
+
+        while (page <= totalPages) {
+          const res = await inventoryApi.listSnapshots({ page, page_size: pageSize });
+          totalPages = res.total_pages ?? 1;
+          allSnapshots.push(...(res.items ?? []));
+
+          for (const snapshot of res.items ?? []) {
+            const ySnapshot = extractYear(snapshot.snapshot_date);
+            const yFiscal = extractYear(String(snapshot.fiscal_year ?? ''));
+            const yUpload = extractYear(snapshot.uploaded_at);
+            const year = ySnapshot ?? yFiscal ?? yUpload;
+            if (year === currentYear) {
+              foundId = snapshot.id;
+              break;
+            }
+          }
+
+          if (foundId) break;
+          page += 1;
+        }
+
+        if (!foundId && allSnapshots.length > 0) {
+          const sortByBestDateDesc = [...allSnapshots].sort((a, b) => {
+            const da = new Date(String(a.snapshot_date ?? a.uploaded_at ?? '')).getTime();
+            const db = new Date(String(b.snapshot_date ?? b.uploaded_at ?? '')).getTime();
+            return db - da;
+          });
+
+          foundId = sortByBestDateDesc[0]?.id ?? null;
+        }
+
+        if (mounted) setCurrentYearSnapshotId(foundId);
+      } catch {
+        if (mounted) setCurrentYearSnapshotId(null);
+      }
+    };
+
+    resolveSnapshotForYear();
+
+    return () => {
+      mounted = false;
+    };
+  }, [currentYear]);
+
+  const currentYearAgingDate = useMemo(() => {
+    const dates = agingDates.data?.dates ?? [];
+    const yearDates = dates.filter((d) => d.startsWith(String(currentYear))).sort((a, b) => b.localeCompare(a));
+    return yearDates[0];
+  }, [agingDates.data, currentYear]);
+
+  const summary = useTransactionSummary({
+    year: currentYear,
+    date_from: yearStart,
+    date_to: yearEnd,
+  });
+  const agingDist = useAgingDistribution(
+    currentYearAgingDate ? { report_date: currentYearAgingDate } : undefined,
+  );
+  const agingRisk = useAgingRisk(
+    currentYearAgingDate ? { report_date: currentYearAgingDate, limit: 5 } : { limit: 5 },
+  );
+  const categoryBreakdown = useCategoryBreakdown(
+    currentYearSnapshotId ? { snapshot_id: currentYearSnapshotId } : undefined,
+  );
+  const typeBreakdown = useTypeBreakdown({ date_from: yearStart, date_to: yearEnd });
+  const branchMonthly = useBranchMonthly({
+    movement_type: MOVEMENT_TYPES.SALE,
+    year: currentYear,
+    date_from: yearStart,
+    date_to: yearEnd,
+  });
+  const branchStockSummary = useBranchSummary(
+    currentYearSnapshotId ? { snapshot_id: currentYearSnapshotId } : undefined,
+  );
+  const branchSales = useBranchBreakdown({
+    movement_type: MOVEMENT_TYPES.SALE,
+    date_from: yearStart,
+    date_to: yearEnd,
+  });
 
   const trendData = useMemo(() =>
     [...(summary.data?.summary ?? [])]
       .sort((a, b) => a.year - b.year || a.month - b.month)
-      .slice(-12)
       .map(m => ({
         month:     m.month_label,
         sales:     m.total_sales,
@@ -509,15 +607,19 @@ export function DashboardPage() {
   );
 
   const agingBars = useMemo(() =>
-    (agingDist.data?.distribution ?? [])
-      .filter(b => b.total > 0)
-      .map(b => ({ ...b, fill: AGING_COLORS[b.bucket] ?? '#94a3b8' })),
-    [agingDist.data]
+    currentYearAgingDate
+      ? (agingDist.data?.distribution ?? [])
+          .filter(b => b.total > 0)
+          .map(b => ({ ...b, fill: AGING_COLORS[b.bucket] ?? '#94a3b8' }))
+      : [],
+    [agingDist.data, currentYearAgingDate]
   );
 
   const branchPerfData = useMemo(() => {
     const salesBranches = branchSales.data?.branches  ?? [];
-    const stockBranches = branchStockSummary.data?.branches ?? [];
+    const stockBranches = currentYearSnapshotId
+      ? (branchStockSummary.data?.branches ?? [])
+      : [];
 
     if (!salesBranches.length && !stockBranches.length) return [];
 
@@ -562,23 +664,51 @@ export function DashboardPage() {
       })
       .filter(b => b.sales > 0 || b.stock > 0)
       .sort((a, b) => (b.sales + b.stock) - (a.sales + a.stock));
-  }, [branchSales.data, branchStockSummary.data]);
+  }, [branchSales.data, branchStockSummary.data, currentYearSnapshotId]);
 
   const categoryData = useMemo(() =>
-    (categoryBreakdown.data?.categories ?? [])
-      .slice(0, 8)
-      .map((c, i) => ({
-        category: c.category,
-        value:    c.total_value,
-        fill:     BRANCH_COLORS[i % BRANCH_COLORS.length],
-      })),
-    [categoryBreakdown.data]
+    currentYearSnapshotId
+      ? (categoryBreakdown.data?.categories ?? [])
+          .slice(0, 8)
+          .map((c, i) => ({
+            category: c.category,
+            value:    c.total_value,
+            fill:     BRANCH_COLORS[i % BRANCH_COLORS.length],
+          }))
+      : [],
+    [categoryBreakdown.data, currentYearSnapshotId]
+  );
+
+  const topRiskCustomers = useMemo(
+    () => (currentYearAgingDate ? (agingRisk.data?.top_risk ?? []) : []),
+    [agingRisk.data, currentYearAgingDate],
   );
 
   const totalPurchases = useMemo(() =>
     (typeBreakdown.data?.breakdown ?? [])
       .find(t => t.movement_type === MOVEMENT_TYPES.PURCHASE)?.total_in ?? 0,
     [typeBreakdown.data]
+  );
+
+  const totalSales = useMemo(
+    () => (summary.data?.summary ?? []).reduce((acc, row) => acc + (row.total_sales ?? 0), 0),
+    [summary.data],
+  );
+
+  const currentStockValue = useMemo(
+    () =>
+      currentYearSnapshotId
+        ? (branchStockSummary.data?.branches ?? []).reduce(
+            (acc, row) => acc + (typeof row.total_value === 'number' ? row.total_value : 0),
+            0,
+          )
+        : 0,
+    [branchStockSummary.data, currentYearSnapshotId],
+  );
+
+  const totalReceivables = useMemo(
+    () => agingBars.reduce((acc, b) => acc + (b.total ?? 0), 0),
+    [agingBars],
   );
 
   const legendStyle = {
@@ -588,6 +718,7 @@ export function DashboardPage() {
   };
 
   const branchPerfLoading = branchSales.loading || branchStockSummary.loading;
+  const kpiLoading = summary.loading || typeBreakdown.loading || branchStockSummary.loading || agingDist.loading;
 
   return (
     <div style={{ background: css.bg, minHeight: '100vh', padding: '32px 28px' }}>
@@ -604,12 +735,12 @@ export function DashboardPage() {
           Dashboard Overview
         </h1>
         <p style={{ fontSize: 13, color: css.mutedFg, marginTop: 4 }}>
-          Monitor your business performance and key metrics
+          Monitor your business performance and key metrics for {currentYear}
         </p>
       </div>
 
       {/* ── KPIs ── */}
-      {kpi.loading ? (
+      {kpiLoading ? (
         <div style={{
           display:             'grid',
           gridTemplateColumns: 'repeat(4,1fr)',
@@ -632,10 +763,10 @@ export function DashboardPage() {
           gap:                  16,
           marginBottom:         24,
         }}>
-          <KPI title="Total Sales"         value={formatCurrency(kpiData?.totalSalesValue ?? 0)} icon={TrendingUp}   accent={C.indigo} />
+          <KPI title="Total Sales"         value={formatCurrency(totalSales)}                     icon={TrendingUp}   accent={C.indigo} />
           <KPI title="Total Purchases"     value={formatCurrency(totalPurchases)}                 icon={ShoppingCart} accent={C.amber}  />
-          <KPI title="Current Stock Value" value={formatCurrency(kpiData?.stockValue ?? 0)}       icon={Package}      accent={C.cyan}   />
-          <KPI title="Total Receivables"   value={formatCurrency(kpiData?.totalReceivables ?? 0)} icon={Wallet}       accent={C.violet} />
+          <KPI title="Current Stock Value" value={formatCurrency(currentStockValue)}               icon={Package}      accent={C.cyan}   />
+          <KPI title="Total Receivables"   value={formatCurrency(totalReceivables)}                icon={Wallet}       accent={C.violet} />
         </div>
       )}
 
@@ -648,7 +779,7 @@ export function DashboardPage() {
       }}>
 
         {/* ── Sales vs Purchases ── */}
-        <Panel title="Sales vs Purchases" sub="Monthly comparison — last 12 months">
+        <Panel title="Sales vs Purchases" sub={`Monthly comparison — ${currentYear}`}>
           {summary.loading ? <Loader label="Loading…" /> :
            trendData.length === 0 ? <Empty /> : (
             <ResponsiveContainer width="100%" height={260}>
@@ -898,9 +1029,9 @@ export function DashboardPage() {
       <div style={{ marginBottom: 16 }}>
         <Panel title="Top Risky Customers" sub="Customers with highest overdue balances">
           {agingRisk.loading ? <Loader label="Loading…" /> :
-           !agingRisk.data || agingRisk.data.top_risk.length === 0 ? <Empty /> : (
+           topRiskCustomers.length === 0 ? <Empty /> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {agingRisk.data.top_risk.map(item => {
+              {topRiskCustomers.map(item => {
                 const pct    = item.total > 0
                   ? Math.min(100, (item.overdue_total / item.total) * 100)
                   : 0;
@@ -981,7 +1112,7 @@ export function DashboardPage() {
       {/* ── Revenue Trend by Branch ── */}
       <Panel
         title="Revenue Trend by Branch"
-        sub="Monthly sales revenue — one line per branch"
+        sub={`Monthly sales revenue (${currentYear}) — one line per branch`}
       >
         {branchMonthly.loading ? <Loader label="Loading…" /> :
          !branchMonthly.data || branchMonthly.data.monthly_data.length === 0
