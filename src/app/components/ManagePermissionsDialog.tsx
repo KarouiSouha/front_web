@@ -47,9 +47,11 @@ export function ManagePermissionsDialog({
         agents: Array<{ id: string; permissions_list?: string[] }>;
       }>('/users/agents/');
       const found = res.agents.find(a => a.id === user.id);
-      setSelectedPermissions(ensureRequiredPermission(found?.permissions_list ?? []));
+      const permissions = ensureRequiredPermission(found?.permissions_list ?? []);
+      setSelectedPermissions(user.role === 'agent' ? permissions.filter(p => p !== 'view-team') : permissions);
     } catch {
-      setSelectedPermissions(ensureRequiredPermission(user.permissions ?? []));
+      const permissions = ensureRequiredPermission(user.permissions ?? []);
+      setSelectedPermissions(user.role === 'agent' ? permissions.filter(p => p !== 'view-team') : permissions);
       toast.error('Unable to load current permissions');
     } finally {
       setLoadingUser(false);
@@ -66,7 +68,7 @@ export function ManagePermissionsDialog({
   };
 
   const selectAllInCategory = (category: string) => {
-    const ids = AVAILABLE_PERMISSIONS.filter(p => p.category === category).map(p => p.id);
+    const ids = availablePermissions.filter(p => p.category === category).map(p => p.id);
     const allSelected = ids.every(p => selectedPermissions.includes(p));
     setSelectedPermissions(prev =>
       allSelected
@@ -98,7 +100,11 @@ export function ManagePermissionsDialog({
     }
   };
 
-  const groupedPermissions = AVAILABLE_PERMISSIONS.reduce((acc, p) => {
+  const availablePermissions = selectedUser?.role === 'agent'
+    ? AVAILABLE_PERMISSIONS.filter(p => p.id !== 'view-team')
+    : AVAILABLE_PERMISSIONS;
+
+  const groupedPermissions = availablePermissions.reduce((acc, p) => {
     if (!acc[p.category]) acc[p.category] = [];
     acc[p.category].push(p);
     return acc;
@@ -217,7 +223,7 @@ export function ManagePermissionsDialog({
 
                   <div className="flex gap-2">
                     <Button type="button" size="sm" variant="outline"
-                      onClick={() => setSelectedPermissions(ensureRequiredPermission(AVAILABLE_PERMISSIONS.map(p => p.id)))}
+                      onClick={() => setSelectedPermissions(ensureRequiredPermission(availablePermissions.map(p => p.id)))}
                       disabled={loadingUser}>
                       Select all
                     </Button>

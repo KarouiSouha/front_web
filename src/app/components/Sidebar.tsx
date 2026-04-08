@@ -84,6 +84,7 @@ export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarPro
   const hasPermission = (permission: string) => {
     if (!user) return false;
     if (user.role === 'manager' || user.role === 'admin') return true;
+    if (permission === 'view-team') return false;
     return user.permissions.includes(permission);
   };
 

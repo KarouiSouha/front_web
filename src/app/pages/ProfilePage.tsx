@@ -80,8 +80,13 @@ export function ProfilePage() {
 
   const getUserPermissions = () => {
     if (!user) return [];
-    if (user.permissions.includes('all')) return AVAILABLE_PERMISSIONS;
-    return AVAILABLE_PERMISSIONS.filter(p => user.permissions.includes(p.id));
+    const permissions = user.permissions.includes('all')
+      ? AVAILABLE_PERMISSIONS
+      : AVAILABLE_PERMISSIONS.filter(p => user.permissions.includes(p.id));
+    if (user.role === 'agent') {
+      return permissions.filter(p => p.id !== 'view-team');
+    }
+    return permissions;
   };
 
   const userPermissions = getUserPermissions();

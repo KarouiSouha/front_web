@@ -45,6 +45,7 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
   });
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const agentPermissions = AVAILABLE_PERMISSIONS.filter(p => p.id !== 'view-team');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,7 +95,7 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
   };
 
   const selectAllInCategory = (category: string) => {
-    const ids = AVAILABLE_PERMISSIONS.filter(p => p.category === category).map(p => p.id);
+    const ids = agentPermissions.filter(p => p.category === category).map(p => p.id);
     const allSelected = ids.every(p => selectedPermissions.includes(p));
     setSelectedPermissions(prev =>
       allSelected
@@ -103,7 +104,7 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
     );
   };
 
-  const groupedPermissions = AVAILABLE_PERMISSIONS.reduce((acc, p) => {
+  const groupedPermissions = agentPermissions.reduce((acc, p) => {
     if (!acc[p.category]) acc[p.category] = [];
     acc[p.category].push(p);
     return acc;
@@ -183,7 +184,7 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
           <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
             <span className="text-sm font-medium">Quick selection:</span>
             <div className="flex gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPermissions(ensureRequiredPermission(AVAILABLE_PERMISSIONS.map(p => p.id)))}>
+              <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPermissions(ensureRequiredPermission(agentPermissions.map(p => p.id)))}>
                 Select all
               </Button>
               <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPermissions([REQUIRED_PERMISSION])}>
