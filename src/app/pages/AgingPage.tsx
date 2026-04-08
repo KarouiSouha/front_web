@@ -13,7 +13,7 @@ import {
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie,
   AreaChart, Area, Legend
 } from 'recharts';
-import { useAgingDates, type AgingRow } from '../lib/dataHooks';
+import { useAgingDates, useAgingSnapshots, type AgingRow, type AgingSnapshotItem } from '../lib/dataHooks';
 import { formatCurrency } from '../lib/utils';
 import { DataTable } from '../components/DataTable';
 import { AgingHistoricalTrend } from '../components/AgingHistoricalTrend';
@@ -324,6 +324,7 @@ function ChartTooltip({ active, payload, label }: any) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export function AgingReceivablePage() {
   const { data: datesData } = useAgingDates();
+  const { data: snapshotsData } = useAgingSnapshots();
 
   // ✅ All 4 filters
   const [period,       setPeriod]       = useState<string>('ytd');
@@ -353,7 +354,30 @@ export function AgingReceivablePage() {
   const [creditKPI,        setCreditKPI]        = useState<CreditKPIData | null>(null);
   const [creditKPILoading, setCreditKPILoading] = useState(false);
 
-  // ── Derived values ────────────────────────────────────────────────────────
+  // ── Derived values ───────────────────────────────────────────────────────-
+  const snapshotItems = snapshotsData?.items ?? [];
+  const currentYear = new Date().getFullYear();
+
+  const selectedSnapshot = useMemo(() => {
+    if (selectedDate) {
+      return snapshotItems.find(s => String(s.report_date) === selectedDate || String(s.uploaded_at)?.startsWith(selectedDate));
+    }
+    if (period === 'last_year') {
+      return snapshotItems.find(s => s.aging_year === currentYear - 1);
+    }
+    if (period === 'ytd') {
+      return snapshotItems.find(s => s.aging_year === currentYear);
+    }
+    return snapshotItems[0];
+  }, [selectedDate, period, snapshotItems, currentYear]);
+
+  const effectiveAgingParams = useMemo(() => {
+    if (selectedSnapshot?.id) return { snapshot_id: selectedSnapshot.id };
+    if (selectedDate) return { report_date: selectedDate };
+    if (period === 'last_year') return { aging_year: currentYear - 1 };
+    if (period === 'ytd') return { aging_year: currentYear };
+    return {};
+  }, [selectedSnapshot, selectedDate, period, currentYear]);
   const effectiveDate = selectedDate || datesData?.dates?.[0] || '';
   const dateRange     = useMemo(() => periodToDates(period), [period]);
 
@@ -365,18 +389,19 @@ export function AgingReceivablePage() {
 
   // ── ✅ Fetch aging rows — re-fetches on date OR period change ─────────────
   const fetchAgingRows = useCallback(async () => {
-    const dateToFetch = effectiveDate;
-    if (!dateToFetch) return;
+    const params: Record<string, any> = { page_size: 500, page: 1, ...effectiveAgingParams };
+    if (!params.snapshot_id && !params.report_date && params.aging_year === undefined) return;
 
     setLoading(true);
     setError(null);
     try {
       const res = await axios.get('/api/aging/', {
         headers: getAuthHeaders(),
-        params: { report_date: dateToFetch, page_size: 500, page: 1 },
+        params,
       });
       const data = res.data;
-      setReportDate(data.report_date || dateToFetch);
+      const displayDate = data.report_date || selectedSnapshot?.report_date || (selectedSnapshot?.aging_year ? String(selectedSnapshot.aging_year) : selectedDate);
+      setReportDate(displayDate || '');
       setTotalAccounts(data.total_accounts ?? 0);
       const normalized = (data.records ?? [])
         .filter((r: any) => Number(r.total) > 0)
@@ -387,7 +412,7 @@ export function AgingReceivablePage() {
     } finally {
       setLoading(false);
     }
-  }, [effectiveDate]);
+  }, [effectiveAgingParams, selectedSnapshot, selectedDate]);
 
   useEffect(() => { fetchAgingRows(); }, [fetchAgingRows]);
 
@@ -427,11 +452,12 @@ export function AgingReceivablePage() {
 
   // ── Credit KPI ────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!effectiveDate) return;
+    const params: Record<string, any> = { ...effectiveAgingParams };
+    if (!params.snapshot_id && !params.report_date && params.aging_year === undefined) return;
     setCreditKPILoading(true);
-    axios.get('/api/kpi/credit/', { headers: getAuthHeaders(), params: { report_date: effectiveDate } })
+    axios.get('/api/kpi/credit/', { headers: getAuthHeaders(), params })
       .then(res => setCreditKPI(res.data)).catch(() => {}).finally(() => setCreditKPILoading(false));
-  }, [effectiveDate]);
+  }, [effectiveAgingParams]);
 
   // ── ✅ filtered = aging rows after applying ALL 4 filters ─────────────────
   const filtered = useMemo(() => {
@@ -490,24 +516,6 @@ export function AgingReceivablePage() {
   const collectionRate = creditKPI?.kpis?.taux_recouvrement?.value ?? 0;
   const overdueRate    = creditKPI?.kpis?.taux_impayes?.value ?? 0;
 
-  // ── Export CSV ────────────────────────────────────────────────────────────
-  const exportCSV = () => {
-    const headers = ['Code', 'Customer', ...BUCKETS.map(b => b.label), 'Total', 'Overdue', 'Risk'];
-    const csvRows = filtered.map(r => [
-      r.account_code,
-      `"${(r.customer_name ?? r.account ?? '').replace(/"/g, '""')}"`,
-      ...BUCKETS.map(b => ((r[b.key] as number) || 0).toFixed(2)),
-      r.total.toFixed(2), r.overdue_total.toFixed(2),
-      RISK_CONFIG[r.risk_score]?.label ?? r.risk_score,
-    ].join(','));
-    const csv  = [headers.join(','), ...csvRows].join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const a    = Object.assign(document.createElement('a'), {
-      href: URL.createObjectURL(blob),
-      download: `aging_receivables_${reportDate || 'latest'}.csv`,
-    });
-    a.click();
-  };
 
   // ── Dropdown options ──────────────────────────────────────────────────────
   const branchOptions = [
@@ -578,14 +586,6 @@ export function AgingReceivablePage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={exportCSV} disabled={filtered.length === 0} style={{
-            display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 14px',
-            borderRadius: 10, border: `1px solid ${css.border}`, background: css.card,
-            color: css.cardFg, fontSize: 13, cursor: filtered.length === 0 ? 'not-allowed' : 'pointer',
-            opacity: filtered.length === 0 ? 0.5 : 1, boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          }}>
-            <Download size={14} /> Export CSV
-          </button>
           <button onClick={fetchAgingRows} disabled={loading} style={{
             display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 14px',
             borderRadius: 10, border: `1px solid ${css.border}`, background: css.card,

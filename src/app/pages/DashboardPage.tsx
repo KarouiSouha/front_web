@@ -11,9 +11,10 @@ import {
 } from 'recharts';
 import {
   useTransactionSummary,
+  useAgingSnapshots,
   useAgingDistribution,
   useAgingRisk,
-  useAgingDates,
+  useInventorySnapshots,
   useBranchSummary,
   useBranchBreakdown,
   useCategoryBreakdown,
@@ -489,66 +490,36 @@ export function DashboardPage() {
     };
   }, []);
 
-  const agingDates = useAgingDates();
-  const [currentYearSnapshotId, setCurrentYearSnapshotId] = useState<string | null>(null);
+  const agingSnapshots = useAgingSnapshots();
+  const inventorySnapshots = useInventorySnapshots({ page_size: 100 });
+  const [currentYearAgingSnapshotId, setCurrentYearAgingSnapshotId] = useState<string | null>(null);
+  const [currentYearInventorySnapshotId, setCurrentYearInventorySnapshotId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
     const resolveSnapshotForYear = async () => {
       try {
-        let page = 1;
-        const pageSize = 100;
-        let totalPages = 1;
-        let foundId: string | null = null;
-        const allSnapshots: Array<{
-          id: string;
-          snapshot_date?: string | null;
-          fiscal_year?: string | null;
-          uploaded_at?: string | null;
-        }> = [];
-
+        const snapshots = agingSnapshots.data?.items ?? [];
         const extractYear = (raw?: string | null): number | null => {
           if (!raw) return null;
-          const asDate = new Date(raw);
-          if (!Number.isNaN(asDate.getTime())) return asDate.getFullYear();
-          const m = String(raw).match(/(19|20)\d{2}/);
-          return m ? parseInt(m[0], 10) : null;
+          const date = new Date(raw);
+          if (!Number.isNaN(date.getTime())) return date.getFullYear();
+          const match = String(raw).match(/(19|20)\d{2}/);
+          return match ? parseInt(match[0], 10) : null;
         };
 
-        while (page <= totalPages) {
-          const res = await inventoryApi.listSnapshots({ page, page_size: pageSize });
-          totalPages = res.total_pages ?? 1;
-          allSnapshots.push(...(res.items ?? []));
+        const candidates = snapshots.filter((snapshot) => {
+          if (snapshot.aging_year === currentYear) return true;
+          return extractYear(snapshot.report_date) === currentYear;
+        });
 
-          for (const snapshot of res.items ?? []) {
-            const ySnapshot = extractYear(snapshot.snapshot_date);
-            const yFiscal = extractYear(String(snapshot.fiscal_year ?? ''));
-            const yUpload = extractYear(snapshot.uploaded_at);
-            const year = ySnapshot ?? yFiscal ?? yUpload;
-            if (year === currentYear) {
-              foundId = snapshot.id;
-              break;
-            }
-          }
+        const sorted = candidates.sort((a, b) => (b.uploaded_at ?? '').localeCompare(a.uploaded_at ?? ''));
+        const foundId = sorted[0]?.id ?? null;
 
-          if (foundId) break;
-          page += 1;
-        }
-
-        if (!foundId && allSnapshots.length > 0) {
-          const sortByBestDateDesc = [...allSnapshots].sort((a, b) => {
-            const da = new Date(String(a.snapshot_date ?? a.uploaded_at ?? '')).getTime();
-            const db = new Date(String(b.snapshot_date ?? b.uploaded_at ?? '')).getTime();
-            return db - da;
-          });
-
-          foundId = sortByBestDateDesc[0]?.id ?? null;
-        }
-
-        if (mounted) setCurrentYearSnapshotId(foundId);
+        if (mounted) setCurrentYearAgingSnapshotId(foundId);
       } catch {
-        if (mounted) setCurrentYearSnapshotId(null);
+        if (mounted) setCurrentYearAgingSnapshotId(null);
       }
     };
 
@@ -557,13 +528,43 @@ export function DashboardPage() {
     return () => {
       mounted = false;
     };
-  }, [currentYear]);
+  }, [currentYear, agingSnapshots.data]);
 
-  const currentYearAgingDate = useMemo(() => {
-    const dates = agingDates.data?.dates ?? [];
-    const yearDates = dates.filter((d) => d.startsWith(String(currentYear))).sort((a, b) => b.localeCompare(a));
-    return yearDates[0];
-  }, [agingDates.data, currentYear]);
+  useEffect(() => {
+    let mounted = true;
+
+    const resolveInventorySnapshotForYear = async () => {
+      try {
+        const snapshots = inventorySnapshots.data?.items ?? [];
+        const extractYear = (raw?: string | null): number | null => {
+          if (!raw) return null;
+          const date = new Date(raw);
+          if (!Number.isNaN(date.getTime())) return date.getFullYear();
+          const match = String(raw).match(/(19|20)\d{2}/);
+          return match ? parseInt(match[0], 10) : null;
+        };
+
+        const candidates = snapshots.filter((snapshot) => {
+          if (typeof snapshot.inventory_year === 'number' && snapshot.inventory_year === currentYear) return true;
+          if (snapshot.fiscal_year && extractYear(String(snapshot.fiscal_year)) === currentYear) return true;
+          return extractYear(snapshot.snapshot_date) === currentYear;
+        });
+
+        const sorted = candidates.sort((a, b) => (b.uploaded_at ?? '').localeCompare(a.uploaded_at ?? ''));
+        const foundId = sorted[0]?.id ?? null;
+
+        if (mounted) setCurrentYearInventorySnapshotId(foundId);
+      } catch {
+        if (mounted) setCurrentYearInventorySnapshotId(null);
+      }
+    };
+
+    resolveInventorySnapshotForYear();
+
+    return () => {
+      mounted = false;
+    };
+  }, [currentYear, inventorySnapshots.data]);
 
   const summary = useTransactionSummary({
     year: currentYear,
@@ -571,13 +572,13 @@ export function DashboardPage() {
     date_to: yearEnd,
   });
   const agingDist = useAgingDistribution(
-    currentYearAgingDate ? { report_date: currentYearAgingDate } : undefined,
+    currentYearAgingSnapshotId ? { snapshot_id: currentYearAgingSnapshotId } : null,
   );
   const agingRisk = useAgingRisk(
-    currentYearAgingDate ? { report_date: currentYearAgingDate, limit: 5 } : { limit: 5 },
+    currentYearAgingSnapshotId ? { snapshot_id: currentYearAgingSnapshotId, limit: 5 } : null,
   );
   const categoryBreakdown = useCategoryBreakdown(
-    currentYearSnapshotId ? { snapshot_id: currentYearSnapshotId } : undefined,
+    currentYearInventorySnapshotId ? { snapshot_id: currentYearInventorySnapshotId } : null,
   );
   const typeBreakdown = useTypeBreakdown({ date_from: yearStart, date_to: yearEnd });
   const branchMonthly = useBranchMonthly({
@@ -587,7 +588,7 @@ export function DashboardPage() {
     date_to: yearEnd,
   });
   const branchStockSummary = useBranchSummary(
-    currentYearSnapshotId ? { snapshot_id: currentYearSnapshotId } : undefined,
+    currentYearInventorySnapshotId ? { snapshot_id: currentYearInventorySnapshotId } : null,
   );
   const branchSales = useBranchBreakdown({
     movement_type: MOVEMENT_TYPES.SALE,
@@ -607,17 +608,17 @@ export function DashboardPage() {
   );
 
   const agingBars = useMemo(() =>
-    currentYearAgingDate
+    currentYearAgingSnapshotId
       ? (agingDist.data?.distribution ?? [])
           .filter(b => b.total > 0)
           .map(b => ({ ...b, fill: AGING_COLORS[b.bucket] ?? '#94a3b8' }))
       : [],
-    [agingDist.data, currentYearAgingDate]
+    [agingDist.data, currentYearAgingSnapshotId]
   );
 
   const branchPerfData = useMemo(() => {
     const salesBranches = branchSales.data?.branches  ?? [];
-    const stockBranches = currentYearSnapshotId
+    const stockBranches = currentYearInventorySnapshotId
       ? (branchStockSummary.data?.branches ?? [])
       : [];
 
@@ -664,10 +665,10 @@ export function DashboardPage() {
       })
       .filter(b => b.sales > 0 || b.stock > 0)
       .sort((a, b) => (b.sales + b.stock) - (a.sales + a.stock));
-  }, [branchSales.data, branchStockSummary.data, currentYearSnapshotId]);
+  }, [branchSales.data, branchStockSummary.data, currentYearInventorySnapshotId]);
 
   const categoryData = useMemo(() =>
-    currentYearSnapshotId
+    currentYearInventorySnapshotId
       ? (categoryBreakdown.data?.categories ?? [])
           .slice(0, 8)
           .map((c, i) => ({
@@ -676,12 +677,12 @@ export function DashboardPage() {
             fill:     BRANCH_COLORS[i % BRANCH_COLORS.length],
           }))
       : [],
-    [categoryBreakdown.data, currentYearSnapshotId]
+    [categoryBreakdown.data, currentYearInventorySnapshotId]
   );
 
   const topRiskCustomers = useMemo(
-    () => (currentYearAgingDate ? (agingRisk.data?.top_risk ?? []) : []),
-    [agingRisk.data, currentYearAgingDate],
+    () => (currentYearAgingSnapshotId ? (agingRisk.data?.top_risk ?? []) : []),
+    [agingRisk.data, currentYearAgingSnapshotId],
   );
 
   const totalPurchases = useMemo(() =>
@@ -697,13 +698,13 @@ export function DashboardPage() {
 
   const currentStockValue = useMemo(
     () =>
-      currentYearSnapshotId
+      currentYearInventorySnapshotId
         ? (branchStockSummary.data?.branches ?? []).reduce(
             (acc, row) => acc + (typeof row.total_value === 'number' ? row.total_value : 0),
             0,
           )
         : 0,
-    [branchStockSummary.data, currentYearSnapshotId],
+    [branchStockSummary.data, currentYearInventorySnapshotId],
   );
 
   const totalReceivables = useMemo(

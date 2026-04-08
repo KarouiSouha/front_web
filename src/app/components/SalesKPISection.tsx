@@ -1,5 +1,5 @@
 // src/app/components/SalesKPISection.tsx
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   TrendingUp, TrendingDown, ShoppingBag, Users, Clock,
   BarChart2, ArrowUp, ArrowDown, Loader2, AlertCircle, RefreshCw, Info,
@@ -10,7 +10,7 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer, Cell,
 } from 'recharts';
-import { useSalesKPI } from '../lib/dataHooks';
+import { useSalesKPI, useTransactionYears } from '../lib/dataHooks';
 import { formatCurrency, formatNumber } from '../lib/utils';
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
@@ -230,6 +230,21 @@ export function SalesKPISection() {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const { data, loading, error, refetch } = useSalesKPI({ year });
+  const { data: yearsData } = useTransactionYears();
+
+  const availableYears = useMemo(() => {
+    const years = yearsData?.years ?? [];
+    if (years.length === 0) {
+      return [currentYear - 1, currentYear];
+    }
+    return [...years].sort((a, b) => b - a);
+  }, [currentYear, yearsData?.years]);
+
+  useEffect(() => {
+    if (availableYears.length > 0 && !availableYears.includes(year)) {
+      setYear(availableYears[0]);
+    }
+  }, [availableYears, year]);
 
   const caTotal             = Number(data?.ca?.total         ?? 0);
   const caPrevious          = Number(data?.ca?.previous      ?? 0);
@@ -274,8 +289,8 @@ export function SalesKPISection() {
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {[currentYear - 1, currentYear].map(y => (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {availableYears.map(y => (
               <YearBtn key={y} active={year === y} onClick={() => setYear(y)}>{y}</YearBtn>
             ))}
           </div>

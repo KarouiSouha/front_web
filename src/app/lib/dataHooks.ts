@@ -173,16 +173,16 @@ export function useInventoryDates() {
   return useAsync(() => inventoryApi.dates(), []);
 }
 
-export function useBranchSummary(params?: { snapshot_id?: string ; branch?: string  }) {
+export function useBranchSummary(params?: { snapshot_id?: string ; branch?: string  } | null) {
   return useAsync(
-    () => inventoryApi.branchSummary(params),
+    () => params === null ? Promise.resolve({ branches: [] }) : inventoryApi.branchSummary(params),
     [JSON.stringify(params)],
   );
 }
 
-export function useCategoryBreakdown(params?: { snapshot_id?: string ; branch?: string   }) {
+export function useCategoryBreakdown(params?: { snapshot_id?: string ; branch?: string   } | null) {
   return useAsync(
-    () => inventoryApi.categoryBreakdown(params),
+    () => params === null ? Promise.resolve({ categories: [] }) : inventoryApi.categoryBreakdown(params),
     [JSON.stringify(params)],
   );
 }
@@ -290,9 +290,12 @@ export function useMovementTypes() {
 // ─────────────────────────────────────────────
 
 export function useAgingList(
-  params?: QueryParams & { report_date?: string; risk?: string },
+  params?: QueryParams & { report_date?: string; risk?: string } | null,
 ) {
-  return useAsync(() => agingApi.list(params), [JSON.stringify(params)]);
+  return useAsync(
+    () => params === null ? Promise.resolve(null) : agingApi.list(params),
+    [JSON.stringify(params)],
+  );
 }
 
 export function useAgingDates() {
@@ -303,17 +306,24 @@ export function useAgingSnapshots() {
   return useAsync(() => agingApi.snapshots(), []);
 }
 
-export function useAgingRisk(params?: {
-  report_date?: string;
-  risk?: string;
-  limit?: number;
-}) {
-  return useAsync(() => agingApi.risk(params), [JSON.stringify(params)]);
+export function useTransactionYears() {
+  return useAsync(() => transactionsApi.years(), []);
 }
 
-export function useAgingDistribution(params?: { report_date?: string }) {
+export function useAgingRisk(params?: { report_date?: string; risk?: string; limit?: number } | null) {
   return useAsync(
-    () => agingApi.distribution(params),
+    () => params === null
+      ? Promise.resolve({ report_date: null, count: 0, top_risk: [] })
+      : agingApi.risk(params),
+    [JSON.stringify(params)],
+  );
+}
+
+export function useAgingDistribution(params?: { report_date?: string } | null) {
+  return useAsync(
+    () => params === null
+      ? Promise.resolve({ report_date: null, grand_total: 0, distribution: [] })
+      : agingApi.distribution(params),
     [JSON.stringify(params)],
   );
 }
@@ -426,7 +436,7 @@ export function useStockKPI(params?: {
   return useAsync(() => stockKpiApi.getAll(params), [JSON.stringify(params)]);
 }
 
-export function useCreditKPI(params?: { report_date?: string }) {
+export function useCreditKPI(params?: { report_date?: string; snapshot_id?: string; aging_year?: number }) {
   return useAsync(() => creditKpiApi.getAll(params), [JSON.stringify(params)]);
 }
 

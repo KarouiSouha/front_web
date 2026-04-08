@@ -1,5 +1,5 @@
 // src/app/components/CreditKPISection.tsx
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Users, TrendingDown, AlertCircle, Clock,
@@ -42,7 +42,7 @@ function GradientBar(props: any) {
     </g>
   );
 }
-import { api } from '../lib/api';
+import { useAgingSnapshots, useCreditKPI } from '../lib/dataHooks';
 import { formatCurrency, formatNumber } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -424,32 +424,63 @@ function SectionHeader({
   );
 }
 
+// ── Year button ───────────────────────────────────────────────────────────────
+function YearBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: '5px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+      border:     `1px solid ${active ? C.emerald : css.border}`,
+      background: active ? `${C.emerald}18` : 'transparent',
+      color:      active ? C.emerald : css.mutedFg,
+      transition: 'all 0.15s ease',
+    }}>
+      {children}
+    </button>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 export function CreditKPISection() {
-  const [data, setData]       = useState<CreditKPIData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
+  const currentYear = new Date().getFullYear();
+  const agingSnapshots = useAgingSnapshots();
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.get<CreditKPIData>('/kpi/credit/');
-      setData(res);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to load credit KPIs');
-    } finally {
-      setLoading(false);
+  const availableYears = useMemo(() => {
+    const years = new Set<number>();
+    const extractYear = (raw?: string | null): number | null => {
+      if (!raw) return null;
+      const asDate = new Date(raw);
+      if (!Number.isNaN(asDate.getTime())) return asDate.getFullYear();
+      const match = String(raw).match(/(19|20)\d{2}/);
+      return match ? parseInt(match[0], 10) : null;
+    };
+
+    (agingSnapshots.data?.items ?? []).forEach((snap) => {
+      const year = snap.aging_year ?? extractYear(snap.report_date) ?? extractYear(snap.uploaded_at);
+      if (year) years.add(year);
+    });
+
+    if (years.size === 0) {
+      return [currentYear, currentYear - 1];
     }
-  }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+    return Array.from(years).sort((a, b) => b - a);
+  }, [agingSnapshots.data, currentYear]);
+
+  const [selectedYear, setSelectedYear] = useState<number>(availableYears[0] ?? currentYear);
+
+  useEffect(() => {
+    if (availableYears.length > 0 && !availableYears.includes(selectedYear)) {
+      setSelectedYear(availableYears[0]);
+    }
+  }, [availableYears, selectedYear]);
+
+  const { data, loading, error, refetch } = useCreditKPI({ aging_year: selectedYear });
 
   // ── Loading skeleton (matches DashboardPage skeleton style) ──
   if (loading) {
     return (
       <div style={{ background: css.bg, minHeight: '100vh', padding: '32px 28px' }}>
-        <SectionHeader loading onRefresh={fetchData} />
+        <SectionHeader loading onRefresh={refetch} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 16, marginBottom: 24 }}>
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} style={{ height: 110, borderRadius: 16, background: css.muted, opacity: 0.5 }} />
@@ -468,12 +499,12 @@ export function CreditKPISection() {
   if (error || !data) {
     return (
       <div style={{ background: css.bg, minHeight: '100vh', padding: '32px 28px' }}>
-        <SectionHeader onRefresh={fetchData} />
+        <SectionHeader onRefresh={refetch} />
         <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 48 }}>
           <AlertCircle size={36} style={{ color: C.rose }} />
           <p style={{ fontSize: 14, color: C.rose, fontWeight: 600 }}>{error || 'No data available'}</p>
           <button
-            onClick={fetchData}
+            onClick={refetch}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600,
@@ -516,7 +547,16 @@ export function CreditKPISection() {
   return (
     <div style={{ background: css.bg, minHeight: '100vh', padding: '32px 28px' }}>
 
-      <SectionHeader onRefresh={fetchData} reportDate={data.report_date} />
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
+        <SectionHeader onRefresh={refetch} reportDate={data.report_date} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {availableYears.map((year) => (
+            <YearBtn key={year} active={selectedYear === year} onClick={() => setSelectedYear(year)}>
+              {year}
+            </YearBtn>
+          ))}
+        </div>
+      </div>
 
       {/* ── Summary ribbon (6 KPI cards matching DashboardPage style) ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 16, marginBottom: 24 }}>

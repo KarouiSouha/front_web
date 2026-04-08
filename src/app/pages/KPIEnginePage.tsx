@@ -363,6 +363,7 @@ export function KPIEnginePage() {
           id: string;
           snapshot_date?: string | null;
           fiscal_year?: string | null;
+          inventory_year?: number | null;
           uploaded_at?: string | null;
         }> = [];
 
@@ -382,8 +383,8 @@ export function KPIEnginePage() {
           for (const s of res.items ?? []) {
             const ySnapshot = extractYear(s.snapshot_date);
             const yFiscal = extractYear(String(s.fiscal_year ?? ''));
-            const yUpload = extractYear(s.uploaded_at);
-            const year = ySnapshot ?? yFiscal ?? yUpload;
+            const yInventory = typeof s.inventory_year === 'number' ? s.inventory_year : extractYear(String(s.inventory_year ?? ''));
+            const year = ySnapshot ?? yFiscal ?? yInventory;
             if (year === targetYear) {
               foundId = s.id;
               break;
@@ -392,21 +393,6 @@ export function KPIEnginePage() {
 
           if (foundId) break;
           page += 1;
-        }
-
-        if (!foundId && allSnapshots.length > 0) {
-          const sortByBestDateDesc = [...allSnapshots].sort((a, b) => {
-            const da = new Date(String(a.snapshot_date ?? a.uploaded_at ?? '')).getTime();
-            const db = new Date(String(b.snapshot_date ?? b.uploaded_at ?? '')).getTime();
-            return db - da;
-          });
-
-          if (period === 'last_year') {
-            // Fallback: if year tags are missing, use the snapshot just before the latest one.
-            foundId = sortByBestDateDesc[1]?.id ?? null;
-          } else {
-            foundId = sortByBestDateDesc[0]?.id ?? null;
-          }
         }
 
         if (mounted) setTargetInventorySnapshotId(foundId);
@@ -425,7 +411,7 @@ export function KPIEnginePage() {
   const branchStockGlobal = useBranchSummary(
     targetInventorySnapshotId
       ? { snapshot_id: targetInventorySnapshotId, branch: branchFilter || undefined }
-      : undefined,
+      : null,
   );
 
   const stockValue = useMemo(
@@ -440,6 +426,9 @@ export function KPIEnginePage() {
   const targetAgingSnapshotId = useMemo(() => {
     const items = agingSnapshots.data?.items ?? [];
     const yearItems = items.filter((s) => {
+      if (typeof s.aging_year === 'number') {
+        return s.aging_year === targetYear;
+      }
       const source = String(s.report_date ?? s.uploaded_at ?? "");
       const parsed = new Date(source);
       if (!Number.isNaN(parsed.getTime())) return parsed.getFullYear() === targetYear;
@@ -450,22 +439,13 @@ export function KPIEnginePage() {
       const db = new Date(String(b.report_date ?? b.uploaded_at)).getTime();
       return db - da;
     });
-    if (yearItems[0]?.id) return yearItems[0].id;
-
-    const sortedAll = [...items].sort((a, b) => {
-      const da = new Date(String(a.report_date ?? a.uploaded_at)).getTime();
-      const db = new Date(String(b.report_date ?? b.uploaded_at)).getTime();
-      return db - da;
-    });
-
-    if (period === 'last_year') return sortedAll[1]?.id;
-    return sortedAll[0]?.id;
-  }, [agingSnapshots.data, period, targetYear]);
+    return yearItems[0]?.id ?? null;
+  }, [agingSnapshots.data, targetYear]);
 
   const agingGlobal = useAgingList(
     targetAgingSnapshotId
       ? { snapshot_id: targetAgingSnapshotId, page_size: 1 }
-      : { page_size: 1 },
+      : null,
   );
   const totalReceivables = targetAgingSnapshotId ? (agingGlobal.data?.grand_total ?? 0) : 0;
 

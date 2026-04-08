@@ -1,5 +1,5 @@
 // src/app/components/StockKPISection.tsx
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Package, AlertTriangle, ShieldAlert, Calendar,
   Loader2, AlertCircle, RefreshCw, TrendingDown, ArrowUpRight,
@@ -9,7 +9,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer, Cell,
 } from 'recharts';
-import { useStockKPI } from '../lib/dataHooks';
+import { useStockKPI, useTransactionYears } from '../lib/dataHooks';
 import { formatCurrency, formatNumber } from '../lib/utils';
 
 // ── Brand palette ─────────────────────────────────────────────────────────────
@@ -191,6 +191,21 @@ function FormulaBadge() {
 export function StockKPISection() {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
+  const { data: yearsData } = useTransactionYears();
+
+  const availableYears = useMemo(() => {
+    const years = yearsData?.years ?? [];
+    if (years.length === 0) {
+      return [currentYear - 1, currentYear];
+    }
+    return [...years].sort((a, b) => b - a);
+  }, [currentYear, yearsData?.years]);
+
+  useEffect(() => {
+    if (availableYears.length > 0 && !availableYears.includes(year)) {
+      setYear(availableYears[0]);
+    }
+  }, [availableYears, year]);
 
   const { data, loading, error, refetch } = useStockKPI({ year });
 
@@ -226,8 +241,8 @@ export function StockKPISection() {
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {[currentYear - 1, currentYear].map(y => (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {availableYears.map(y => (
               <YearBtn key={y} active={year === y} onClick={() => setYear(y)}>{y}</YearBtn>
             ))}
           </div>

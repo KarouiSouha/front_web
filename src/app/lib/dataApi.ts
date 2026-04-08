@@ -296,6 +296,7 @@ export interface InventorySnapshot {
   label: string;
   snapshot_date: string | null;
   fiscal_year: string;
+  inventory_year?: number | null;
   source_file: string;
   notes: string;
   uploaded_at: string;
@@ -481,7 +482,13 @@ export const transactionsApi = {
 
   get: (id: string) => api.get<any>(`/transactions/${id}/`),
 
-  summary: (params?: { year?: number; months?: number ; branch?: string }) =>
+  summary: (params?: {
+    year?: number;
+    months?: number;
+    date_from?: string;
+    date_to?: string;
+    branch?: string;
+  }) =>
     api.get<{ summary: MonthlySummaryItem[] }>(
       `/transactions/summary/${qs(params)}`,
     ),
@@ -529,6 +536,8 @@ export const transactionsApi = {
   },
   movementTypes: () =>
     api.get<{ types: string[] }>("/transactions/movement-types/"),
+  years: () =>
+    api.get<{ years: number[] }>("/transactions/years/"),
 };
 // ─────────────────────────────────────────────
 // Aging
@@ -589,6 +598,7 @@ export interface AgingDistributionItem {
 
 export interface AgingSnapshotItem {
   id: string;
+  aging_year?: number | null;
   report_date: string | null;
   uploaded_at: string;
 }
@@ -729,10 +739,14 @@ export interface CreditKPIData {
 }
 
 export const creditKpiApi = {
-  getAll: (params?: { report_date?: string }) =>
-    api.get<CreditKPIData>(
-      `/kpi/credit/${params?.report_date ? `?report_date=${params.report_date}` : ""}`,
-    ),
+  getAll: (params?: { report_date?: string; snapshot_id?: string; aging_year?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.report_date) query.set("report_date", params.report_date);
+    if (params?.snapshot_id) query.set("snapshot_id", params.snapshot_id);
+    if (params?.aging_year !== undefined) query.set("aging_year", String(params.aging_year));
+    const qs = query.toString();
+    return api.get<CreditKPIData>(`/kpi/credit/${qs ? `?${qs}` : ""}`);
+  },
 };
 
 // ─────────────────────────────────────────────
