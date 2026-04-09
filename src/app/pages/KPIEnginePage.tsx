@@ -25,7 +25,6 @@ import {
   useAgingList,
   type MonthlySummaryItem,
 } from '../lib/dataHooks';
-import { inventoryApi } from '../lib/dataApi';
 import { formatCurrency, formatNumber } from '../lib/utils';
 
 // ── Brand palette ──────────────────────────────────────────────────────────
@@ -347,79 +346,13 @@ export function KPIEnginePage() {
     branch:    branchFilter || undefined,
   });
 
-  // Stock / receivables cards are global and year-based.
-  const [targetInventorySnapshotId, setTargetInventorySnapshotId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const resolveSnapshotForYear = async () => {
-      try {
-        let page = 1;
-        const pageSize = 100;
-        let totalPages = 1;
-        let foundId: string | null = null;
-        const allSnapshots: Array<{
-          id: string;
-          snapshot_date?: string | null;
-          fiscal_year?: string | null;
-          inventory_year?: number | null;
-          uploaded_at?: string | null;
-        }> = [];
-
-        const extractYear = (raw?: string | null): number | null => {
-          if (!raw) return null;
-          const asDate = new Date(raw);
-          if (!Number.isNaN(asDate.getTime())) return asDate.getFullYear();
-          const m = String(raw).match(/(19|20)\d{2}/);
-          return m ? parseInt(m[0], 10) : null;
-        };
-
-        while (page <= totalPages) {
-          const res = await inventoryApi.listSnapshots({ page, page_size: pageSize });
-          totalPages = res.total_pages ?? 1;
-          allSnapshots.push(...(res.items ?? []));
-
-          for (const s of res.items ?? []) {
-            const ySnapshot = extractYear(s.snapshot_date);
-            const yFiscal = extractYear(String(s.fiscal_year ?? ''));
-            const yInventory = typeof s.inventory_year === 'number' ? s.inventory_year : extractYear(String(s.inventory_year ?? ''));
-            const year = ySnapshot ?? yFiscal ?? yInventory;
-            if (year === targetYear) {
-              foundId = s.id;
-              break;
-            }
-          }
-
-          if (foundId) break;
-          page += 1;
-        }
-
-        if (mounted) setTargetInventorySnapshotId(foundId);
-      } catch {
-        if (mounted) setTargetInventorySnapshotId(null);
-      }
-    };
-
-    resolveSnapshotForYear();
-
-    return () => {
-      mounted = false;
-    };
-  }, [period, targetYear]);
-
-  const branchStockGlobal = useBranchSummary(
-    targetInventorySnapshotId
-      ? { snapshot_id: targetInventorySnapshotId, branch: branchFilter || undefined }
-      : null,
-  );
+  // Stock card uses current inventory only (no historical snapshots).
+  const branchStockGlobal = useBranchSummary({ branch: branchFilter || undefined });
 
   const stockValue = useMemo(
     () =>
-      targetInventorySnapshotId
-        ? (branchStockGlobal.data?.branches ?? []).reduce((sum, b) => sum + b.total_value, 0)
-        : 0,
-    [branchStockGlobal.data, targetInventorySnapshotId],
+      (branchStockGlobal.data?.branches ?? []).reduce((sum, b) => sum + b.total_value, 0),
+    [branchStockGlobal.data],
   );
 
   const agingSnapshots = useAgingSnapshots();
@@ -573,7 +506,7 @@ export function KPIEnginePage() {
                 value={formatCurrency(stockValue)}
                 icon={Package}
                 accent={C.cyan}
-                sub={branchFilter ? `Branch: ${branchFilter} · ${targetYear}` : `All branches · ${targetYear}`}
+                sub={branchFilter ? `Branch: ${branchFilter}` : 'All branches'}
               />
 
               {/* ⚠️ Non filtrable par branch (aging = dimension client, pas branch) */}

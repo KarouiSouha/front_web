@@ -3,17 +3,34 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import {
-  RefreshCw, Loader2, AlertCircle, Download,
-  TrendingUp, AlertTriangle, CheckCircle2, Clock,
-  ChevronDown as ChevronDownIcon, ArrowUpRight, ArrowDownRight, Building2,
-  Target, Activity
+  RefreshCw,
+  Loader2,
+  AlertCircle,
+  TrendingUp,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  ChevronDown as ChevronDownIcon,
+  ArrowUpRight,
+  ArrowDownRight,
+  Building2,
+  Target,
+  Activity,
 } from 'lucide-react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Cell, PieChart, Pie,
-  AreaChart, Area, Legend
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  PieChart,
+  Pie,
+  Legend,
 } from 'recharts';
-import { useAgingDates, useAgingSnapshots, type AgingRow, type AgingSnapshotItem } from '../lib/dataHooks';
+import { useAgingDates, useAgingSnapshots, type AgingRow } from '../lib/dataHooks';
 import { formatCurrency } from '../lib/utils';
 import { DataTable } from '../components/DataTable';
 import { AgingHistoricalTrend } from '../components/AgingHistoricalTrend';
@@ -701,59 +718,6 @@ export function AgingReceivablePage() {
             <KpiCard label="Overdue Rate"    value={creditKPILoading ? '…' : `${overdueRate.toFixed(1)}%`}    icon={AlertTriangle} accent={C.rose}    sub="Overdue receivables as % of total"        trend={overdueRate <= 20 ? { direction: 'up', label: 'Good' } : { direction: 'down', label: 'Alert' }} />
             <KpiCard label="DSO"             value={creditKPILoading ? '…' : `${(creditKPI?.kpis?.dmp?.value ?? 0).toFixed(0)} days`} icon={Activity} accent={C.amber} sub="Average days customers take to pay" trend={(creditKPI?.kpis?.dmp?.value ?? 0) <= 90 ? { direction: 'up', label: 'Normal' } : { direction: 'down', label: 'High' }} />
           </div>
-
-          {/* ── Branch Revenue — ✅ filtered by period + branch ── */}
-          <SectionTitle title="Revenue by Branch (Monthly)" sub={`${branchFilter !== 'all' ? `Branch: ${branchFilter} · ` : ''}${PERIOD_OPTIONS.find(o => o.key === period)?.label ?? 'Year to Date'}`} />
-          <Panel title="Branch Revenue Trend" sub={`${visibleBranchTrendBranches.length} branches · last ${branchTrend.length} months`}>
-            {branchTrendLoading ? (
-              <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: css.mutedFg }}>
-                <Loader2 size={16} className="animate-spin" style={{ color: C.cyan }} />
-                <span style={{ fontSize: 13 }}>Loading branch data…</span>
-              </div>
-            ) : branchTrend.length === 0 ? (
-              <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', color: css.mutedFg, fontSize: 13 }}>No branch trend data available</div>
-            ) : (
-              <ResponsiveContainer width="100%" height={280}>
-                <AreaChart data={branchTrend.slice(-12)} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                  <defs>
-                    {visibleBranchTrendBranches.map((branch, i) => {
-                      const color = BRANCH_COLORS[i % BRANCH_COLORS.length];
-                      return (
-                        <linearGradient key={branch} id={`aging-bg-${i}`} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%"   stopColor={color} stopOpacity={0.25} />
-                          <stop offset="55%"  stopColor={color} stopOpacity={0.07} />
-                          <stop offset="100%" stopColor={color} stopOpacity={0}    />
-                        </linearGradient>
-                      );
-                    })}
-                  </defs>
-                  <CartesianGrid stroke={css.border} strokeWidth={1} vertical={false} />
-                  <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false}
-                    tickFormatter={(v, i) => {
-                      const row = branchTrend.slice(-12)[i];
-                      return row ? `${v} ${row.year ?? ''}` : String(v);
-                    }}
-                  />
-                  <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 3' }} />
-                  <Legend wrapperStyle={legendStyle} iconType="plainline" iconSize={18} />
-                  {visibleBranchTrendBranches.map((branch, i) => (
-                    <Area
-                      key={branch}
-                      type="natural"
-                      dataKey={branch}
-                      stroke={BRANCH_COLORS[i % BRANCH_COLORS.length]}
-                      strokeWidth={2.5}
-                      fill={`url(#aging-bg-${i})`}
-                      dot={false}
-                      activeDot={{ r: 5, fill: css.card, stroke: BRANCH_COLORS[i % BRANCH_COLORS.length], strokeWidth: 2.5 }}
-                      name={branch}
-                    />
-                  ))}
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
-          </Panel>
 
           {/* ── Top Debtors — ✅ filtered ── */}
           <SectionTitle title="Top Debtors" sub={branchFilter !== 'all' ? `Filtered to branch: ${branchFilter}` : 'All branches · current report snapshot'} />

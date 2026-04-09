@@ -376,12 +376,16 @@ export const inventoryApi = {
    * Supports ?branch= and ?search= filters.
    */
   getLines: (
-    snapshotId: string,
+    snapshotId?: string,
     params?: QueryParams & { branch?: string; search?: string },
-  ) =>
-    api.get<InventoryLinesResponse>(
-      `/inventory/${snapshotId}/lines/${qs(params)}`,
-    ),
+  ) => {
+    if (snapshotId) {
+      return api.get<InventoryLinesResponse>(
+        `/inventory/${snapshotId}/lines/${qs(params)}`,
+      );
+    }
+    return api.get<InventoryLinesResponse>(`/inventory/lines/${qs(params)}`);
+  },
 
   /** Distinct upload dates (from uploaded_at). */
   dates: () => api.get<{ dates: string[] }>("/inventory/dates/"),
@@ -604,7 +608,7 @@ export interface AgingSnapshotItem {
 }
 
 export const agingApi = {
-  list: (params?: QueryParams & { report_date?: string; risk?: string }) =>
+  list: (params?: QueryParams & { snapshot_id?: string; report_date?: string; aging_year?: number; risk?: string }) =>
     api.get<AgingListResponse>(`/aging/${qs(params)}`),
 
   snapshots: () =>
@@ -614,14 +618,14 @@ export const agingApi = {
 
   dates: () => api.get<{ dates: string[] }>("/aging/dates/"),
 
-  risk: (params?: { report_date?: string; risk?: string; limit?: number }) =>
+  risk: (params?: { snapshot_id?: string; report_date?: string; aging_year?: number; risk?: string; limit?: number }) =>
     api.get<{
       report_date: string | null;
       count: number;
       top_risk: AgingRiskItem[];
     }>(`/aging/risk/${qs(params)}`),
 
-  distribution: (params?: { report_date?: string }) =>
+  distribution: (params?: { snapshot_id?: string; report_date?: string; aging_year?: number }) =>
     api.get<{
       report_date: string | null;
       grand_total: number;
@@ -1061,6 +1065,9 @@ interface StockKPIRawProduct {
 interface StockKPIRawData {
   snapshot_date?: string | null;
   year?: number;
+  branch_filter?: string | null;
+  movement_scope_used?: "company" | "branch" | "company_fallback";
+  available_branches?: string[];
   rotation_formula?: string; 
   stock_summary?: {
     total_products?: number;
@@ -1082,6 +1089,9 @@ interface StockKPIRawData {
 export interface StockKPIData {
   snapshot_date: string | null;
   year: number;
+  branch_filter?: string | null;
+  movement_scope_used?: "company" | "branch" | "company_fallback";
+  available_branches?: string[];
   rotation_formula: string;
   stock_summary: {
     total_products: number;
@@ -1135,6 +1145,9 @@ function normalizeStockKPIData(raw: StockKPIRawData): StockKPIData {
   return {
     snapshot_date: raw.snapshot_date ?? null,
     year: raw.year ?? new Date().getFullYear(),
+    branch_filter: raw.branch_filter ?? null,
+    movement_scope_used: raw.movement_scope_used ?? "company",
+    available_branches: raw.available_branches ?? [],
     rotation_formula: raw.rotation_formula ?? "qty_sold / (stock_initial + achats)",
     stock_summary: {
       total_products: toFiniteNumber(summary.total_products, 0),

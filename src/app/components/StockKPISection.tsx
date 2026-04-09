@@ -1,18 +1,25 @@
 // src/app/components/StockKPISection.tsx
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Package, AlertTriangle, ShieldAlert, Calendar,
-  Loader2, AlertCircle, RefreshCw, TrendingDown, ArrowUpRight,
-  Info,
+    Package,
+    AlertTriangle,
+    Calendar,
+    Loader2,
+    AlertCircle,
+    RefreshCw,
+    TrendingDown,
+    ArrowUpRight,
+    Info,
+    ChevronDown,
+    Building2,
 } from 'lucide-react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip as RechartsTooltip, ResponsiveContainer, Cell,
+    BarChart, Bar, XAxis, YAxis, CartesianGrid,
+    Tooltip as RechartsTooltip, ResponsiveContainer, Cell,
 } from 'recharts';
-import { useStockKPI, useTransactionYears } from '../lib/dataHooks';
+import { useStockKPI } from '../lib/dataHooks';
 import { formatCurrency, formatNumber } from '../lib/utils';
 
-// ── Brand palette ─────────────────────────────────────────────────────────────
 const C = {
   indigo:  '#6366f1',
   violet:  '#8b5cf6',
@@ -27,34 +34,38 @@ const C = {
 const ROTATION_COLORS = [C.emerald, '#34d399', '#a3e635', C.amber, C.orange];
 
 const css = {
-  card:    'hsl(var(--card))',
-  cardFg:  'hsl(var(--card-foreground))',
-  border:  'hsl(var(--border))',
-  muted:   'hsl(var(--muted))',
+  card: 'hsl(var(--card))',
+  cardFg: 'hsl(var(--card-foreground))',
+  border: 'hsl(var(--border))',
+  muted: 'hsl(var(--muted))',
   mutedFg: 'hsl(var(--muted-foreground))',
-  bg:      'hsl(var(--background))',
-  fg:      'hsl(var(--foreground))',
+  bg: 'hsl(var(--background))',
+  fg: 'hsl(var(--foreground))',
 };
 
 const cardStyle: React.CSSProperties = {
-  background:   css.card,
+  background: css.card,
   borderRadius: 16,
-  padding:      24,
-  boxShadow:    '0 1px 3px rgba(0,0,0,0.08), 0 4px 20px rgba(0,0,0,0.05)',
-  border:       `1px solid ${css.border}`,
+  padding: 24,
+  boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 4px 20px rgba(0,0,0,0.05)',
+  border: `1px solid ${css.border}`,
 };
 
 const axisStyle = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' };
 
-// ── Rotation Tooltip — shows formula breakdown on hover ───────────────────────
 function RotationTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   const p = payload[0]?.payload;
   return (
     <div style={{
-      background: css.card, border: `1px solid ${css.border}`, borderRadius: 12,
-      padding: '12px 16px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-      fontSize: 12, minWidth: 240, maxWidth: 300,
+      background: css.card,
+      border: `1px solid ${css.border}`,
+      borderRadius: 12,
+      padding: '12px 16px',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+      fontSize: 12,
+      minWidth: 240,
+      maxWidth: 300,
     }}>
       <p style={{ fontSize: 12, fontWeight: 700, color: css.cardFg, paddingBottom: 8, borderBottom: `1px solid ${css.border}`, margin: '0 0 10px 0' }}>
         {label}
@@ -88,17 +99,6 @@ function RotationTooltip({ active, payload, label }: any) {
   );
 }
 
-// ── Loader ────────────────────────────────────────────────────────────────────
-function Loader({ label }: { label: string }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120, gap: 8, color: css.mutedFg }}>
-      <Loader2 size={15} className="animate-spin" />
-      <span style={{ fontSize: 13 }}>{label}</span>
-    </div>
-  );
-}
-
-// ── KPI Card ──────────────────────────────────────────────────────────────────
 function KPI({ title, value, sub, icon: Icon, accent }: {
   title: string; value: string; sub?: string;
   icon: React.ElementType; accent: string;
@@ -126,7 +126,6 @@ function KPI({ title, value, sub, icon: Icon, accent }: {
   );
 }
 
-// ── Panel ─────────────────────────────────────────────────────────────────────
 function Panel({ title, sub, badge, children }: {
   title: string; sub?: string;
   badge?: { label: string; variant?: 'default' | 'danger' };
@@ -144,8 +143,8 @@ function Panel({ title, sub, badge, children }: {
             fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20,
             textTransform: 'uppercase', letterSpacing: '0.05em',
             background: badge.variant === 'danger' ? `${C.rose}18` : `${C.amber}18`,
-            color:      badge.variant === 'danger' ? C.rose : C.amber,
-            border:     `1px solid ${badge.variant === 'danger' ? C.rose : C.amber}35`,
+            color: badge.variant === 'danger' ? C.rose : C.amber,
+            border: `1px solid ${badge.variant === 'danger' ? C.rose : C.amber}35`,
           }}>
             {badge.label}
           </span>
@@ -156,22 +155,21 @@ function Panel({ title, sub, badge, children }: {
   );
 }
 
-// ── Year toggle button ────────────────────────────────────────────────────────
-function YearBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function ScopeBtn({ children }: { children: React.ReactNode }) {
   return (
-    <button onClick={onClick} style={{
+    <button type="button" disabled style={{
       padding: '5px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-      border:     `1px solid ${active ? C.emerald : css.border}`,
-      background: active ? `${C.emerald}18` : 'transparent',
-      color:      active ? C.emerald : css.mutedFg,
+      border: `1px solid ${C.emerald}`,
+      background: `${C.emerald}18`,
+      color: C.emerald,
       transition: 'all 0.15s ease',
+      opacity: 1,
     }}>
       {children}
     </button>
   );
 }
 
-// ── Formula badge ─────────────────────────────────────────────────────────────
 function FormulaBadge() {
   return (
     <div style={{
@@ -187,47 +185,46 @@ function FormulaBadge() {
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
 export function StockKPISection() {
-  const currentYear = new Date().getFullYear();
-  const [year, setYear] = useState(currentYear);
-  const { data: yearsData } = useTransactionYears();
+  const [branchFilter, setBranchFilter] = useState('');
 
-  const availableYears = useMemo(() => {
-    const years = yearsData?.years ?? [];
-    if (years.length === 0) {
-      return [currentYear - 1, currentYear];
+  const { data, loading, error, refetch } = useStockKPI({
+    branch: branchFilter || undefined,
+  });
+
+  const availableBranches = useMemo(() => {
+    const unique = new Map<string, string>();
+    for (const rawName of data?.available_branches ?? []) {
+      const cleanName = String(rawName ?? '').replace(/\s+/g, ' ').trim();
+      if (!cleanName) continue;
+      const key = cleanName.toLocaleLowerCase();
+      if (!unique.has(key)) unique.set(key, cleanName);
     }
-    return [...years].sort((a, b) => b - a);
-  }, [currentYear, yearsData?.years]);
+    return Array.from(unique.values()).sort((a, b) => a.localeCompare(b));
+  }, [data?.available_branches]);
 
   useEffect(() => {
-    if (availableYears.length > 0 && !availableYears.includes(year)) {
-      setYear(availableYears[0]);
+    if (branchFilter && !availableBranches.includes(branchFilter)) {
+      setBranchFilter('');
     }
-  }, [availableYears, year]);
+  }, [availableBranches, branchFilter]);
 
-  const { data, loading, error, refetch } = useStockKPI({ year });
+  const summary = data?.stock_summary;
+  const topRotation = data?.top_rotation_products ?? [];
+  const lowRotation = data?.low_rotation_products ?? [];
+  const coverageAtRisk = data?.coverage_at_risk ?? [];
 
-  const summary        = data?.stock_summary;
-  const topRotation    = data?.top_rotation_products ?? [];
-  const lowRotation    = data?.low_rotation_products ?? [];
-  const zeroStock      = data?.zero_stock_products   ?? [];
-  const coverageAtRisk = data?.coverage_at_risk      ?? [];
-
-  const rotationChartData = topRotation.slice(0, 10).map(p => ({
-    name:          p.product_name.slice(0, 18),
-    rotation:      parseFloat(p.rotation_rate.toFixed(2)),
-    qty_sold:      p.qty_sold,
-    qty_opening:   p.qty_opening,
+  const rotationChartData = topRotation.slice(0, 10).map((p) => ({
+    name: p.product_name.slice(0, 18),
+    rotation: parseFloat(p.rotation_rate.toFixed(2)),
+    qty_sold: p.qty_sold,
+    qty_opening: p.qty_opening,
     qty_purchased: p.qty_purchased,
-    denominator:   p.denominator,
+    denominator: p.denominator,
   }));
 
   return (
     <div style={{ background: css.bg, minHeight: '100vh', padding: '32px 28px' }}>
-
-      {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 28 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: css.fg, letterSpacing: '-0.03em', margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -241,22 +238,119 @@ export function StockKPISection() {
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {availableYears.map(y => (
-              <YearBtn key={y} active={year === y} onClick={() => setYear(y)}>{y}</YearBtn>
-            ))}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <ScopeBtn>Now</ScopeBtn>
+            <div style={{
+              minWidth: 320,
+              borderRadius: 14,
+              border: `1px solid ${css.border}`,
+              background: `linear-gradient(180deg, ${css.card} 0%, ${css.bg} 100%)`,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.04)',
+              padding: '10px 12px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 9,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: `${C.emerald}14`,
+                    border: `1px solid ${C.emerald}24`,
+                    color: C.emerald,
+                  }}>
+                    <Building2 size={14} />
+                  </span>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: css.cardFg, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                      Branch
+                    </p>
+                    <p style={{ margin: '2px 0 0', fontSize: 11, color: css.mutedFg }}>
+                      Scope the dashboard by location
+                    </p>
+                  </div>
+                </div>
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: 800,
+                  color: C.emerald,
+                  background: `${C.emerald}12`,
+                  border: `1px solid ${C.emerald}24`,
+                  borderRadius: 999,
+                  padding: '3px 8px',
+                  minWidth: 24,
+                  textAlign: 'center',
+                }}>
+                  {availableBranches.length}
+                </span>
+              </div>
+              <div style={{ position: 'relative' }}>
+                <select
+                  value={branchFilter}
+                  onChange={(e) => setBranchFilter(e.target.value)}
+                  style={{
+                    width: '100%',
+                    height: 40,
+                    borderRadius: 11,
+                    border: `1px solid ${css.border}`,
+                    background: css.card,
+                    color: css.cardFg,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    padding: '0 42px 0 12px',
+                    outline: 'none',
+                    appearance: 'none',
+                    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.04)',
+                  }}
+                >
+                  <option value="">All Branches</option>
+                  {availableBranches.map((branch) => (
+                    <option key={branch} value={branch}>{branch}</option>
+                  ))}
+                </select>
+                <ChevronDown size={15} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: css.mutedFg, pointerEvents: 'none' }} />
+              </div>
+              {branchFilter && (
+                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 10, color: css.mutedFg }}>Selected:</span>
+                  <span style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: C.emerald,
+                    background: `${C.emerald}12`,
+                    border: `1px solid ${C.emerald}24`,
+                    borderRadius: 999,
+                    padding: '3px 8px',
+                    maxWidth: '100%',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {branchFilter}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
           <button onClick={refetch} disabled={loading} style={{
-            width: 34, height: 34, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'transparent', border: `1px solid ${css.border}`,
-            cursor: loading ? 'not-allowed' : 'pointer', color: css.mutedFg,
+            width: 34,
+            height: 34,
+            borderRadius: 8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'transparent',
+            border: `1px solid ${css.border}`,
+            cursor: loading ? 'not-allowed' : 'pointer',
+            color: css.mutedFg,
           }}>
             {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
           </button>
         </div>
       </div>
 
-      {/* ── Error ── */}
       {error && (
         <div style={{ ...cardStyle, display: 'flex', alignItems: 'center', gap: 12, borderColor: `${C.rose}40`, marginBottom: 20 }}>
           <AlertCircle size={18} style={{ color: C.rose, flexShrink: 0 }} />
@@ -276,54 +370,26 @@ export function StockKPISection() {
 
       {!loading && !error && data && (
         <>
-          {/* ── KPI Cards ── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 24 }}>
-            <KPI
-              title="Total Products"
-              value={formatNumber(summary?.total_products ?? 0)}
-              sub={`Total qty: ${formatNumber(summary?.total_qty ?? 0)}`}
-              icon={Package} accent={C.indigo}
-            />
-            <KPI
-              title="Total Stock Value"
-              value={formatCurrency(summary?.total_value ?? 0)}
-              sub={data.snapshot_date ? `Snapshot: ${data.snapshot_date}` : undefined}
-              icon={Package} accent={C.emerald}
-            />
-            <KPI
-              title="Zero Stock Products"
-              value={String(summary?.zero_stock_count ?? 0)}
-              sub="Out of stock — needs reorder"
-              icon={AlertTriangle} accent={C.rose}
-            />
-            <KPI
-              title="Low Turnover Products"
-              value={String(summary?.low_rotation_count ?? 0)}
-              sub={summary?.avg_rotation_rate !== undefined
-                ? `Avg turnover: ${summary.avg_rotation_rate.toFixed(4)}x/yr`
-                : undefined}
-              icon={TrendingDown} accent={C.amber}
-            />
+            <KPI title="Total Products" value={formatNumber(summary?.total_products ?? 0)} sub={`Total qty: ${formatNumber(summary?.total_qty ?? 0)}`} icon={Package} accent={C.indigo} />
+            <KPI title="Total Stock Value" value={formatCurrency(summary?.total_value ?? 0)} sub={branchFilter ? `Branch: ${branchFilter} · Now` : 'All branches · Now'} icon={Package} accent={C.emerald} />
+            <KPI title="Zero Stock Products" value={String(summary?.zero_stock_count ?? 0)} sub="Out of stock — needs reorder" icon={AlertTriangle} accent={C.rose} />
+            <KPI title="Low Turnover Products" value={String(summary?.low_rotation_count ?? 0)} sub={summary?.avg_rotation_rate !== undefined ? `Avg turnover: ${summary.avg_rotation_rate.toFixed(4)}x/yr` : undefined} icon={TrendingDown} accent={C.amber} />
           </div>
 
-          {/* ── Formula Banner ── */}
           <div style={{ marginBottom: 16 }}>
             <FormulaBadge />
           </div>
 
-          {/* ── Top Turnover chart ── */}
           {rotationChartData.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <Panel
-                title="Top Turnover Rate Products"
-                sub="Turnover = Qty Sold ÷ (Opening Stock + Purchases) · Hover for details"
-              >
+              <Panel title="Top Turnover Rate Products" sub="Turnover = Qty Sold ÷ (Opening Stock + Purchases) · Hover for details">
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={rotationChartData} layout="vertical" barCategoryGap="30%" barGap={4} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                     <defs>
                       {rotationChartData.map((_, i) => (
                         <linearGradient key={i} id={`rot-g-${i}`} x1="1" y1="0" x2="0" y2="0">
-                          <stop offset="0%"   stopColor={ROTATION_COLORS[i % ROTATION_COLORS.length]} stopOpacity={1}    />
+                          <stop offset="0%" stopColor={ROTATION_COLORS[i % ROTATION_COLORS.length]} stopOpacity={1} />
                           <stop offset="100%" stopColor={ROTATION_COLORS[i % ROTATION_COLORS.length]} stopOpacity={0.55} />
                         </linearGradient>
                       ))}
@@ -343,15 +409,9 @@ export function StockKPISection() {
             </div>
           )}
 
-          {/* ── Low Turnover + Coverage at Risk ── */}
           <div style={{ display: 'grid', gridTemplateColumns: '550px 1fr', gap: 16, marginBottom: 16 }}>
-
             {lowRotation.length > 0 && (
-              <Panel
-                title="Low Turnover Products"
-                sub="Tied-up capital · Turnover = Qty Sold ÷ (Opening Stock + Purchases)"
-                badge={{ label: `${lowRotation.length}`, variant: 'default' }}
-              >
+              <Panel title="Low Turnover Products" sub="Tied-up capital · Turnover = Qty Sold ÷ (Opening Stock + Purchases)" badge={{ label: `${lowRotation.length}`, variant: 'default' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 288, overflowY: 'auto' }}>
                   {lowRotation.slice(0, 15).map((p, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10, border: `1px solid ${css.border}` }}>
@@ -359,9 +419,7 @@ export function StockKPISection() {
                         <TrendingDown size={14} style={{ color: C.amber }} />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: 13, fontWeight: 600, color: css.cardFg, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.product_name}>
-                          {p.product_name}
-                        </p>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: css.cardFg, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.product_name}>{p.product_name}</p>
                         <p style={{ fontSize: 10, color: css.mutedFg, margin: 0 }}>
                           Sold: <strong>{formatNumber(p.qty_sold)}</strong>
                           {' · '}Opening: <strong>{formatNumber(p.qty_opening)}</strong>
@@ -379,14 +437,10 @@ export function StockKPISection() {
             )}
 
             {coverageAtRisk.length > 0 && (
-              <Panel
-                title="Coverage at Risk"
-                sub="Products with fewest days of stock remaining — reorder soon"
-                badge={{ label: `${coverageAtRisk.length}`, variant: 'danger' }}
-              >
+              <Panel title="Coverage at Risk" sub="Products with fewest days of stock remaining — reorder soon" badge={{ label: `${coverageAtRisk.length}`, variant: 'danger' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 288, overflowY: 'auto' }}>
                   {coverageAtRisk.slice(0, 15).map((p, i) => {
-                    const days   = p.coverage_days;
+                    const days = p.coverage_days;
                     const accent = days === null ? css.mutedFg : days <= 7 ? C.rose : days <= 30 ? C.orange : C.amber;
                     return (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -396,9 +450,7 @@ export function StockKPISection() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
                             <div style={{ minWidth: 0 }}>
-                              <p style={{ fontSize: 13, fontWeight: 600, color: css.cardFg, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.product_name}>
-                                {p.product_name}
-                              </p>
+                              <p style={{ fontSize: 13, fontWeight: 600, color: css.cardFg, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.product_name}>{p.product_name}</p>
                               <p style={{ fontSize: 11, color: css.mutedFg, margin: 0 }}>
                                 Stock: {formatNumber(p.stock_qty)} · Sold: {formatNumber(p.qty_sold)}/yr
                               </p>
@@ -409,7 +461,8 @@ export function StockKPISection() {
                           </div>
                           <div style={{ height: 5, borderRadius: 999, background: css.muted, overflow: 'hidden', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.06)' }}>
                             <div style={{
-                              height: '100%', borderRadius: 999,
+                              height: '100%',
+                              borderRadius: 999,
                               width: days === null ? '100%' : `${Math.min(100, 100 - (days / 90) * 100)}%`,
                               background: `linear-gradient(90deg, ${accent}55, ${accent})`,
                               transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)',
@@ -423,71 +476,6 @@ export function StockKPISection() {
               </Panel>
             )}
           </div>
-
-          {/* ── Zero Stock products ── */}
-          {zeroStock.length > 0 && (
-            <div style={{ ...cardStyle, borderColor: `${C.rose}40` }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: `${C.rose}18`, border: `1px solid ${C.rose}35`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <ShieldAlert size={16} style={{ color: C.rose }} />
-                  </div>
-                  <div>
-                    <h3 style={{ fontSize: 14, fontWeight: 700, color: C.rose, margin: 0 }}>Zero Stock Products</h3>
-                    <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>
-                      Completely out of stock. Last period sales shown as demand indicator.
-                    </p>
-                  </div>
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20, textTransform: 'uppercase', letterSpacing: '0.05em', background: `${C.rose}18`, color: C.rose, border: `1px solid ${C.rose}35` }}>
-                  {zeroStock.length}
-                </span>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: `1px solid ${css.border}` }}>
-                      {['Product', 'Code', 'Category', 'Qty Sold (period)', 'Revenue Lost (est.)'].map(h => (
-                        <th key={h} style={{
-                          padding: '8px 10px', fontSize: 10, fontWeight: 700,
-                          textTransform: 'uppercase', letterSpacing: '0.06em', color: css.mutedFg,
-                          textAlign: h.startsWith('Qty') || h.startsWith('Rev') ? 'right' : 'left',
-                        }}>
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {zeroStock.slice(0, 20).map((p, i) => (
-                      <tr key={i} style={{ borderBottom: `1px solid ${css.border}` }}>
-                        <td style={{ padding: '10px 10px', fontWeight: 600, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: css.cardFg }} title={p.product_name}>
-                          {p.product_name}
-                        </td>
-                        <td style={{ padding: '10px 10px', fontFamily: 'monospace', fontSize: 11, color: css.mutedFg }}>{p.material_code}</td>
-                        <td style={{ padding: '10px 10px', color: css.mutedFg }}>{p.category ?? '—'}</td>
-                        <td style={{ padding: '10px 10px', textAlign: 'right' }}>
-                          {p.qty_sold > 0
-                            ? <span style={{ color: C.amber, fontWeight: 700 }}>{formatNumber(p.qty_sold)}</span>
-                            : <span style={{ color: css.mutedFg, opacity: 0.4 }}>—</span>}
-                        </td>
-                        <td style={{ padding: '10px 10px', textAlign: 'right' }}>
-                          {p.revenue > 0
-                            ? <span style={{ color: C.rose, fontWeight: 700 }}>{formatCurrency(p.revenue)}</span>
-                            : <span style={{ color: css.mutedFg, opacity: 0.4 }}>—</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {zeroStock.length > 20 && (
-                  <p style={{ fontSize: 12, color: css.mutedFg, textAlign: 'center', marginTop: 12 }}>
-                    Showing 20 of {zeroStock.length} zero-stock products
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>

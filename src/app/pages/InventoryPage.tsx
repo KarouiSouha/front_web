@@ -8,7 +8,6 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip,
 } from 'recharts';
 import {
-  useInventorySnapshots,
   useInventoryLines,
   useBranchSummary,
   useCategoryBreakdown,
@@ -178,16 +177,10 @@ function Panel({ title, sub, children }: { title: string; sub?: string; children
 }
 
 export function InventoryPage() {
-  const [selectedSnapshotId, setSelectedSnapshotId] = useState<string>('');
   const [selectedBranch,     setSelectedBranch]     = useState<string>('all');
-  const [openDropdown,       setOpenDropdown]       = useState<'snapshot' | 'branch' | null>(null);
+  const [openDropdown,       setOpenDropdown]       = useState<'branch' | null>(null);
   const [tablePage,          setTablePage]          = useState(1);
   const [tableSearch,        setTableSearch]        = useState('');
-
-  const { data: snapshotsData, loading: snapsLoading } = useInventorySnapshots({ page_size: 50 });
-  const snapshots     = snapshotsData?.items ?? [];
-  const currentSnapId = selectedSnapshotId || snapshots[0]?.id || '';
-  const currentSnap   = snapshots.find(s => s.id === currentSnapId) ?? null;
 
   // branchParam: undefined = all, string = exact branch name
   const branchParam = selectedBranch !== 'all' ? selectedBranch : undefined;
@@ -199,7 +192,7 @@ export function InventoryPage() {
   // - distinct_products = nb de produits uniques dans la branch sélectionnée
   // - grand_total_qty   = quantité totale réelle (pas juste les 100 premières lignes)
   // - etc.
-  const { data: totalsData, loading: totalsLoading } = useInventoryLines(currentSnapId || null, {
+  const { data: totalsData, loading: totalsLoading } = useInventoryLines(null, {
     page:      1,
     page_size: 1,
     branch:    branchParam,
@@ -208,7 +201,7 @@ export function InventoryPage() {
 
   // Hook paginé pour le tableau des lignes
   const { data: linesData, loading: linesLoading, error: linesError, refetch } =
-    useInventoryLines(currentSnapId || null, {
+    useInventoryLines(null, {
       page:      tablePage,
       page_size: 100,
       branch:    branchParam,
@@ -216,13 +209,13 @@ export function InventoryPage() {
     });
 
   // Branch summary sans filtre → dropdown
-  const { data: allBranchData, loading: branchLoading } = useBranchSummary({ snapshot_id: currentSnapId });
+  const { data: allBranchData, loading: branchLoading } = useBranchSummary();
 
   // Branch summary avec filtre → cards + bar chart
-  const { data: filteredBranchData } = useBranchSummary({ snapshot_id: currentSnapId, branch: branchParam });
+  const { data: filteredBranchData } = useBranchSummary({ branch: branchParam });
 
   // Category breakdown avec filtre
-  const { data: categoryData } = useCategoryBreakdown({ snapshot_id: currentSnapId, branch: branchParam });
+  const { data: categoryData } = useCategoryBreakdown({ branch: branchParam });
 
   const allBranches     = allBranchData?.branches    ?? [];
   const displayBranches = filteredBranchData?.branches ?? [];
@@ -257,7 +250,6 @@ export function InventoryPage() {
     return { background: `rgba(${Math.round(99 + t * 40)},${Math.round(102 - t * 10)},${Math.round(241 + t * 5)},${parseFloat((0.04 + t * 0.07).toFixed(3))})` };
   }
 
-  const snapshotOptions = snapshots.map(s => ({ key: s.id, label: `${s.source_file || s.label || 'Inventory'} — ${s.uploaded_at.split('T')[0]}` }));
   const branchOptions   = [{ key: 'all', label: 'All Branches' }, ...allBranches.map(b => ({ key: b.branch, label: b.branch }))];
 
   const columns = [
@@ -270,7 +262,7 @@ export function InventoryPage() {
     { key: 'status',       label: 'Status',     render: (row: InventorySnapshotLine) => <StockStatusBadge quantity={toNum(row.quantity)} /> },
   ];
 
-  const isLoading = snapsLoading || linesLoading || totalsLoading;
+  const isLoading = linesLoading || totalsLoading;
 
   return (
     <div style={{ background: css.bg, minHeight: '100vh', padding: '32px 28px' }}>
@@ -286,7 +278,7 @@ export function InventoryPage() {
           </h1>
           <p style={{ fontSize: 13, color: css.mutedFg, marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
             Monitor and manage inventory across all branches
-            {snapshots.length > 0 && <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: `${C.indigo}18`, color: C.indigo, border: `1px solid ${C.indigo}35` }}>{snapshots.length} snapshot{snapshots.length !== 1 ? 's' : ''} available</span>}
+            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: `${C.indigo}18`, color: C.indigo, border: `1px solid ${C.indigo}35` }}>Current stock</span>
           </p>
         </div>
         <button onClick={refetch} disabled={isLoading} style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 16px', borderRadius: 10, border: `1px solid ${css.border}`, background: css.card, color: css.cardFg, fontSize: 13, cursor: isLoading ? 'not-allowed' : 'pointer', opacity: isLoading ? 0.6 : 1, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
@@ -299,12 +291,9 @@ export function InventoryPage() {
       <div style={{ ...cardStyle, marginBottom: 16 }}>
         <div style={{ marginBottom: 18 }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>Filters</h3>
-          <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>Select a snapshot and optionally filter by branch — all KPIs and charts update automatically</p>
+          <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>Filter by branch — all KPIs and charts update automatically</p>
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <StyledDropdown label="Snapshot" options={snapshotOptions} value={currentSnapId}
-            onChange={v => { setSelectedSnapshotId(v); setSelectedBranch('all'); setTablePage(1); setTableSearch(''); }}
-            isOpen={openDropdown === 'snapshot'} onToggle={() => setOpenDropdown(o => o === 'snapshot' ? null : 'snapshot')} onClose={() => setOpenDropdown(null)} />
           <StyledDropdown label="Branch" options={branchOptions} value={selectedBranch}
             onChange={v => { setSelectedBranch(v); setTablePage(1); setTableSearch(''); }}
             isOpen={openDropdown === 'branch'} onToggle={() => setOpenDropdown(o => o === 'branch' ? null : 'branch')} onClose={() => setOpenDropdown(null)} />
@@ -439,7 +428,7 @@ export function InventoryPage() {
         <div style={{ marginBottom: 20 }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>Inventory Lines</h3>
           <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 3 }}>
-            {currentSnap ? `${currentSnap.source_file || currentSnap.label || 'Import'} — uploaded ${currentSnap.uploaded_at.split('T')[0]}` : 'Select a snapshot above'}
+            Current inventory state
             {selectedBranch !== 'all' && ` · Branch: ${selectedBranch}`}
           </p>
         </div>

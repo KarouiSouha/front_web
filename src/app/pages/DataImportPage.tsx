@@ -155,21 +155,55 @@ export function DataImportPage() {
   // ── All handlers are 100% unchanged ───────────────────────────────────────
 
   const handleDownloadTemplate = (e: React.MouseEvent, template: typeof templates[0]) => {
-    e.stopPropagation();
-    setDownloadingId(template.id);
-    try {
-      const ws = XLSX.utils.aoa_to_sheet([template.exactHeaders]);
-      ws['!freeze'] = { xSplit: 0, ySplit: 1 };
-      ws['!cols'] = template.exactHeaders.map((h) => ({ wch: Math.max(h.length + 4, 14) }));
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Data');
-      XLSX.writeFile(wb, template.fileName);
-    } catch (err) {
-      console.error('Template generation failed:', err);
-    } finally {
-      setDownloadingId(null);
-    }
-  };
+  e.stopPropagation();
+  setDownloadingId(template.id);
+
+  try {
+    // Create sheet with headers
+    const ws = XLSX.utils.aoa_to_sheet([template.exactHeaders]);
+
+    // Freeze the header row
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+    // Set column widths
+    ws['!cols'] = template.exactHeaders.map((header) => ({
+      wch: Math.max(header.length + 4, 18),
+    }));
+
+    // Enable Right-to-Left layout (Arabic)
+    ws['!rtl'] = true;
+
+    // Align header cells to the right
+    template.exactHeaders.forEach((_, colIndex) => {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: colIndex });
+      if (ws[cellAddress]) {
+        ws[cellAddress].s = {
+          alignment: {
+            horizontal: "right",
+            vertical: "center",
+          },
+          font: {
+            bold: true,
+          },
+        };
+      }
+    });
+
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+
+    // Add sheet
+    XLSX.utils.book_append_sheet(wb, ws, 'Data');
+
+    // Download file
+    XLSX.writeFile(wb, template.fileName);
+
+  } catch (err) {
+    console.error('Template generation failed:', err);
+  } finally {
+    setDownloadingId(null);
+  }
+};
 
   const handleFileChange = async (file: File | null) => {
     if (!file) return;

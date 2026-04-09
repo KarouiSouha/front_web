@@ -14,7 +14,6 @@ import {
   useAgingSnapshots,
   useAgingDistribution,
   useAgingRisk,
-  useInventorySnapshots,
   useBranchSummary,
   useBranchBreakdown,
   useCategoryBreakdown,
@@ -22,7 +21,6 @@ import {
   MOVEMENT_TYPES,
   useTypeBreakdown,
 } from '../lib/dataHooks';
-import { inventoryApi } from '../lib/dataApi';
 import { notificationsApi } from '../lib/notificationsApi';
 import { formatCurrency } from '../lib/utils';
 
@@ -491,9 +489,7 @@ export function DashboardPage() {
   }, []);
 
   const agingSnapshots = useAgingSnapshots();
-  const inventorySnapshots = useInventorySnapshots({ page_size: 100 });
   const [currentYearAgingSnapshotId, setCurrentYearAgingSnapshotId] = useState<string | null>(null);
-  const [currentYearInventorySnapshotId, setCurrentYearInventorySnapshotId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -515,9 +511,9 @@ export function DashboardPage() {
         });
 
         const sorted = candidates.sort((a, b) => (b.uploaded_at ?? '').localeCompare(a.uploaded_at ?? ''));
-        const foundId = sorted[0]?.id ?? null;
+        const foundSnapshotId = sorted[0]?.id ?? null;
 
-        if (mounted) setCurrentYearAgingSnapshotId(foundId);
+        if (mounted) setCurrentYearAgingSnapshotId(foundSnapshotId);
       } catch {
         if (mounted) setCurrentYearAgingSnapshotId(null);
       }
@@ -530,42 +526,6 @@ export function DashboardPage() {
     };
   }, [currentYear, agingSnapshots.data]);
 
-  useEffect(() => {
-    let mounted = true;
-
-    const resolveInventorySnapshotForYear = async () => {
-      try {
-        const snapshots = inventorySnapshots.data?.items ?? [];
-        const extractYear = (raw?: string | null): number | null => {
-          if (!raw) return null;
-          const date = new Date(raw);
-          if (!Number.isNaN(date.getTime())) return date.getFullYear();
-          const match = String(raw).match(/(19|20)\d{2}/);
-          return match ? parseInt(match[0], 10) : null;
-        };
-
-        const candidates = snapshots.filter((snapshot) => {
-          if (typeof snapshot.inventory_year === 'number' && snapshot.inventory_year === currentYear) return true;
-          if (snapshot.fiscal_year && extractYear(String(snapshot.fiscal_year)) === currentYear) return true;
-          return extractYear(snapshot.snapshot_date) === currentYear;
-        });
-
-        const sorted = candidates.sort((a, b) => (b.uploaded_at ?? '').localeCompare(a.uploaded_at ?? ''));
-        const foundId = sorted[0]?.id ?? null;
-
-        if (mounted) setCurrentYearInventorySnapshotId(foundId);
-      } catch {
-        if (mounted) setCurrentYearInventorySnapshotId(null);
-      }
-    };
-
-    resolveInventorySnapshotForYear();
-
-    return () => {
-      mounted = false;
-    };
-  }, [currentYear, inventorySnapshots.data]);
-
   const summary = useTransactionSummary({
     year: currentYear,
     date_from: yearStart,
@@ -577,9 +537,7 @@ export function DashboardPage() {
   const agingRisk = useAgingRisk(
     currentYearAgingSnapshotId ? { snapshot_id: currentYearAgingSnapshotId, limit: 5 } : null,
   );
-  const categoryBreakdown = useCategoryBreakdown(
-    currentYearInventorySnapshotId ? { snapshot_id: currentYearInventorySnapshotId } : null,
-  );
+  const categoryBreakdown = useCategoryBreakdown();
   const typeBreakdown = useTypeBreakdown({ date_from: yearStart, date_to: yearEnd });
   const branchMonthly = useBranchMonthly({
     movement_type: MOVEMENT_TYPES.SALE,
@@ -587,9 +545,7 @@ export function DashboardPage() {
     date_from: yearStart,
     date_to: yearEnd,
   });
-  const branchStockSummary = useBranchSummary(
-    currentYearInventorySnapshotId ? { snapshot_id: currentYearInventorySnapshotId } : null,
-  );
+  const branchStockSummary = useBranchSummary();
   const branchSales = useBranchBreakdown({
     movement_type: MOVEMENT_TYPES.SALE,
     date_from: yearStart,
@@ -618,9 +574,7 @@ export function DashboardPage() {
 
   const branchPerfData = useMemo(() => {
     const salesBranches = branchSales.data?.branches  ?? [];
-    const stockBranches = currentYearInventorySnapshotId
-      ? (branchStockSummary.data?.branches ?? [])
-      : [];
+    const stockBranches = branchStockSummary.data?.branches ?? [];
 
     if (!salesBranches.length && !stockBranches.length) return [];
 
@@ -665,19 +619,17 @@ export function DashboardPage() {
       })
       .filter(b => b.sales > 0 || b.stock > 0)
       .sort((a, b) => (b.sales + b.stock) - (a.sales + a.stock));
-  }, [branchSales.data, branchStockSummary.data, currentYearInventorySnapshotId]);
+  }, [branchSales.data, branchStockSummary.data]);
 
   const categoryData = useMemo(() =>
-    currentYearInventorySnapshotId
-      ? (categoryBreakdown.data?.categories ?? [])
-          .slice(0, 8)
-          .map((c, i) => ({
-            category: c.category,
-            value:    c.total_value,
-            fill:     BRANCH_COLORS[i % BRANCH_COLORS.length],
-          }))
-      : [],
-    [categoryBreakdown.data, currentYearInventorySnapshotId]
+    (categoryBreakdown.data?.categories ?? [])
+      .slice(0, 8)
+      .map((c, i) => ({
+        category: c.category,
+        value:    c.total_value,
+        fill:     BRANCH_COLORS[i % BRANCH_COLORS.length],
+      })),
+    [categoryBreakdown.data]
   );
 
   const topRiskCustomers = useMemo(
@@ -698,13 +650,11 @@ export function DashboardPage() {
 
   const currentStockValue = useMemo(
     () =>
-      currentYearInventorySnapshotId
-        ? (branchStockSummary.data?.branches ?? []).reduce(
-            (acc, row) => acc + (typeof row.total_value === 'number' ? row.total_value : 0),
-            0,
-          )
-        : 0,
-    [branchStockSummary.data, currentYearInventorySnapshotId],
+      (branchStockSummary.data?.branches ?? []).reduce(
+        (acc, row) => acc + (typeof row.total_value === 'number' ? row.total_value : 0),
+        0,
+      ),
+    [branchStockSummary.data],
   );
 
   const totalReceivables = useMemo(
