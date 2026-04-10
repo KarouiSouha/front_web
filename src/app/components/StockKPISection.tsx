@@ -1,4 +1,3 @@
-// src/app/components/StockKPISection.tsx
 import { useEffect, useMemo, useState } from 'react';
 import {
     Package,

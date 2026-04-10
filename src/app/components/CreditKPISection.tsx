@@ -539,9 +539,7 @@ export function CreditKPISection() {
     { label: 'Total Accounts',    value: formatNumber(summary.total_customers),                              sub: 'All accounts in imported file',        icon: Users,         accent: C.indigo  },
     { label: 'Active Clients',    value: formatNumber(summary.credit_customers),                             sub: `${pctActive}% of total · balance > 0`, icon: UserCheck,     accent: C.emerald },
     { label: 'Total Receivables', value: formatCurrency(summary.grand_total_receivables),                    icon: BarChart3,      accent: C.cyan    },
-    { label: 'Overdue >60d',      value: formatCurrency(summary.overdue_amount),                             icon: AlertTriangle,  accent: C.amber   },
-    { label: 'Credit Revenue',    value: formatCurrency(summary.ca_total - summary.grand_total_receivables), icon: TrendingUp,     accent: C.emerald },
-    { label: 'Total Revenue',     value: formatCurrency(summary.ca_total),                                   icon: DollarSign,     accent: C.orange  },
+    { label: 'Overdue >60d',      value: formatCurrency(summary.overdue_amount),                                  icon: DollarSign,     accent: C.orange  },
   ];
 
   return (
@@ -559,7 +557,7 @@ export function CreditKPISection() {
       </div>
 
       {/* ── Summary ribbon (6 KPI cards matching DashboardPage style) ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 24 }}>
         {summaryCards.map((card, i) => <SummaryCard key={i} {...card} />)}
       </div>
 

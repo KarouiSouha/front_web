@@ -182,8 +182,9 @@ export function InventoryPage() {
   const [tablePage,          setTablePage]          = useState(1);
   const [tableSearch,        setTableSearch]        = useState('');
 
-  // branchParam: undefined = all, string = exact branch name
-  const branchParam = selectedBranch !== 'all' ? selectedBranch : undefined;
+  const isAllBranches = selectedBranch === 'all';
+  const branchParam = isAllBranches ? undefined : selectedBranch;
+  const branchScopeParams = branchParam ? { branch: branchParam } : undefined;
 
   // ✅ Hook dédié pour les TOTAUX seulement (page_size=1, toujours page 1)
   // Les totaux (distinct_products, grand_total_qty, etc.) sont calculés
@@ -195,7 +196,7 @@ export function InventoryPage() {
   const { data: totalsData, loading: totalsLoading } = useInventoryLines(null, {
     page:      1,
     page_size: 1,
-    branch:    branchParam,
+    ...branchScopeParams,
     search:    tableSearch || undefined,
   });
 
@@ -204,7 +205,7 @@ export function InventoryPage() {
     useInventoryLines(null, {
       page:      tablePage,
       page_size: 100,
-      branch:    branchParam,
+      ...branchScopeParams,
       search:    tableSearch || undefined,
     });
 
@@ -212,10 +213,10 @@ export function InventoryPage() {
   const { data: allBranchData, loading: branchLoading } = useBranchSummary();
 
   // Branch summary avec filtre → cards + bar chart
-  const { data: filteredBranchData } = useBranchSummary({ branch: branchParam });
+  const { data: filteredBranchData } = useBranchSummary(branchScopeParams);
 
   // Category breakdown avec filtre
-  const { data: categoryData } = useCategoryBreakdown({ branch: branchParam });
+  const { data: categoryData } = useCategoryBreakdown(branchScopeParams);
 
   const allBranches     = allBranchData?.branches    ?? [];
   const displayBranches = filteredBranchData?.branches ?? [];
