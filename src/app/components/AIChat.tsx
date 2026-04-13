@@ -652,8 +652,22 @@ function MessageBubble({ message, onFollowup, onSpeak, speakingMessageId }: {
   // true only when THIS specific message is being read
   const isThisPlaying = speakingMessageId === message.id;
 
-  const renderContent = (text: string) =>
-    text.split('\n').map((line, i, arr) => {
+  // Guard: always ensure text is a string (API may return object/null)
+  const safeString = (val: unknown): string => {
+    if (!val) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'object') {
+      // LLM sometimes returns { answer: "..." } instead of a plain string
+      const obj = val as Record<string, unknown>;
+      if (typeof obj.answer === 'string') return obj.answer;
+      return JSON.stringify(obj, null, 2);
+    }
+    return String(val);
+  };
+
+  const renderContent = (text: unknown) => {
+    const safe = safeString(text);
+    return safe.split('\n').map((line, i, arr) => {
       const parts = line.split(/(\*\*[^*]+\*\*)/g);
       return (
         <span key={i}>
@@ -664,6 +678,7 @@ function MessageBubble({ message, onFollowup, onSpeak, speakingMessageId }: {
         </span>
       );
     });
+  };
 
   if (isUser) {
     return (
@@ -874,8 +889,18 @@ export function AIChat({ className = '' }: AIChatProps) {
         const latest = res.conversations?.[0];
         if (!latest) { if (mounted) setMessages([INITIAL_MESSAGE]); return; }
         const hist = await api.get<{ count: number; messages: StoredConversationMessage[] }>(`/ai-insights/conversations/${latest.id}/messages/`);
+        const contentToStr = (v: unknown): string => {
+          if (!v) return '';
+          if (typeof v === 'string') return v;
+          if (typeof v === 'object') {
+            const o = v as Record<string, unknown>;
+            if (typeof o.answer === 'string') return o.answer;
+            return JSON.stringify(o, null, 2);
+          }
+          return String(v);
+        };
         const mapped = (hist.messages || []).map((m): ChatMessage => ({
-          id: m.id, role: m.role === 'assistant' ? 'ai' : 'user', content: m.content,
+          id: m.id, role: m.role === 'assistant' ? 'ai' : 'user', content: contentToStr(m.content),
           time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           decision_needed: m.metadata?.decision_needed, decision_card: m.metadata?.decision_card ?? null,
           suggested_followups: m.metadata?.suggested_followups, urgency: m.metadata?.urgency,
@@ -901,7 +926,10 @@ export function AIChat({ className = '' }: AIChatProps) {
 
     const apiHistory = [...messages, userMsg]
       .filter(m => !m.loading)
-      .map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content }));
+      .map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+      }));
 
     try {
       const res = await api.post<{
@@ -914,8 +942,14 @@ export function AIChat({ className = '' }: AIChatProps) {
       });
       if (res.conversation_id) setConversationId(res.conversation_id);
 
+      const answerText: string = typeof res.answer === 'string'
+        ? res.answer
+        : typeof res.answer === 'object' && res.answer !== null
+          ? ((res.answer as Record<string,unknown>).answer as string) ?? JSON.stringify(res.answer, null, 2)
+          : String(res.answer ?? '');
+
       setMessages(prev => [...prev, {
-        id: uid(), role: 'ai', content: res.answer, time: now(),
+        id: uid(), role: 'ai', content: answerText, time: now(),
         decision_needed: res.decision_needed, decision_card: res.decision_card,
         suggested_followups: res.suggested_followups, urgency: res.urgency,
         topic: res.topic, fallback: res.fallback,
