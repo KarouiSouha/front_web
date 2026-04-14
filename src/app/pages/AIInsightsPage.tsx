@@ -37,7 +37,7 @@ import {
 } from '../lib/aiInsightsApi';
 import { formatCurrency } from '../lib/utils';
 import { AIChat } from '../components/AIChat';
-
+import type { SeasonalResultV3 } from '@/app/lib/aiInsightsApi';
 // ─────────────────────────────────────────────────────────────────────────────
 // Design system — mirrors DashboardPage exactly
 // ─────────────────────────────────────────────────────────────────────────────
@@ -726,50 +726,164 @@ function AnomalyCard({ anomaly: a }: { anomaly: Anomaly }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function SeasonalSection() {
-  const { data, loading, error, loadedAt, reload } = useAnalyzer(() => aiInsightsApi.seasonal(), []);
+  const { data, loading, error, loadedAt, reload } = useAnalyzer(
+    () => aiInsightsApi.seasonal() as Promise<SeasonalResultV3>,
+    []
+  );
   return (
-    <Panel icon={Calendar} title="Seasonal Trend Analysis" accent={C.teal}
-      sub="Multiplicative decomposition · 24-month seasonality indices + trend model"
-      loadedAt={loadedAt} loading={loading} onRefresh={reload}>
+    <Panel
+      icon={Calendar}
+      title="Seasonal Trend Analysis"
+      accent={C.teal}
+      sub="12-month window · STL decomposition · Ramadan detection · LYD/USD rate"
+      loadedAt={loadedAt}
+      loading={loading}
+      onRefresh={reload}
+    >
       {loading && <LoadingSkeleton rows={4} />}
       {error && <ErrorState message={error} onRetry={reload} />}
       {data && (data.error ? <EmptyState text={data.error} /> : <SeasonalContent data={data} />)}
     </Panel>
   );
 }
-
-function SeasonalContent({ data }: { data: SeasonalResult }) {
-  const indices = Object.values(data.seasonality_indices ?? {}).filter(v => v.seasonality_index !== null);
+function SeasonalContent({ data }: { data: SeasonalResultV3 }) {
+  const indices  = Object.values(data.seasonality_indices ?? {}).filter(
+    v => v.seasonality_index !== null
+  );
   const chartData = indices.map(v => ({
-    name: v.month_name.slice(0, 3), si: +(v.seasonality_index ?? 1).toFixed(3), label: v.label,
+    name: v.month_name.slice(0, 3),
+    si:   +(v.seasonality_index ?? 1).toFixed(3),
+    label: v.label,
   }));
-
+ 
+  const today     = new Date();
+  const todayMonth = today.getMonth() + 1; // 1-12
+ 
+  // ── Exchange rate pill ──────────────────────────────────────────────────────
+  const fx = data.exchange_rate;
+  const fxEl = fx && (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      padding: '5px 14px', borderRadius: 20,
+      background: `${C.amber}12`, border: `1px solid ${C.amber}30`,
+      fontSize: 12, fontWeight: 700, color: C.amber,
+    }}>
+      <DollarSign size={13} style={{ color: C.amber }} />
+      1 USD = {fx.usd_to_lyd.toFixed(2)} LYD
+      {fx.source === 'default' && (
+        <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.7 }}>(default rate)</span>
+      )}
+    </span>
+  );
+ 
+  // ── Ramadan alert — only when relevant ─────────────────────────────────────
+  const ramadan = data.relevant_ramadan;
+  const ramadanEl = ramadan && (
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', gap: 12,
+      padding: '12px 16px', borderRadius: 12,
+      background: `${C.violet}10`, border: `1px solid ${C.violet}30`,
+    }}>
+      <span style={{
+        fontSize: 18, lineHeight: 1, marginTop: 1,
+        // crescent moon symbol, no emoji
+      }}>☽</span>
+      <div style={{ flex: 1 }}>
+        <p style={{
+          fontSize: 12, fontWeight: 700, color: C.violet,
+          margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.07em',
+        }}>
+          {ramadan.status === 'ongoing' ? 'Ramadan in progress' : 'Ramadan approaching'}
+        </p>
+        <p style={{ fontSize: 13, color: css.cardFg, margin: 0 }}>
+          {ramadan.label}
+          {ramadan.status === 'ongoing' && ramadan.days_remaining !== undefined && (
+            <span style={{ color: css.mutedFg }}>
+              {' '}· ends in {ramadan.days_remaining} days
+            </span>
+          )}
+          {ramadan.status === 'upcoming' && ramadan.days_until !== undefined && (
+            <span style={{ color: css.mutedFg }}>
+              {' '}({ramadan.days_until} days — stock up now)
+            </span>
+          )}
+        </p>
+        {data.ramadan_analysis?.detected && (
+          <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 4 }}>
+            Historical impact: {data.ramadan_analysis.dominant_effect}
+            {' · '}avg index {data.ramadan_analysis.avg_ramadan_index?.toFixed(3)}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+ 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+ 
+      {/* Top-row pills: current season + exchange rate + upcoming peak */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-        <span style={{ padding: '6px 14px', borderRadius: 20, background: `${C.teal}15`, border: `1px solid ${C.teal}30`, fontSize: 13, fontWeight: 600, color: C.teal }}>{data.current_season}</span>
+        <span style={{
+          padding: '6px 14px', borderRadius: 20,
+          background: `${C.teal}15`, border: `1px solid ${C.teal}30`,
+          fontSize: 13, fontWeight: 600, color: C.teal,
+        }}>
+          {data.current_season}
+        </span>
+ 
+        {fxEl}
+ 
         {data.upcoming_peak_alert && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: `${C.amber}15`, border: `1px solid ${C.amber}30`, fontSize: 12, fontWeight: 700, color: C.amber }}>
+          <span style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '6px 14px', borderRadius: 20,
+            background: `${C.amber}15`, border: `1px solid ${C.amber}30`,
+            fontSize: 12, fontWeight: 700, color: C.amber,
+          }}>
             <AlertCircle size={13} />Peak season approaching — prepare stock now
           </span>
         )}
+ 
+        {data.analysis_year && (
+          <span style={{
+            padding: '4px 10px', borderRadius: 20,
+            background: css.muted, fontSize: 11, color: css.mutedFg,
+          }}>
+            {data.analysis_year} · 12-month window
+          </span>
+        )}
       </div>
-
+ 
+      {/* Ramadan alert (only when relevant) */}
+      {ramadanEl}
+ 
+      {/* Trend pill */}
       {data.trend && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, background: css.muted, fontSize: 12 }}>
-            {data.trend.direction === 'growing' ? <TrendingUp size={13} style={{ color: C.emerald }} /> :
-             data.trend.direction === 'declining' ? <TrendingDown size={13} style={{ color: C.rose }} /> :
-             <Minus size={13} style={{ color: css.mutedFg }} />}
-            Overall trend: <strong>{data.trend.direction}</strong>
-            {' · '}{data.trend.slope_pct_per_month > 0 ? '+' : ''}{data.trend.slope_pct_per_month.toFixed(2)}%/month
+          <span style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '6px 12px', borderRadius: 20, background: css.muted, fontSize: 12,
+          }}>
+            {data.trend.direction === 'growing'
+              ? <TrendingUp size={13} style={{ color: C.emerald }} />
+              : data.trend.direction === 'declining'
+              ? <TrendingDown size={13} style={{ color: C.rose }} />
+              : <Minus size={13} style={{ color: css.mutedFg }} />
+            }
+            Trend: <strong>{data.trend.direction}</strong>
+            {' · '}
+            {data.trend.slope_pct_per_month > 0 ? '+' : ''}
+            {data.trend.slope_pct_per_month?.toFixed(2)}%/month
           </span>
         </div>
       )}
-
+ 
+      {/* SI bar chart */}
       {chartData.length > 0 && (
         <div>
-          <p style={{ fontSize: 11, fontWeight: 600, color: css.mutedFg, marginBottom: 10 }}>Monthly demand index (1.0 = average month)</p>
+          <p style={{ fontSize: 11, fontWeight: 600, color: css.mutedFg, marginBottom: 10 }}>
+            Monthly demand index (1.0 = average month)
+          </p>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
               <defs>
@@ -779,52 +893,200 @@ function SeasonalContent({ data }: { data: SeasonalResult }) {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={css.border} vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: css.mutedFg }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: css.mutedFg }} domain={[0.5, 'auto']} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [v, 'SI']} />
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 11, fill: css.mutedFg }}
+                axisLine={false} tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 11, fill: css.mutedFg }}
+                domain={[0.5, 'auto']}
+                axisLine={false} tickLine={false}
+              />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(v: any) => [v, 'SI']}
+              />
               <ReferenceLine y={1} stroke="#94a3b8" strokeDasharray="4 4" />
-              <Bar dataKey="si" fill="url(#siGrad)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="si" fill="url(#siGrad)" radius={[4, 4, 0, 0]}>
+                {chartData.map((entry, i) => {
+                  const isCurrentMonth = (i + 1) === todayMonth; // approximate
+                  return (
+                    <Cell
+                      key={i}
+                      fill={
+                        entry.label === 'peak'   ? C.teal   :
+                        entry.label === 'trough' ? C.amber  :
+                        isCurrentMonth           ? C.indigo :
+                        'url(#siGrad)'
+                      }
+                      opacity={isCurrentMonth ? 1 : 0.85}
+                    />
+                  );
+                })}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
+            {[
+              { color: C.teal,   label: 'Peak' },
+              { color: C.amber,  label: 'Trough' },
+              { color: C.indigo, label: 'Current month' },
+            ].map(({ color, label }) => (
+              <span key={label} style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                fontSize: 11, color: css.mutedFg,
+              }}>
+                <span style={{
+                  display: 'inline-block', width: 10, height: 10,
+                  borderRadius: 2, background: color,
+                }} />
+                {label}
+              </span>
+            ))}
+          </div>
         </div>
       )}
-
+ 
+      {/* Peak / Trough months */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <div style={{ padding: 14, borderRadius: 12, background: `${C.indigo}08`, border: `1px solid ${C.indigo}20` }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: C.indigo, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+        <div style={{
+          padding: 14, borderRadius: 12,
+          background: `${C.indigo}08`, border: `1px solid ${C.indigo}20`,
+        }}>
+          <p style={{
+            fontSize: 11, fontWeight: 700, color: C.indigo, marginBottom: 6,
+            display: 'flex', alignItems: 'center', gap: 5,
+          }}>
             <TrendingUp size={13} style={{ color: C.indigo }} />Peak months
           </p>
-          <p style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>{data.peak_month_names?.join(', ') || '—'}</p>
+          <p style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>
+            {data.peak_month_names?.join(', ') || '—'}
+          </p>
         </div>
-        <div style={{ padding: 14, borderRadius: 12, background: `${C.orange}08`, border: `1px solid ${C.orange}20` }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: C.orange, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+        <div style={{
+          padding: 14, borderRadius: 12,
+          background: `${C.orange}08`, border: `1px solid ${C.orange}20`,
+        }}>
+          <p style={{
+            fontSize: 11, fontWeight: 700, color: C.orange, marginBottom: 6,
+            display: 'flex', alignItems: 'center', gap: 5,
+          }}>
             <TrendingDown size={13} style={{ color: C.orange }} />Trough months
           </p>
-          <p style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>{data.trough_month_names?.join(', ') || '—'}</p>
+          <p style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>
+            {data.trough_month_names?.join(', ') || '—'}
+          </p>
         </div>
       </div>
-
-      {data.seasonal_narrative && (
-        <div style={{ padding: 16, borderRadius: 12, background: css.muted + '50', border: `1px solid ${css.border}` }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: css.mutedFg, marginBottom: 6 }}>AI Narrative</p>
-          <p style={{ fontSize: 13, color: css.cardFg, margin: 0, lineHeight: 1.6 }}>{data.seasonal_narrative}</p>
+ 
+      {/* Stock preparation calendar — upcoming peaks only */}
+      {data.stock_preparation_calendar?.length > 0 && (
+        <div style={{
+          padding: 16, borderRadius: 12,
+          background: `${C.cyan}06`, border: `1px solid ${C.cyan}20`,
+        }}>
+          <p style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.09em',
+            textTransform: 'uppercase', color: C.cyan, marginBottom: 12,
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <Package size={13} />Stock preparation calendar — upcoming peaks
+          </p>
+          {data.stock_preparation_calendar.map((item, i) => (
+            <div key={i} style={{
+              display: 'flex', gap: 12, alignItems: 'flex-start',
+              padding: '10px 0',
+              borderBottom: i < data.stock_preparation_calendar.length - 1
+                ? `1px solid ${css.border}` : 'none',
+            }}>
+              <div style={{
+                minWidth: 48, textAlign: 'center', padding: '4px 8px',
+                borderRadius: 8, background: `${C.teal}15`,
+                fontSize: 11, fontWeight: 700, color: C.teal,
+              }}>
+                {item.month.slice(0, 3)}
+                {item.prep_year ? (
+                  <div style={{ fontSize: 9, fontWeight: 400, color: css.mutedFg }}>
+                    {item.prep_year}
+                  </div>
+                ) : null}
+              </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: css.cardFg, margin: '0 0 3px' }}>
+                  {item.action}
+                </p>
+                <p style={{ fontSize: 11, color: css.mutedFg, margin: 0 }}>
+                  {item.rationale}
+                </p>
+              </div>
+              <div style={{
+                fontSize: 11, fontWeight: 700, color: C.amber,
+                padding: '3px 8px', borderRadius: 20,
+                background: `${C.amber}12`, flexShrink: 0,
+              }}>
+                {item.lead_time_weeks}w lead
+              </div>
+            </div>
+          ))}
         </div>
       )}
-
+ 
+      {/* AI narrative */}
+      {data.seasonal_narrative && (
+        <div style={{
+          padding: 16, borderRadius: 12,
+          background: css.muted + '50', border: `1px solid ${css.border}`,
+        }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: css.mutedFg, marginBottom: 6 }}>
+            AI Narrative
+          </p>
+          <p style={{
+            fontSize: 13, color: css.cardFg, margin: 0, lineHeight: 1.6,
+          }}>
+            {data.seasonal_narrative}
+          </p>
+        </div>
+      )}
+ 
+      {/* Recommendations — upcoming/current only */}
       {data.ai_recommendations?.length > 0 && (
         <div>
-          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: css.mutedFg, marginBottom: 10 }}>Recommendations</p>
+          <p style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.09em',
+            textTransform: 'uppercase', color: css.mutedFg, marginBottom: 10,
+          }}>
+            Recommendations
+          </p>
           {data.ai_recommendations.map((r, i) => (
-            <p key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, marginBottom: 8 }}>
-              <CheckCircle2 size={15} style={{ color: C.emerald, flexShrink: 0, marginTop: 1 }} />{r}
+            <p key={i} style={{
+              display: 'flex', alignItems: 'flex-start', gap: 8,
+              fontSize: 13, marginBottom: 8,
+            }}>
+              <CheckCircle2
+                size={15}
+                style={{ color: C.emerald, flexShrink: 0, marginTop: 1 }}
+              />
+              {r}
             </p>
           ))}
         </div>
       )}
+ 
+      {/* Exchange rate disclaimer */}
+      {fx?.source === 'default' && (
+        <p style={{
+          fontSize: 10, color: css.mutedFg,
+          padding: '8px 12px', borderRadius: 8, background: css.muted + '50',
+          border: `1px solid ${css.border}`,
+        }}>
+          ⚠️ Using default LYD/USD rate ({fx.usd_to_lyd.toFixed(2)}).
+          Set <code>LYD_USD_RATE</code> in Django settings for the live Central Bank rate.
+        </p>
+      )}
     </div>
   );
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
 // 5. Churn Prediction
 // ─────────────────────────────────────────────────────────────────────────────

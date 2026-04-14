@@ -203,7 +203,38 @@ export interface SeasonalResult {
   confidence:                 Confidence;
   cached:                     boolean;
 }
-
+export interface ExchangeRate {
+  usd_to_lyd: number;
+  lyd_to_usd: number;
+  source:     'settings' | 'default';
+  note?:      string;
+}
+ 
+export interface RelevantRamadan {
+  status:          'ongoing' | 'upcoming';
+  start:           string;
+  end:             string;
+  label:           string;
+  days_remaining?: number;  // when status = 'ongoing'
+  days_until?:     number;  // when status = 'upcoming'
+}
+ 
+export interface StockCalendarItem {
+  month:           string;
+  prep_year?:      number;
+  action:          string;
+  lead_time_weeks: number;
+  rationale:       string;
+  days_to_peak?:   number;
+}
+// Extend the base SeasonalResult
+export interface SeasonalResultV3 extends SeasonalResult {
+  analysis_year?:   number;
+  exchange_rate?:   ExchangeRate;
+  relevant_ramadan: RelevantRamadan | null;
+  stock_preparation_calendar: StockCalendarItem[];
+}
+ 
 // ── SCRUM-27: Churn Prediction ────────────────────────────────────────────────
 
 export interface ChurnPrediction {
