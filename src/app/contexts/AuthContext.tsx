@@ -2,6 +2,18 @@ import { createContext, useContext, useState, ReactNode, useEffect, useCallback 
 import { authApi, BackendUser, type UserListItem } from '../lib/authApi';
 import { TokenStorage, ApiError } from '../lib/api';
 
+const NOTIFICATIONS_REFRESH_KEY = 'weeg-notifications-refresh-ts';
+
+function triggerNotificationsRefresh() {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(NOTIFICATIONS_REFRESH_KEY, String(Date.now()));
+    window.dispatchEvent(new Event('weeg-notifications-refresh'));
+  } catch {
+    // best-effort only
+  }
+}
+
 export type UserRole = 'admin' | 'manager' | 'agent';
 
 export interface Permission {
@@ -163,6 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const mappedUser = mapBackendUser(profile);
         setUser(mappedUser);
         await fetchUserList(mappedUser.role, setUsers);
+        triggerNotificationsRefresh();
       })
       .catch(() => {
         TokenStorage.clear();
@@ -180,6 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const mappedUser = mapBackendUser(profile);
       setUser(mappedUser);
       await fetchUserList(mappedUser.role, setUsers);
+      triggerNotificationsRefresh();
       return { success: true, message: 'Login successful' };
     } catch (err) {
       TokenStorage.clear();

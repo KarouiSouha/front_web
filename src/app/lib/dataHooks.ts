@@ -503,6 +503,7 @@ function deduplicateNotifications(items: Notification[]): Notification[] {
 export function useNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [criticalUnreadCount, setCriticalUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
  
   const load = useCallback(async (withDetect = false) => {
@@ -511,8 +512,12 @@ export function useNotifications() {
       if (withDetect) {
         await notificationsApi.detect().catch(() => {});
       }
-      const res = await notificationsApi.list({ page: 1 });
+      const [res, criticalRes] = await Promise.all([
+        notificationsApi.list({ page: 1 }),
+        notificationsApi.list({ page: 1, severity: 'critical', is_read: false }),
+      ]);
       const data = res as any;
+      const criticalData = criticalRes as any;
       const raw: Notification[] = data.results ?? [];
  
       // Dédupliquer avant affichage
@@ -523,6 +528,13 @@ export function useNotifications() {
       // Recalculer unread_count localement — le count backend est faussé
       // par les doublons tant que la DB n'est pas nettoyée
       setUnreadCount(unique.filter(n => !n.is_read).length);
+
+      // Compteur global des critiques non lues (pas limite aux 15 notifs affichées)
+      if (typeof criticalData?.count === 'number') {
+        setCriticalUnreadCount(criticalData.count);
+      } else {
+        setCriticalUnreadCount(unique.filter(n => n.severity === 'critical' && !n.is_read).length);
+      }
     } catch (err) {
       console.error('[useNotifications] load error:', err);
     } finally {
@@ -548,15 +560,20 @@ export function useNotifications() {
  
   const markAsRead = useCallback(async (id: string) => {
     try {
+      const target = notifications.find(n => n.id === id);
       await notificationsApi.markRead({ ids: [id] });
       setNotifications(prev =>
         prev.map(n => n.id === id ? { ...n, is_read: true, read_at: new Date().toISOString() } : n)
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
+
+      if (target?.severity === 'critical' && !target.is_read) {
+        setCriticalUnreadCount(prev => Math.max(0, prev - 1));
+      }
     } catch (err) {
       console.error('[useNotifications] markAsRead error:', err);
     }
-  }, []);
+  }, [notifications]);
  
   const markAllAsRead = useCallback(async () => {
     try {
@@ -565,6 +582,7 @@ export function useNotifications() {
         prev.map(n => ({ ...n, is_read: true, read_at: new Date().toISOString() }))
       );
       setUnreadCount(0);
+      setCriticalUnreadCount(0);
     } catch (err) {
       console.error('[useNotifications] markAllAsRead error:', err);
     }
@@ -573,6 +591,7 @@ export function useNotifications() {
   return {
     notifications,
     unreadCount,
+    criticalUnreadCount,
     loading,
     refetch: load,
     markAsRead,

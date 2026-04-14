@@ -2,10 +2,10 @@
 import { Bell, CheckCheck, ExternalLink, RefreshCw } from 'lucide-react';
 import { Badge } from './ui/badge';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuTrigger,
+    DropdownMenuSeparator,
 } from './ui/dropdown-menu';
 import { useNotifications } from '../lib/dataHooks';
 import { useNavigate } from 'react-router';
@@ -46,12 +46,12 @@ interface NotificationBellProps {
 
 export function NotificationBell({ onViewAll }: NotificationBellProps) {
   const navigate = useNavigate();
-  const { notifications, unreadCount, loading, refetch, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, criticalUnreadCount, loading, refetch, markAsRead, markAllAsRead } = useNotifications();
   const [open, setOpen] = useState(false);
 
   // ── Show ONLY critical alerts in the bell dropdown ──────────────────────
   const criticalNotifs = notifications.filter(n => n.severity === 'critical');
-  const criticalUnread = criticalNotifs.filter(n => !n.is_read).length;
+  const criticalUnreadLocal = criticalNotifs.filter(n => !n.is_read).length;
 
   const handleViewAll = () => {
     setOpen(false);
@@ -66,9 +66,9 @@ export function NotificationBell({ onViewAll }: NotificationBellProps) {
           aria-label="Notifications"
         >
           <Bell className="h-5 w-5" />
-          {criticalUnread > 0 && (
+          {criticalUnreadCount > 0 && (
             <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-red-600 text-white text-xs font-bold border-2 border-background">
-              {criticalUnread > 99 ? '99+' : criticalUnread}
+              {criticalUnreadCount > 99 ? '99+' : criticalUnreadCount}
             </Badge>
           )}
         </button>
@@ -79,9 +79,9 @@ export function NotificationBell({ onViewAll }: NotificationBellProps) {
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <div>
             <p className="font-semibold">Critical Alerts</p>
-            {criticalUnread > 0 ? (
+            {criticalUnreadCount > 0 ? (
               <p className="text-xs text-muted-foreground">
-                {criticalUnread} unread critical alert{criticalUnread > 1 ? 's' : ''}
+                {criticalUnreadCount} unread critical alert{criticalUnreadCount > 1 ? 's' : ''}
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">All critical alerts reviewed</p>
@@ -95,7 +95,7 @@ export function NotificationBell({ onViewAll }: NotificationBellProps) {
             >
               <RefreshCw className={`h-4 w-4 text-muted-foreground ${loading ? 'animate-spin' : ''}`} />
             </button>
-            {criticalUnread > 0 && (
+            {criticalUnreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
                 title="Mark all as read"
@@ -113,7 +113,11 @@ export function NotificationBell({ onViewAll }: NotificationBellProps) {
             <div className="py-12 text-center text-muted-foreground">
               <Bell className="mx-auto h-12 w-12 opacity-30 mb-3" />
               <p className="text-sm font-medium">No critical alerts</p>
-              <p className="text-xs mt-1 opacity-70">You're all clear</p>
+              <p className="text-xs mt-1 opacity-70">
+                {criticalUnreadCount > 0
+                  ? 'Unread critical alerts exist in history. Open full alert history.'
+                  : "You're all clear"}
+              </p>
             </div>
           ) : (
             criticalNotifs.map((notif) => (
@@ -148,6 +152,11 @@ export function NotificationBell({ onViewAll }: NotificationBellProps) {
                 </div>
               </div>
             ))
+          )}
+          {criticalUnreadCount > criticalUnreadLocal && (
+            <div className="px-4 py-2 border-t text-xs text-muted-foreground bg-muted/40">
+              Showing latest {criticalNotifs.length} critical alerts. Total unread critical: {criticalUnreadCount}.
+            </div>
           )}
         </div>
 

@@ -9,6 +9,28 @@ import { dataImportApi, ImportResult, DetectResult } from '../lib/dataApi';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 
+type ValidationStructureError = {
+  code: string;
+  message: string;
+  position?: number;
+  expected?: string | number;
+  actual?: string | number;
+};
+
+type ValidationSummary = {
+  total_rows: number;
+  valid_rows: number;
+  invalid_rows: number;
+};
+
+type ValidationDetails = {
+  file_type: string;
+  is_valid: boolean;
+  structure_errors: ValidationStructureError[];
+  row_errors_count: number;
+  summary?: ValidationSummary;
+};
+
 // ── Brand palette (identical to DashboardPage) ────────────────────────────────
 const C = {
   indigo:  '#6366f1',
@@ -147,6 +169,8 @@ export function DataImportPage() {
   const [uploadResult, setUploadResult]   = useState<ImportResult | null>(null);
   const [previewData, setPreviewData]     = useState<DetectResult | null>(null);
   const [errorMsg, setErrorMsg]           = useState<string | null>(null);
+  const [validationDetails, setValidationDetails] = useState<ValidationDetails | null>(null);
+  const [errorCode, setErrorCode]         = useState<string | null>(null);
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
@@ -210,10 +234,14 @@ export function DataImportPage() {
     const lowerName = file.name.toLowerCase();
     if (!lowerName.endsWith('.xlsx') && !lowerName.endsWith('.xls')) {
       setErrorMsg('Only .xlsx and .xls files are accepted');
+      setValidationDetails(null);
+      setErrorCode(null);
       return;
     }
     setSelectedFile(file);
     setErrorMsg(null);
+    setValidationDetails(null);
+    setErrorCode(null);
     setPreviewData(null);
     setUploadResult(null);
     setUploadProgress(0);
@@ -222,6 +250,8 @@ export function DataImportPage() {
       setPreviewData(detect);
     } catch (err: any) {
       setErrorMsg(err.message || 'File detection failed');
+      setValidationDetails(null);
+      setErrorCode(null);
     }
   };
 
@@ -229,6 +259,8 @@ export function DataImportPage() {
     if (!selectedFile) return;
     setIsUploading(true);
     setErrorMsg(null);
+    setValidationDetails(null);
+    setErrorCode(null);
     setUploadResult(null);
     setUploadProgress(0);
     try {
@@ -251,11 +283,28 @@ export function DataImportPage() {
       setUploadResult(response.data);
       setUploadProgress(100);
     } catch (err: any) {
-      const msg = err.response?.data?.error || err.response?.data?.message || err.message || 'Import failed';
+      const apiError = err.response?.data;
+      const msg = apiError?.error || apiError?.message || err.message || 'Import failed';
+
       setErrorMsg(msg);
+      setErrorCode(apiError?.error_code || null);
+
+      if (apiError?.validation_details) {
+        setValidationDetails(apiError.validation_details as ValidationDetails);
+      }
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const formatStructureError = (error: ValidationStructureError) => {
+    if (error.expected !== undefined && error.actual !== undefined) {
+      if (error.position !== undefined) {
+        return `Column ${error.position}: expected "${error.expected}", found "${error.actual}"`;
+      }
+      return `Expected "${error.expected}", found "${error.actual}"`;
+    }
+    return error.message;
   };
 
   const hasPreview = previewData && previewData.preview_rows.length > 0;
@@ -345,10 +394,58 @@ export function DataImportPage() {
           <div style={{
             marginTop: 16, padding: '12px 16px', borderRadius: 10,
             background: `${C.rose}08`, border: `1px solid ${C.rose}30`,
-            display: 'flex', alignItems: 'flex-start', gap: 10,
+            display: 'flex', alignItems: 'flex-start', gap: 10, flexDirection: 'column',
           }}>
-            <AlertCircle size={16} style={{ color: C.rose, flexShrink: 0, marginTop: 1 }} />
-            <p style={{ fontSize: 13, color: C.rose, margin: 0, fontWeight: 500 }}>{errorMsg}</p>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <AlertCircle size={16} style={{ color: C.rose, flexShrink: 0, marginTop: 1 }} />
+              <div>
+                <p style={{ fontSize: 13, color: C.rose, margin: 0, fontWeight: 700 }}>{errorMsg}</p>
+                {errorCode && (
+                  <p style={{ fontSize: 12, color: css.mutedFg, margin: '4px 0 0' }}>
+                    Code: {errorCode}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {validationDetails && (
+              <div style={{
+                width: '100%',
+                marginTop: 4,
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: `${C.rose}06`,
+                border: `1px solid ${C.rose}20`,
+              }}>
+                <p style={{ fontSize: 12, color: css.cardFg, margin: 0, fontWeight: 700 }}>
+                  Validation Summary
+                </p>
+                <p style={{ fontSize: 12, color: css.mutedFg, margin: '6px 0 0' }}>
+                  Detected Type: {validationDetails.file_type} · Structural Errors: {validationDetails.structure_errors.length} · Row Errors: {validationDetails.row_errors_count}
+                </p>
+
+                {validationDetails.summary && (
+                  <p style={{ fontSize: 12, color: css.mutedFg, margin: '4px 0 0' }}>
+                    Total Rows: {validationDetails.summary.total_rows} · Valid: {validationDetails.summary.valid_rows} · Invalid: {validationDetails.summary.invalid_rows}
+                  </p>
+                )}
+
+                {validationDetails.structure_errors.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    {validationDetails.structure_errors.slice(0, 5).map((item, idx) => (
+                      <p key={`${item.code}-${idx}`} style={{ fontSize: 12, color: css.cardFg, margin: '4px 0 0' }}>
+                        • {formatStructureError(item)}
+                      </p>
+                    ))}
+                    {validationDetails.structure_errors.length > 5 && (
+                      <p style={{ fontSize: 12, color: css.mutedFg, margin: '6px 0 0' }}>
+                        ... {validationDetails.structure_errors.length - 5} more structural errors
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -406,7 +503,15 @@ export function DataImportPage() {
             {isUploading ? 'Importing...' : 'Start Import'}
           </button>
           <button
-            onClick={() => { setSelectedFile(null); setPreviewData(null); setErrorMsg(null); setUploadResult(null); setUploadProgress(0); }}
+            onClick={() => {
+              setSelectedFile(null);
+              setPreviewData(null);
+              setErrorMsg(null);
+              setErrorCode(null);
+              setValidationDetails(null);
+              setUploadResult(null);
+              setUploadProgress(0);
+            }}
             disabled={isUploading}
             style={{
               padding: '10px 24px', borderRadius: 9, fontSize: 13, fontWeight: 600,
