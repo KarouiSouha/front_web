@@ -867,12 +867,26 @@ function SeasonalContent({ data }: { data: SeasonalResultV4 }) {
           }}>
             <Wifi size={12} style={{ color: fx.source === 'settings' ? C.cyan : C.emerald }}/>
             1 USD = {fx.usd_to_lyd.toFixed(2)} LYD
-            <span style={{ fontSize:10, fontWeight:400, opacity:0.8 }}>
-              ({fx.source === 'openai_live' ? 'live' : fx.source === 'cache' ? 'cached' : 'configured'})
-            </span>
-          </span>
-        )}
 
+          </span>
+
+        )}
+        <span
+          style={{
+            padding: '6px 14px', borderRadius: 20,
+            background: `${C.teal}15`,
+            border: `1px solid ${C.teal}30`,
+            fontSize: 13,
+            fontWeight: 600,
+            color: C.teal,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          <TrendingUp size={16} />
+          SI = Seasonality Index
+        </span>
         {data.upcoming_peak_alert && (
           <span style={{
             display:'flex', alignItems:'center', gap:6,
@@ -969,29 +983,7 @@ function SeasonalContent({ data }: { data: SeasonalResultV4 }) {
         </div>
       )}
 
-      {/* ── Trend ── */}
-      {data.trend && (
-        <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
-          <span style={{
-            display:'flex', alignItems:'center', gap:6,
-            padding:'6px 12px', borderRadius:20, background:css.muted, fontSize:12,
-          }}>
-            {data.trend.direction==='growing'
-              ? <TrendingUp size={13} style={{ color:C.emerald }}/>
-              : data.trend.direction==='declining'
-              ? <TrendingDown size={13} style={{ color:C.rose }}/>
-              : <Minus size={13} style={{ color:css.mutedFg }}/>
-            }
-            Trend: <strong>{data.trend.direction}</strong>
-            {' · '}
-            {data.trend.slope_pct_per_month > 0 ? '+' : ''}
-            {data.trend.slope_pct_per_month?.toFixed(2)}%/month
-            {data.trend.r_squared > 0 && (
-              <span style={{ color:css.mutedFg }}> · R²={data.trend.r_squared.toFixed(3)}</span>
-            )}
-          </span>
-        </div>
-      )}
+
 
       {/* ── FIX 2 & 3 — YTD Bar Chart (ordered, year-month pairs) ── */}
       {chartData.length > 0 && (
@@ -1074,14 +1066,6 @@ function SeasonalContent({ data }: { data: SeasonalResultV4 }) {
             ))}
           </div>
 
-          {/* Exchange rate source */}
-          {fx && (
-            <p style={{ fontSize:10, color:css.mutedFg, marginTop:8 }}>
-              Exchange rate: 1 USD = {fx.usd_to_lyd.toFixed(2)} LYD
-              {' · '}Source: {fx.source_label ?? fx.source}
-              {fx.fetched_at && ` · Updated: ${new Date(fx.fetched_at).toLocaleTimeString()}`}
-            </p>
-          )}
         </div>
       )}
 
@@ -1187,71 +1171,7 @@ function SeasonalContent({ data }: { data: SeasonalResultV4 }) {
         </div>
       )}
 
-      {/* ── FIX 4 — Category Patterns: current month and future only ── */}
-      {visibleCategoryPatterns.length > 0 && (
-        <div>
-          <p style={{ fontSize:10, fontWeight:700, letterSpacing:'0.09em', textTransform:'uppercase', color:css.mutedFg, marginBottom:6 }}>
-            Seasonal patterns by category — current & upcoming months only
-          </p>
-          {/* Filter info */}
-          <p style={{ fontSize:11, color:css.mutedFg, marginBottom:10, display:'flex', alignItems:'center', gap:5 }}>
-            <Filter size={11}/>
-            Showing categories with peaks/troughs from{' '}
-            <strong style={{ color:css.cardFg }}>
-              {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][currentMonthNum - 1]}
-            </strong>{' '}onwards
-            {' · '}
-            <span style={{ color:C.amber }}>
-              {(data.category_patterns?.length ?? 0) - visibleCategoryPatterns.length} past month(s) hidden
-            </span>
-          </p>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px,1fr))', gap:10 }}>
-            {visibleCategoryPatterns.map((cat, i) => {
-              const peakIsCurrent  = cat.peak_month   === currentMonthNum;
-              const troughIsCurrent = cat.trough_month === currentMonthNum;
-              return (
-                <div key={i} style={{
-                  padding:12, borderRadius:10, border:`1px solid ${css.border}`,
-                  background:css.card,
-                  // Highlight if peak or trough is this month
-                  boxShadow: (peakIsCurrent || troughIsCurrent)
-                    ? `0 0 0 2px ${peakIsCurrent ? C.teal : C.amber}40`
-                    : undefined,
-                }}>
-                  <p style={{ fontSize:12, fontWeight:700, color:css.cardFg, margin:'0 0 8px',
-                    overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                    {cat.category}
-                  </p>
-                  <div style={{ display:'flex', gap:10, fontSize:11 }}>
-                    <span style={{ color: peakIsCurrent ? C.teal : css.mutedFg, fontWeight: peakIsCurrent ? 700 : 400 }}>
-                      ↑ {cat.peak_month_name}
-                      {peakIsCurrent && ' ← NOW'}
-                      {' '}
-                      <span style={{ color:css.mutedFg, fontWeight:400 }}>({cat.peak_index.toFixed(2)})</span>
-                    </span>
-                    <span style={{ color: troughIsCurrent ? C.amber : css.mutedFg, fontWeight: troughIsCurrent ? 700 : 400 }}>
-                      ↓ {cat.trough_month_name}
-                      {troughIsCurrent && ' ← NOW'}
-                      {' '}
-                      <span style={{ color:css.mutedFg, fontWeight:400 }}>({cat.trough_index.toFixed(2)})</span>
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
-      {/* No upcoming categories */}
-      {visibleCategoryPatterns.length === 0 && data.category_patterns && data.category_patterns.length > 0 && (
-        <div style={{ padding:'14px 16px', borderRadius:12, background:`${C.amber}06`, border:`1px solid ${C.amber}20` }}>
-          <p style={{ fontSize:12, color:C.amber, display:'flex', alignItems:'center', gap:6 }}>
-            <AlertCircle size={13}/>
-            All category peaks/troughs are in past months — no upcoming seasonal signals.
-          </p>
-        </div>
-      )}
 
       {/* ── Exchange rate — source info (displayed discreetly) ── */}
       {fx && fx.source_label && (
