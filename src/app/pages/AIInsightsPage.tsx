@@ -1,14 +1,11 @@
 /**
  * AIInsightsPage.tsx — Redesigned to match DashboardPage aesthetic
  *
- * Design system extracted from DashboardPage:
- *  - cardStyle: borderRadius 16, boxShadow, border, background css vars
- *  - Brand palette: indigo, violet, cyan, teal, emerald, amber, orange, rose
- *  - Typography: uppercase labels 10px/700, values 22px/800, body 13px
- *  - Accent top-border on KPI cards (3px solid)
- *  - CSS variable colors: hsl(var(--card)), hsl(var(--muted-foreground)), etc.
- *  - Panel component with title + sub header
- *  - Gradient fills on bars and lines
+ * SCRUM-26 v4 — 4 business rules fully reflected in the frontend:
+ *   RULE 1 → 12-month sliding window displayed (analysis_window.label)
+ *   RULE 2 → Conditional Ramadan block (displayed only if relevant_ramadan ≠ null)
+ *   RULE 3 → LYD/USD rate displayed everywhere with formatCurrency (native LYD)
+ *   RULE 4 → upcoming_peak / upcoming_trough with days remaining, never past
  */
 
 import {
@@ -17,7 +14,7 @@ import {
   Minus, RefreshCw, Clock, ChevronDown, ChevronRight, Target,
   AlertCircle, TrendingDown, CheckCircle2, XCircle, Flame,
   Calendar, DollarSign, GitMerge, Building2, Layers, Filter,
-  Activity, Eye,
+  Activity, Eye, Wifi, WifiOff
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
@@ -29,15 +26,16 @@ import {
   type CriticalDetectionResult, type CriticalSituation,
   type KPIResult, type KPIValue,
   type AnomalyResult, type Anomaly,
-  type SeasonalResult,
+  type SeasonalResultV4,
   type ChurnResult, type ChurnPrediction,
   type StockResult, type StockItem,
   type PredictorResult,
   type Severity, type Confidence, type TrafficLight,
+  type ExchangeRate, type RelevantRamadan, type CurrentSeasonInfo,
 } from '../lib/aiInsightsApi';
 import { formatCurrency } from '../lib/utils';
 import { AIChat } from '../components/AIChat';
-import type { SeasonalResultV3 } from '@/app/lib/aiInsightsApi';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Design system — mirrors DashboardPage exactly
 // ─────────────────────────────────────────────────────────────────────────────
@@ -141,7 +139,6 @@ function Panel({ title, sub, accent, icon: Icon, children, onRefresh, loading, l
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {Icon && <Icon size={15} style={{ color: accent ?? css.mutedFg }} />}
             <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>{title}</h3>
-            {/* AI badge */}
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10,
               fontWeight: 700, padding: '2px 8px', borderRadius: 20,
@@ -282,7 +279,7 @@ const tooltipStyle = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tab navigation — styled like Dashboard
+// Tab navigation
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TABS = [
@@ -314,8 +311,6 @@ function CriticalSection() {
       {error && <ErrorState message={error} onRetry={reload} />}
       {data && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-          {/* Risk overview banner */}
           <div style={{
             padding: 20, borderRadius: 14,
             background: `${riskAccent[data.risk_level]}10`,
@@ -349,7 +344,6 @@ function CriticalSection() {
             </div>
           </div>
 
-          {/* Situations list */}
           {data.situations.length > 0 && (
             <div>
               <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: css.mutedFg, marginBottom: 12 }}>
@@ -361,7 +355,6 @@ function CriticalSection() {
             </div>
           )}
 
-          {/* Causal clusters */}
           {data.causal_clusters?.length > 0 && (
             <div style={{
               padding: 16, borderRadius: 12,
@@ -388,7 +381,6 @@ function CriticalSection() {
             </div>
           )}
 
-          {/* Action plan */}
           {data.grouped_actions && <GroupedActionsPanel actions={data.grouped_actions} />}
         </div>
       )}
@@ -490,7 +482,6 @@ const KPI_LABELS: Record<string, string> = {
 
 function KPISection() {
   const { data, loading, error, loadedAt, reload } = useAnalyzer(() => aiInsightsApi.kpis(), []);
-
   const healthColor = !data ? css.mutedFg : data.health_score >= 80 ? C.emerald : data.health_score >= 60 ? C.amber : C.rose;
 
   return (
@@ -501,7 +492,6 @@ function KPISection() {
       {error && <ErrorState message={error} onRetry={reload} />}
       {data && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Health score */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: 20, borderRadius: 14, background: css.muted + '50', border: `1px solid ${css.border}` }}>
             <div style={{ position: 'relative', width: 72, height: 72, flexShrink: 0 }}>
               <svg width="72" height="72" viewBox="0 0 64 64" style={{ transform: 'rotate(-90deg)' }}>
@@ -534,7 +524,6 @@ function KPISection() {
             </div>
           </div>
 
-          {/* Top insight */}
           {data.top_insight && (
             <div style={{ padding: '12px 16px', borderRadius: 12, background: `${C.indigo}08`, border: `1px solid ${C.indigo}20` }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: C.indigo, marginBottom: 4 }}>Top insight</p>
@@ -542,7 +531,6 @@ function KPISection() {
             </div>
           )}
 
-          {/* KPI grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
             {Object.entries(data.kpis).map(([key, v]) => {
               const label = (v as any).label || KPI_LABELS[key] || key.replace(/_/g, ' ');
@@ -550,7 +538,6 @@ function KPISection() {
             })}
           </div>
 
-          {/* Actions */}
           {data.recommended_actions?.length > 0 && (
             <div>
               <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: css.mutedFg, marginBottom: 12 }}>Recommended Actions</p>
@@ -590,9 +577,8 @@ function KPIRow({ label, kpi, commentary }: { label: string; kpi: KPIValue; comm
     }
     if (label.toLowerCase().includes('days') || label.toLowerCase().includes('dso'))
       return `${v.toLocaleString(undefined, { maximumFractionDigits: 1 })} d`;
-    if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M LYD`;
-    if (v >= 1_000) return `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })} LYD`;
-    return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    // RULE 3: all amounts are in LYD
+    return formatCurrency(v);
   };
 
   const delta = kpi.delta_pct;
@@ -722,308 +708,436 @@ function AnomalyCard({ anomaly: a }: { anomaly: Anomaly }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. Seasonal Analysis
+// 4. Seasonal Analysis — SCRUM-26 v4
+// All 4 business rules displayed
 // ─────────────────────────────────────────────────────────────────────────────
+
 
 function SeasonalSection() {
   const { data, loading, error, loadedAt, reload } = useAnalyzer(
-    () => aiInsightsApi.seasonal() as Promise<SeasonalResultV3>,
-    []
+    () => aiInsightsApi.seasonal() as Promise<SeasonalResultV4>, []
   );
   return (
-    <Panel
-      icon={Calendar}
-      title="Seasonal Trend Analysis"
-      accent={C.teal}
-      sub="12-month window · STL decomposition · Ramadan detection · LYD/USD rate"
-      loadedAt={loadedAt}
-      loading={loading}
-      onRefresh={reload}
-    >
-      {loading && <LoadingSkeleton rows={4} />}
-      {error && <ErrorState message={error} onRetry={reload} />}
-      {data && (data.error ? <EmptyState text={data.error} /> : <SeasonalContent data={data} />)}
+    <Panel icon={Calendar} title="Seasonal Trend Analysis" accent={C.teal}
+      sub="12-month YTD rolling window · STL decomposition · Live LYD/USD rate"
+      loadedAt={loadedAt} loading={loading} onRefresh={reload}>
+      {loading && <LoadingSkeleton rows={5}/>}
+      {error && <ErrorState message={error} onRetry={reload}/>}
+      {data && (data.error ? <EmptyState text={data.error}/> : <SeasonalContent data={data}/>)}
     </Panel>
   );
 }
-function SeasonalContent({ data }: { data: SeasonalResultV3 }) {
-  const indices  = Object.values(data.seasonality_indices ?? {}).filter(
-    v => v.seasonality_index !== null
-  );
-  const chartData = indices.map(v => ({
-    name: v.month_name.slice(0, 3),
-    si:   +(v.seasonality_index ?? 1).toFixed(3),
-    label: v.label,
-  }));
- 
-  const today     = new Date();
-  const todayMonth = today.getMonth() + 1; // 1-12
- 
-  // ── Exchange rate pill ──────────────────────────────────────────────────────
+
+function SeasonalContent({ data }: { data: SeasonalResultV4 }) {
   const fx = data.exchange_rate;
-  const fxEl = fx && (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 6,
-      padding: '5px 14px', borderRadius: 20,
-      background: `${C.amber}12`, border: `1px solid ${C.amber}30`,
-      fontSize: 12, fontWeight: 700, color: C.amber,
-    }}>
-      <DollarSign size={13} style={{ color: C.amber }} />
-      1 USD = {fx.usd_to_lyd.toFixed(2)} LYD
-      {fx.source === 'default' && (
-        <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.7 }}>(default rate)</span>
-      )}
-    </span>
-  );
- 
-  // ── Ramadan alert — only when relevant ─────────────────────────────────────
   const ramadan = data.relevant_ramadan;
-  const ramadanEl = ramadan && (
-    <div style={{
-      display: 'flex', alignItems: 'flex-start', gap: 12,
-      padding: '12px 16px', borderRadius: 12,
-      background: `${C.violet}10`, border: `1px solid ${C.violet}30`,
-    }}>
-      <span style={{
-        fontSize: 18, lineHeight: 1, marginTop: 1,
-        // crescent moon symbol, no emoji
-      }}>☽</span>
-      <div style={{ flex: 1 }}>
-        <p style={{
-          fontSize: 12, fontWeight: 700, color: C.violet,
-          margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.07em',
-        }}>
-          {ramadan.status === 'ongoing' ? 'Ramadan in progress' : 'Ramadan approaching'}
-        </p>
-        <p style={{ fontSize: 13, color: css.cardFg, margin: 0 }}>
-          {ramadan.label}
-          {ramadan.status === 'ongoing' && ramadan.days_remaining !== undefined && (
-            <span style={{ color: css.mutedFg }}>
-              {' '}· ends in {ramadan.days_remaining} days
-            </span>
-          )}
-          {ramadan.status === 'upcoming' && ramadan.days_until !== undefined && (
-            <span style={{ color: css.mutedFg }}>
-              {' '}({ramadan.days_until} days — stock up now)
-            </span>
-          )}
-        </p>
-        {data.ramadan_analysis?.detected && (
-          <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 4 }}>
-            Historical impact: {data.ramadan_analysis.dominant_effect}
-            {' · '}avg index {data.ramadan_analysis.avg_ramadan_index?.toFixed(3)}
-          </p>
-        )}
-      </div>
-    </div>
-  );
- 
+  const seasonInfo = data.current_season_info;
+
+  const today = new Date();
+  const currentMonthNum = today.getMonth() + 1; // 1-12
+  const currentYear     = today.getFullYear();
+
+  // ─────────────────────────────────────────────────────────────────────
+  // FIX 2 & 3 — YTD chart ordered with year-month pairs
+  //
+  // BEFORE (bug): elapsed_months = [1,2,3,...,12] → display Jan→Dec
+  // AFTER (fix):  seasonal_chart_data = [{year:2025,month:4,...}, ...]
+  //               → display Apr '25, May '25, ..., Apr '26
+  // ─────────────────────────────────────────────────────────────────────
+  const chartData = useMemo(() => {
+    // Priority 1: use server v5.1 data (year-month pairs)
+    const serverChartData = data.seasonal_chart_data;
+    if (serverChartData && serverChartData.length > 0) {
+      return serverChartData
+        .filter(d => d.si !== null)  // Exclude months without data
+        .map(d => ({
+          name:       d.short_label,   // "Apr '25", "Jan '26", etc.
+          si:         +(d.si!).toFixed(3),
+          label:      d.label,
+          monthNum:   d.month,
+          year:       d.year,
+          isCurrent:  d.is_current,
+        }));
+    }
+
+    // Fallback: rebuild client-side if server is v5.0 (without seasonal_chart_data)
+    // Compute YTD window: current month year N-1 → current month year N
+    const startMonth = currentMonthNum;
+    const startYear  = currentYear - 1;
+    const points: {name:string;si:number;label:string;monthNum:number;year:number;isCurrent:boolean}[] = [];
+
+    for (let i = 0; i <= 12; i++) {
+      const rawMonth = startMonth + i;
+      const m = ((rawMonth - 1) % 12) + 1;                  // 1-12
+      const y = startYear + Math.floor((rawMonth - 1) / 12); // year
+
+      const v = Object.values(data.seasonality_indices ?? {})
+        .find((idx: any) => idx.month_num === m);
+
+      if (!v || v.seasonality_index === null) continue;
+
+      const monthAbbr = ['Jan','Feb','Mar','Apr','May','Jun',
+                         'Jul','Aug','Sep','Oct','Nov','Dec'][m - 1];
+      const yearShort = String(y).slice(2);
+
+      points.push({
+        name:      `${monthAbbr} '${yearShort}`,
+        si:        +(v.seasonality_index ?? 1).toFixed(3),
+        label:     v.label,
+        monthNum:  m,
+        year:      y,
+        isCurrent: (y === currentYear && m === currentMonthNum),
+      });
+    }
+    return points;
+  }, [data.seasonal_chart_data, data.seasonality_indices, currentMonthNum, currentYear]);
+
+  // ─────────────────────────────────────────────────────────────────────
+  // FIX 4 — Category patterns: current month and future only
+  //
+  // Rule: show category if peak_month >= current month
+  //       (months Jan, Feb, Mar are considered past if we're in April)
+  //
+  // Logic: if peak_month < currentMonthNum → peak is past → hide
+  //        if peak_month >= currentMonthNum → peak is upcoming → show
+  // ─────────────────────────────────────────────────────────────────────
+  const visibleCategoryPatterns = useMemo(() => {
+    if (!data.category_patterns) return [];
+    return data.category_patterns.filter(cat =>
+      // Show if main peak is this month or in the future
+      cat.peak_month >= currentMonthNum ||
+      // OR if trough is this month or in the future (actionable info)
+      cat.trough_month >= currentMonthNum
+    );
+  }, [data.category_patterns, currentMonthNum]);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
- 
-      {/* Top-row pills: current season + exchange rate + upcoming peak */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+    <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
+
+      {/* ── Analysis Window ── */}
+      {data.analysis_window && (
+        <div style={{
+          display:'flex', alignItems:'center', gap:8,
+          padding:'8px 14px', borderRadius:10,
+          background:`${C.teal}08`, border:`1px solid ${C.teal}20`,
+        }}>
+          <Calendar size={13} style={{ color:C.teal }}/>
+          <span style={{ fontSize:12, color:C.teal, fontWeight:600 }}>Analysis window:</span>
+          <span style={{ fontSize:12, color:css.cardFg }}>{data.analysis_window.label}</span>
+          <span style={{ fontSize:11, color:css.mutedFg, marginLeft:'auto' }}>
+            {data.history_months}-month rolling
+          </span>
+        </div>
+      )}
+
+      {/* ── Executive Summary (AI-generated) ── */}
+      {data.executive_summary && (
+        <div style={{
+          padding:'14px 16px', borderRadius:12,
+          background:`${C.teal}08`, border:`1px solid ${C.teal}25`,
+        }}>
+          <p style={{ fontSize:11, fontWeight:700, color:C.teal, marginBottom:4, display:'flex', alignItems:'center', gap:5 }}>
+            <Sparkles size={12}/>AI Executive Summary
+          </p>
+          <p style={{ fontSize:13, color:css.cardFg, margin:0, lineHeight:1.6 }}>
+            {data.executive_summary}
+          </p>
+        </div>
+      )}
+
+      {/* ── Top row: current season + FX rate + peak alert ── */}
+      <div style={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap:10 }}>
         <span style={{
-          padding: '6px 14px', borderRadius: 20,
-          background: `${C.teal}15`, border: `1px solid ${C.teal}30`,
-          fontSize: 13, fontWeight: 600, color: C.teal,
+          padding:'6px 14px', borderRadius:20,
+          background:`${C.teal}15`, border:`1px solid ${C.teal}30`,
+          fontSize:13, fontWeight:600, color:C.teal,
         }}>
           {data.current_season}
         </span>
- 
-        {fxEl}
- 
-        {data.upcoming_peak_alert && (
+
+        {/* ── RULE 3 — Live exchange rate (OpenAI or settings) ── */}
+        {fx && (
           <span style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 14px', borderRadius: 20,
-            background: `${C.amber}15`, border: `1px solid ${C.amber}30`,
-            fontSize: 12, fontWeight: 700, color: C.amber,
+            display:'inline-flex', alignItems:'center', gap:6,
+            padding:'5px 14px', borderRadius:20,
+            background: fx.source === 'settings' ? `${C.cyan}12` : `${C.emerald}12`,
+            border: `1px solid ${fx.source === 'settings' ? C.cyan : C.emerald}30`,
+            fontSize:12, fontWeight:700,
+            color: fx.source === 'settings' ? C.cyan : C.emerald,
           }}>
-            <AlertCircle size={13} />Peak season approaching — prepare stock now
+            <Wifi size={12} style={{ color: fx.source === 'settings' ? C.cyan : C.emerald }}/>
+            1 USD = {fx.usd_to_lyd.toFixed(2)} LYD
+            <span style={{ fontSize:10, fontWeight:400, opacity:0.8 }}>
+              ({fx.source === 'openai_live' ? 'live' : fx.source === 'cache' ? 'cached' : 'configured'})
+            </span>
           </span>
         )}
- 
-        {data.analysis_year && (
+
+        {data.upcoming_peak_alert && (
           <span style={{
-            padding: '4px 10px', borderRadius: 20,
-            background: css.muted, fontSize: 11, color: css.mutedFg,
+            display:'flex', alignItems:'center', gap:6,
+            padding:'6px 14px', borderRadius:20,
+            background:`${C.amber}15`, border:`1px solid ${C.amber}30`,
+            fontSize:12, fontWeight:700, color:C.amber,
           }}>
-            {data.analysis_year} · 12-month window
+            <AlertCircle size={13}/>Peak season approaching — prepare stock now
           </span>
         )}
       </div>
- 
-      {/* Ramadan alert (only when relevant) */}
-      {ramadanEl}
- 
-      {/* Trend pill */}
+
+      {/* ── Current season detail (RULE 4) ── */}
+      {seasonInfo && (
+        <div style={{
+          padding:16, borderRadius:12,
+          background:`${C.indigo}06`, border:`1px solid ${C.indigo}20`,
+        }}>
+          <p style={{ fontSize:10, fontWeight:700, letterSpacing:'0.09em', textTransform:'uppercase',
+            color:C.indigo, marginBottom:12, display:'flex', alignItems:'center', gap:6 }}>
+            <Activity size={13}/>Current season status
+          </p>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px,1fr))', gap:10 }}>
+            <div style={{ padding:'10px 14px', borderRadius:10, background:css.card, border:`1px solid ${css.border}` }}>
+              <p style={{ fontSize:10, color:css.mutedFg, margin:'0 0 4px', textTransform:'uppercase', letterSpacing:'0.06em' }}>Current month</p>
+              <p style={{ fontSize:14, fontWeight:700, color:css.cardFg, margin:0 }}>{seasonInfo.current_month_name}</p>
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4 }}>
+                <span style={{
+                  fontSize:11, fontWeight:700, padding:'1px 8px', borderRadius:20,
+                  color: seasonInfo.current_label==='peak' ? C.teal : seasonInfo.current_label==='trough' ? C.amber : css.mutedFg,
+                  background: seasonInfo.current_label==='peak' ? `${C.teal}15` : seasonInfo.current_label==='trough' ? `${C.amber}15` : css.muted,
+                }}>
+                  {seasonInfo.current_label.toUpperCase()}
+                </span>
+                <span style={{ fontSize:12, color:css.mutedFg }}>SI = {seasonInfo.current_si.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {seasonInfo.upcoming_peak && (
+              <div style={{ padding:'10px 14px', borderRadius:10, background:`${C.teal}08`, border:`1px solid ${C.teal}25` }}>
+                <p style={{ fontSize:10, color:C.teal, margin:'0 0 4px', textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:700 }}>Next peak</p>
+                <p style={{ fontSize:14, fontWeight:700, color:css.cardFg, margin:0 }}>{seasonInfo.upcoming_peak.month_name}</p>
+                <p style={{ fontSize:12, color:css.mutedFg, marginTop:4 }}>
+                  In <strong style={{ color:C.teal }}>{seasonInfo.upcoming_peak.days_until} days</strong>
+                  {' · '}SI = {seasonInfo.upcoming_peak.si.toFixed(2)}
+                </p>
+              </div>
+            )}
+
+            {seasonInfo.upcoming_trough && (
+              <div style={{ padding:'10px 14px', borderRadius:10, background:`${C.orange}08`, border:`1px solid ${C.orange}25` }}>
+                <p style={{ fontSize:10, color:C.orange, margin:'0 0 4px', textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:700 }}>Next trough</p>
+                <p style={{ fontSize:14, fontWeight:700, color:css.cardFg, margin:0 }}>{seasonInfo.upcoming_trough.month_name}</p>
+                <p style={{ fontSize:12, color:css.mutedFg, marginTop:4 }}>
+                  In <strong style={{ color:C.orange }}>{seasonInfo.upcoming_trough.days_until} days</strong>
+                  {' · '}SI = {seasonInfo.upcoming_trough.si.toFixed(2)}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Ramadan block (RULE 2: only if active/imminent) ── */}
+      {ramadan && (
+        <div style={{
+          display:'flex', alignItems:'flex-start', gap:12,
+          padding:'12px 16px', borderRadius:12,
+          background:`${C.violet}10`, border:`1px solid ${C.violet}30`,
+        }}>
+          <span style={{ fontSize:18, lineHeight:1, marginTop:1 }}>☽</span>
+          <div style={{ flex:1 }}>
+            <p style={{ fontSize:12, fontWeight:700, color:C.violet, margin:'0 0 4px', textTransform:'uppercase', letterSpacing:'0.07em' }}>
+              {ramadan.status==='ongoing' ? 'Ramadan in progress' : 'Ramadan approaching'}
+            </p>
+            <p style={{ fontSize:13, color:css.cardFg, margin:0 }}>
+              {ramadan.label}
+              {ramadan.status==='ongoing' && ramadan.days_remaining !== undefined && (
+                <span style={{ color:css.mutedFg }}> · ends in {ramadan.days_remaining} days</span>
+              )}
+              {ramadan.status==='upcoming' && ramadan.days_until !== undefined && (
+                <span style={{ color:css.mutedFg }}> ({ramadan.days_until} days — stock up now)</span>
+              )}
+            </p>
+            {data.ramadan_analysis?.detected && (
+              <p style={{ fontSize:12, color:css.mutedFg, marginTop:6 }}>
+                Historical impact: <strong>{data.ramadan_analysis.dominant_effect}</strong>
+                {data.ramadan_analysis.avg_ramadan_index && (
+                  <> · avg index {data.ramadan_analysis.avg_ramadan_index.toFixed(3)}</>
+                )}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Trend ── */}
       {data.trend && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
           <span style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 12px', borderRadius: 20, background: css.muted, fontSize: 12,
+            display:'flex', alignItems:'center', gap:6,
+            padding:'6px 12px', borderRadius:20, background:css.muted, fontSize:12,
           }}>
-            {data.trend.direction === 'growing'
-              ? <TrendingUp size={13} style={{ color: C.emerald }} />
-              : data.trend.direction === 'declining'
-              ? <TrendingDown size={13} style={{ color: C.rose }} />
-              : <Minus size={13} style={{ color: css.mutedFg }} />
+            {data.trend.direction==='growing'
+              ? <TrendingUp size={13} style={{ color:C.emerald }}/>
+              : data.trend.direction==='declining'
+              ? <TrendingDown size={13} style={{ color:C.rose }}/>
+              : <Minus size={13} style={{ color:css.mutedFg }}/>
             }
             Trend: <strong>{data.trend.direction}</strong>
             {' · '}
             {data.trend.slope_pct_per_month > 0 ? '+' : ''}
             {data.trend.slope_pct_per_month?.toFixed(2)}%/month
+            {data.trend.r_squared > 0 && (
+              <span style={{ color:css.mutedFg }}> · R²={data.trend.r_squared.toFixed(3)}</span>
+            )}
           </span>
         </div>
       )}
- 
-      {/* SI bar chart */}
+
+      {/* ── FIX 2 & 3 — YTD Bar Chart (ordered, year-month pairs) ── */}
       {chartData.length > 0 && (
         <div>
-          <p style={{ fontSize: 11, fontWeight: 600, color: css.mutedFg, marginBottom: 10 }}>
-            Monthly demand index (1.0 = average month)
-          </p>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+            <p style={{ fontSize:11, fontWeight:600, color:css.mutedFg, margin:0 }}>
+              Monthly demand index — YTD ({chartData.length} months elapsed)
+            </p>
+            <span style={{ fontSize:10, color:css.mutedFg, background:css.muted, padding:'2px 8px', borderRadius:20 }}>
+              1.0 = average month
+            </span>
+          </div>
+          <ResponsiveContainer width="100%" height={210}>
+            <BarChart data={chartData} margin={{ top:4, right:4, left:-20, bottom:0 }}>
               <defs>
                 <linearGradient id="siGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={C.teal} stopOpacity={1} />
-                  <stop offset="100%" stopColor={C.teal} stopOpacity={0.6} />
+                  <stop offset="0%" stopColor={C.teal} stopOpacity={1}/>
+                  <stop offset="100%" stopColor={C.teal} stopOpacity={0.6}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={css.border} vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke={css.border} vertical={false}/>
               <XAxis
                 dataKey="name"
-                tick={{ fontSize: 11, fill: css.mutedFg }}
-                axisLine={false} tickLine={false}
+                tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }}
+                axisLine={false}
+                tickLine={false}
+                interval={0}
+                angle={chartData.length > 12 ? -30 : 0}
+                textAnchor={chartData.length > 12 ? 'end' : 'middle'}
+                height={chartData.length > 12 ? 40 : 20}
               />
               <YAxis
-                tick={{ fontSize: 11, fill: css.mutedFg }}
-                domain={[0.5, 'auto']}
-                axisLine={false} tickLine={false}
+                tick={{ fontSize:11, fill:'hsl(var(--muted-foreground))' }}
+                domain={[0.3,'auto']}
+                axisLine={false}
+                tickLine={false}
               />
               <Tooltip
                 contentStyle={tooltipStyle}
                 formatter={(v: any) => [v, 'SI']}
+                labelFormatter={(label) => {
+                  const item = chartData.find(d => d.name === label);
+                  return item
+                    ? `${item.name} — ${item.label?.toUpperCase()}`
+                    : label;
+                }}
               />
-              <ReferenceLine y={1} stroke="#94a3b8" strokeDasharray="4 4" />
-              <Bar dataKey="si" fill="url(#siGrad)" radius={[4, 4, 0, 0]}>
-                {chartData.map((entry, i) => {
-                  const isCurrentMonth = (i + 1) === todayMonth; // approximate
-                  return (
-                    <Cell
-                      key={i}
-                      fill={
-                        entry.label === 'peak'   ? C.teal   :
-                        entry.label === 'trough' ? C.amber  :
-                        isCurrentMonth           ? C.indigo :
-                        'url(#siGrad)'
-                      }
-                      opacity={isCurrentMonth ? 1 : 0.85}
-                    />
-                  );
-                })}
+              <ReferenceLine y={1} stroke="#94a3b8" strokeDasharray="4 4"/>
+              <Bar dataKey="si" radius={[4,4,0,0]}>
+                {chartData.map((entry, i) => (
+                  <Cell
+                    key={i}
+                    fill={
+                      // Current month (same year) → indigo
+                      entry.isCurrent                  ? C.indigo  :
+                      entry.label === 'peak'           ? C.teal    :
+                      entry.label === 'trough'         ? C.amber   :
+                      'url(#siGrad)'
+                    }
+                    opacity={0.9}
+                  />
+                ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
+
+          {/* Legend */}
+          <div style={{ display:'flex', flexWrap:'wrap', gap:16, marginTop:8 }}>
             {[
-              { color: C.teal,   label: 'Peak' },
-              { color: C.amber,  label: 'Trough' },
-              { color: C.indigo, label: 'Current month' },
-            ].map(({ color, label }) => (
-              <span key={label} style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                fontSize: 11, color: css.mutedFg,
-              }}>
-                <span style={{
-                  display: 'inline-block', width: 10, height: 10,
-                  borderRadius: 2, background: color,
-                }} />
+              { color:C.teal,   label:'Peak' },
+              { color:C.amber,  label:'Trough' },
+              { color:C.indigo, label:'Current month' },
+              { solid:'#14b8a680', label:'Normal' },
+            ].map(({ color, label, solid }: any) => (
+              <span key={label} style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, color:css.mutedFg }}>
+                <span style={{ display:'inline-block', width:10, height:10, borderRadius:2,
+                  background: solid ?? color }}/>
                 {label}
               </span>
             ))}
           </div>
+
+          {/* Exchange rate source */}
+          {fx && (
+            <p style={{ fontSize:10, color:css.mutedFg, marginTop:8 }}>
+              Exchange rate: 1 USD = {fx.usd_to_lyd.toFixed(2)} LYD
+              {' · '}Source: {fx.source_label ?? fx.source}
+              {fx.fetched_at && ` · Updated: ${new Date(fx.fetched_at).toLocaleTimeString()}`}
+            </p>
+          )}
         </div>
       )}
- 
-      {/* Peak / Trough months */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <div style={{
-          padding: 14, borderRadius: 12,
-          background: `${C.indigo}08`, border: `1px solid ${C.indigo}20`,
-        }}>
-          <p style={{
-            fontSize: 11, fontWeight: 700, color: C.indigo, marginBottom: 6,
-            display: 'flex', alignItems: 'center', gap: 5,
-          }}>
-            <TrendingUp size={13} style={{ color: C.indigo }} />Peak months
+
+      {/* ── Peak / Trough summary pills ── */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+        <div style={{ padding:14, borderRadius:12, background:`${C.indigo}08`, border:`1px solid ${C.indigo}20` }}>
+          <p style={{ fontSize:11, fontWeight:700, color:C.indigo, marginBottom:6, display:'flex', alignItems:'center', gap:5 }}>
+            <TrendingUp size={13} style={{ color:C.indigo }}/>Peak months (YTD)
           </p>
-          <p style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>
+          <p style={{ fontSize:14, fontWeight:700, color:css.cardFg, margin:0 }}>
             {data.peak_month_names?.join(', ') || '—'}
           </p>
         </div>
-        <div style={{
-          padding: 14, borderRadius: 12,
-          background: `${C.orange}08`, border: `1px solid ${C.orange}20`,
-        }}>
-          <p style={{
-            fontSize: 11, fontWeight: 700, color: C.orange, marginBottom: 6,
-            display: 'flex', alignItems: 'center', gap: 5,
-          }}>
-            <TrendingDown size={13} style={{ color: C.orange }} />Trough months
+        <div style={{ padding:14, borderRadius:12, background:`${C.orange}08`, border:`1px solid ${C.orange}20` }}>
+          <p style={{ fontSize:11, fontWeight:700, color:C.orange, marginBottom:6, display:'flex', alignItems:'center', gap:5 }}>
+            <TrendingDown size={13} style={{ color:C.orange }}/>Trough months (YTD)
           </p>
-          <p style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: 0 }}>
+          <p style={{ fontSize:14, fontWeight:700, color:css.cardFg, margin:0 }}>
             {data.trough_month_names?.join(', ') || '—'}
           </p>
         </div>
       </div>
- 
-      {/* Stock preparation calendar — upcoming peaks only */}
+
+      {/* ── Stock calendar (upcoming peaks only) ── */}
       {data.stock_preparation_calendar?.length > 0 && (
-        <div style={{
-          padding: 16, borderRadius: 12,
-          background: `${C.cyan}06`, border: `1px solid ${C.cyan}20`,
-        }}>
-          <p style={{
-            fontSize: 10, fontWeight: 700, letterSpacing: '0.09em',
-            textTransform: 'uppercase', color: C.cyan, marginBottom: 12,
-            display: 'flex', alignItems: 'center', gap: 6,
-          }}>
-            <Package size={13} />Stock preparation calendar — upcoming peaks
+        <div style={{ padding:16, borderRadius:12, background:`${C.cyan}06`, border:`1px solid ${C.cyan}20` }}>
+          <p style={{ fontSize:10, fontWeight:700, letterSpacing:'0.09em', textTransform:'uppercase',
+            color:C.cyan, marginBottom:12, display:'flex', alignItems:'center', gap:6 }}>
+            <Package size={13}/>Stock preparation calendar — upcoming peaks only
           </p>
           {data.stock_preparation_calendar.map((item, i) => (
             <div key={i} style={{
-              display: 'flex', gap: 12, alignItems: 'flex-start',
-              padding: '10px 0',
-              borderBottom: i < data.stock_preparation_calendar.length - 1
-                ? `1px solid ${css.border}` : 'none',
+              display:'flex', gap:12, alignItems:'flex-start', padding:'10px 0',
+              borderBottom: i<data.stock_preparation_calendar.length-1 ? `1px solid ${css.border}` : 'none',
             }}>
               <div style={{
-                minWidth: 48, textAlign: 'center', padding: '4px 8px',
-                borderRadius: 8, background: `${C.teal}15`,
-                fontSize: 11, fontWeight: 700, color: C.teal,
+                minWidth:52, textAlign:'center', padding:'4px 8px',
+                borderRadius:8, background:`${C.teal}15`,
+                fontSize:11, fontWeight:700, color:C.teal, flexShrink:0,
               }}>
-                {item.month.slice(0, 3)}
-                {item.prep_year ? (
-                  <div style={{ fontSize: 9, fontWeight: 400, color: css.mutedFg }}>
-                    {item.prep_year}
-                  </div>
-                ) : null}
+                {item.month.slice(0,3)}
+                {item.prep_year && <div style={{ fontSize:9, fontWeight:400, color:css.mutedFg }}>{item.prep_year}</div>}
               </div>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: css.cardFg, margin: '0 0 3px' }}>
-                  {item.action}
-                </p>
-                <p style={{ fontSize: 11, color: css.mutedFg, margin: 0 }}>
-                  {item.rationale}
-                </p>
+              <div style={{ flex:1 }}>
+                <p style={{ fontSize:13, fontWeight:600, color:css.cardFg, margin:'0 0 2px' }}>{item.action}</p>
+                {item.peak_month && (
+                  <p style={{ fontSize:11, color:C.teal, margin:'0 0 2px', fontWeight:600 }}>
+                    Target: {item.peak_month}
+                    {item.days_to_peak && <span style={{ color:css.mutedFg, fontWeight:400 }}> · {item.days_to_peak} days away</span>}
+                  </p>
+                )}
+                <p style={{ fontSize:11, color:css.mutedFg, margin:0 }}>{item.rationale}</p>
               </div>
               <div style={{
-                fontSize: 11, fontWeight: 700, color: C.amber,
-                padding: '3px 8px', borderRadius: 20,
-                background: `${C.amber}12`, flexShrink: 0,
+                fontSize:11, fontWeight:700, color:C.amber,
+                padding:'3px 8px', borderRadius:20, background:`${C.amber}12`, flexShrink:0,
               }}>
                 {item.lead_time_weeks}w lead
               </div>
@@ -1031,62 +1145,128 @@ function SeasonalContent({ data }: { data: SeasonalResultV3 }) {
           ))}
         </div>
       )}
- 
-      {/* AI narrative */}
+
+      {/* ── AI Narrative ── */}
       {data.seasonal_narrative && (
-        <div style={{
-          padding: 16, borderRadius: 12,
-          background: css.muted + '50', border: `1px solid ${css.border}`,
-        }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: css.mutedFg, marginBottom: 6 }}>
+        <div style={{ padding:16, borderRadius:12, background:css.muted+'50', border:`1px solid ${css.border}` }}>
+          <p style={{ fontSize:11, fontWeight:700, color:css.mutedFg, marginBottom:6 }}>
             AI Narrative
           </p>
-          <p style={{
-            fontSize: 13, color: css.cardFg, margin: 0, lineHeight: 1.6,
-          }}>
+          <p style={{ fontSize:13, color:css.cardFg, margin:0, lineHeight:1.6 }}>
             {data.seasonal_narrative}
           </p>
         </div>
       )}
- 
-      {/* Recommendations — upcoming/current only */}
+
+      {/* ── Risk flags (AI-generated) ── */}
+      {data.risk_flags && data.risk_flags.length > 0 && (
+        <div style={{ padding:'12px 16px', borderRadius:12, background:`${C.rose}06`, border:`1px solid ${C.rose}20` }}>
+          <p style={{ fontSize:11, fontWeight:700, color:C.rose, marginBottom:8, display:'flex', alignItems:'center', gap:5 }}>
+            <AlertTriangle size={13}/>Risk Flags
+          </p>
+          {data.risk_flags.map((flag: string, i: number) => (
+            <p key={i} style={{ fontSize:12, color:css.cardFg, margin:'0 0 4px', display:'flex', gap:6, alignItems:'flex-start' }}>
+              <span style={{ color:C.rose, flexShrink:0 }}>·</span>{flag}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {/* ── Recommendations ── */}
       {data.ai_recommendations?.length > 0 && (
         <div>
-          <p style={{
-            fontSize: 10, fontWeight: 700, letterSpacing: '0.09em',
-            textTransform: 'uppercase', color: css.mutedFg, marginBottom: 10,
-          }}>
-            Recommendations
+          <p style={{ fontSize:10, fontWeight:700, letterSpacing:'0.09em', textTransform:'uppercase', color:css.mutedFg, marginBottom:10 }}>
+            AI Recommendations
           </p>
           {data.ai_recommendations.map((r, i) => (
-            <p key={i} style={{
-              display: 'flex', alignItems: 'flex-start', gap: 8,
-              fontSize: 13, marginBottom: 8,
-            }}>
-              <CheckCircle2
-                size={15}
-                style={{ color: C.emerald, flexShrink: 0, marginTop: 1 }}
-              />
+            <p key={i} style={{ display:'flex', alignItems:'flex-start', gap:8, fontSize:13, marginBottom:8 }}>
+              <CheckCircle2 size={15} style={{ color:C.emerald, flexShrink:0, marginTop:1 }}/>
               {r}
             </p>
           ))}
         </div>
       )}
- 
-      {/* Exchange rate disclaimer */}
-      {fx?.source === 'default' && (
+
+      {/* ── FIX 4 — Category Patterns: current month and future only ── */}
+      {visibleCategoryPatterns.length > 0 && (
+        <div>
+          <p style={{ fontSize:10, fontWeight:700, letterSpacing:'0.09em', textTransform:'uppercase', color:css.mutedFg, marginBottom:6 }}>
+            Seasonal patterns by category — current & upcoming months only
+          </p>
+          {/* Filter info */}
+          <p style={{ fontSize:11, color:css.mutedFg, marginBottom:10, display:'flex', alignItems:'center', gap:5 }}>
+            <Filter size={11}/>
+            Showing categories with peaks/troughs from{' '}
+            <strong style={{ color:css.cardFg }}>
+              {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][currentMonthNum - 1]}
+            </strong>{' '}onwards
+            {' · '}
+            <span style={{ color:C.amber }}>
+              {(data.category_patterns?.length ?? 0) - visibleCategoryPatterns.length} past month(s) hidden
+            </span>
+          </p>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px,1fr))', gap:10 }}>
+            {visibleCategoryPatterns.map((cat, i) => {
+              const peakIsCurrent  = cat.peak_month   === currentMonthNum;
+              const troughIsCurrent = cat.trough_month === currentMonthNum;
+              return (
+                <div key={i} style={{
+                  padding:12, borderRadius:10, border:`1px solid ${css.border}`,
+                  background:css.card,
+                  // Highlight if peak or trough is this month
+                  boxShadow: (peakIsCurrent || troughIsCurrent)
+                    ? `0 0 0 2px ${peakIsCurrent ? C.teal : C.amber}40`
+                    : undefined,
+                }}>
+                  <p style={{ fontSize:12, fontWeight:700, color:css.cardFg, margin:'0 0 8px',
+                    overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    {cat.category}
+                  </p>
+                  <div style={{ display:'flex', gap:10, fontSize:11 }}>
+                    <span style={{ color: peakIsCurrent ? C.teal : css.mutedFg, fontWeight: peakIsCurrent ? 700 : 400 }}>
+                      ↑ {cat.peak_month_name}
+                      {peakIsCurrent && ' ← NOW'}
+                      {' '}
+                      <span style={{ color:css.mutedFg, fontWeight:400 }}>({cat.peak_index.toFixed(2)})</span>
+                    </span>
+                    <span style={{ color: troughIsCurrent ? C.amber : css.mutedFg, fontWeight: troughIsCurrent ? 700 : 400 }}>
+                      ↓ {cat.trough_month_name}
+                      {troughIsCurrent && ' ← NOW'}
+                      {' '}
+                      <span style={{ color:css.mutedFg, fontWeight:400 }}>({cat.trough_index.toFixed(2)})</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* No upcoming categories */}
+      {visibleCategoryPatterns.length === 0 && data.category_patterns && data.category_patterns.length > 0 && (
+        <div style={{ padding:'14px 16px', borderRadius:12, background:`${C.amber}06`, border:`1px solid ${C.amber}20` }}>
+          <p style={{ fontSize:12, color:C.amber, display:'flex', alignItems:'center', gap:6 }}>
+            <AlertCircle size={13}/>
+            All category peaks/troughs are in past months — no upcoming seasonal signals.
+          </p>
+        </div>
+      )}
+
+      {/* ── Exchange rate — source info (displayed discreetly) ── */}
+      {fx && fx.source_label && (
         <p style={{
-          fontSize: 10, color: css.mutedFg,
-          padding: '8px 12px', borderRadius: 8, background: css.muted + '50',
-          border: `1px solid ${css.border}`,
+          fontSize:10, color:css.mutedFg, padding:'6px 10px', borderRadius:6,
+          background:css.muted+'30', display:'flex', alignItems:'center', gap:5,
         }}>
-          ⚠️ Using default LYD/USD rate ({fx.usd_to_lyd.toFixed(2)}).
-          Set <code>LYD_USD_RATE</code> in Django settings for the live Central Bank rate.
+          <Wifi size={10} style={{ color:css.mutedFg }}/>
+          {fx.source_label}{fx.fetched_at ? ` · ${fx.fetched_at}` : ''}
         </p>
       )}
     </div>
   );
 }
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 5. Churn Prediction
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1104,12 +1284,11 @@ function ChurnSection() {
           ? <EmptyState text="No churn risk detected in active customers." />
           : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {/* Stats grid */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                 {[
-                  { label: 'Critical',  n: data.summary.critical,                            color: C.rose },
-                  { label: 'High',      n: data.summary.high,                                 color: C.orange },
-                  { label: 'Medium',    n: data.summary.medium,                               color: C.amber },
+                  { label: 'Critical',  n: data.summary.critical,                                color: C.rose },
+                  { label: 'High',      n: data.summary.high,                                     color: C.orange },
+                  { label: 'Medium',    n: data.summary.medium,                                   color: C.amber },
                   { label: 'Avg Score', n: `${(data.summary.avg_churn_score * 100).toFixed(0)}%`, color: C.violet },
                 ].map(({ label, n, color }) => (
                   <div key={label} style={{ textAlign: 'center', padding: '14px 10px', borderRadius: 12, border: `1px solid ${css.border}`, background: css.muted + '30' }}>
@@ -1118,7 +1297,6 @@ function ChurnSection() {
                   </div>
                 ))}
               </div>
-
               <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: css.mutedFg }}>Top at-risk customers</p>
               {data.predictions.slice(0, 10).map((p, i) => <ChurnCard key={i} prediction={p} />)}
             </div>
@@ -1150,6 +1328,7 @@ function ChurnCard({ prediction: p }: { prediction: ChurnPrediction }) {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          {/* RULE 3: amount in LYD */}
           <span style={{ fontSize: 12, color: css.mutedFg }}>{formatCurrency(p.avg_monthly_revenue_lyd)}/mo</span>
           {open ? <ChevronDown size={14} style={{ color: css.mutedFg }} /> : <ChevronRight size={14} style={{ color: css.mutedFg }} />}
         </div>
@@ -1244,7 +1423,6 @@ function StockContent({ data }: { data: BranchStockResult }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Meta pills */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {realCount > 0 && (
           <span style={{ fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 20, color: C.emerald, background: `${C.emerald}12`, border: `1px solid ${C.emerald}25`, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
@@ -1258,13 +1436,12 @@ function StockContent({ data }: { data: BranchStockResult }) {
         )}
       </div>
 
-      {/* KPI grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
         {[
-          { label: 'Class A',   n: summary.class_a_count,      color: C.indigo, icon: null },
-          { label: 'Class B',   n: summary.class_b_count,      color: C.amber,  icon: null },
-          { label: 'Class C',   n: summary.class_c_count,      color: css.mutedFg, icon: null },
-          { label: 'Reorder',   n: summary.immediate_reorders, color: C.rose,   icon: AlertTriangle },
+          { label: 'Class A',  n: summary.class_a_count,      color: C.indigo,    icon: null },
+          { label: 'Class B',  n: summary.class_b_count,      color: C.amber,     icon: null },
+          { label: 'Class C',  n: summary.class_c_count,      color: css.mutedFg, icon: null },
+          { label: 'Reorder',  n: summary.immediate_reorders, color: C.rose,      icon: AlertTriangle },
         ].map(({ label, n, color, icon: Icon }) => (
           <div key={label} style={{ textAlign: 'center', padding: '14px 8px', borderRadius: 12, border: `1px solid ${css.border}`, background: css.muted + '30' }}>
             <p style={{ fontSize: 22, fontWeight: 800, color, margin: 0, lineHeight: 1 }}>{n}</p>
@@ -1275,7 +1452,6 @@ function StockContent({ data }: { data: BranchStockResult }) {
         ))}
       </div>
 
-      {/* Branch selector */}
       {branches.length > 1 && (
         <div style={{ padding: 16, borderRadius: 12, background: `${C.indigo}06`, border: `1px solid ${C.indigo}20` }}>
           <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: C.indigo, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1298,7 +1474,6 @@ function StockContent({ data }: { data: BranchStockResult }) {
         </div>
       )}
 
-      {/* Urgency filter */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: css.mutedFg }}>
           <Filter size={12} />Urgency:
@@ -1316,7 +1491,6 @@ function StockContent({ data }: { data: BranchStockResult }) {
         ))}
       </div>
 
-      {/* Item list */}
       {filtered.length === 0
         ? <EmptyState text="No items match this filter." />
         : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1423,9 +1597,9 @@ function PredictorContent({ data }: { data: PredictorResult }) {
   const trendColor = tm.direction === 'growing' ? C.emerald : tm.direction === 'declining' ? C.rose : css.mutedFg;
 
   const chartData = fc.map(m => ({
-    name: m.period.replace(/\s\d{4}/, ''),
-    base: Math.round(m.base_lyd),
-    optimistic: Math.round(m.optimistic_lyd),
+    name:        m.period.replace(/\s\d{4}/, ''),
+    base:        Math.round(m.base_lyd),
+    optimistic:  Math.round(m.optimistic_lyd),
     pessimistic: Math.round(m.pessimistic_lyd),
   }));
 
@@ -1479,7 +1653,6 @@ function PredictorContent({ data }: { data: PredictorResult }) {
         </div>
       </div>
 
-      {/* Forecast table */}
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
           <thead>
@@ -1534,7 +1707,6 @@ export function AIInsightsPage() {
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
       `}</style>
 
-      {/* Page header */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{
@@ -1554,7 +1726,6 @@ export function AIInsightsPage() {
         </div>
       </div>
 
-      {/* Tab navigation */}
       <div style={{
         display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 24,
         padding: '6px 8px', borderRadius: 14, background: css.muted + '60',
@@ -1576,7 +1747,6 @@ export function AIInsightsPage() {
         ))}
       </div>
 
-      {/* Tab content */}
       <div>
         {activeTab === 'critical'  && <CriticalSection />}
         {activeTab === 'kpis'      && <KPISection />}
@@ -1587,7 +1757,6 @@ export function AIInsightsPage() {
         {activeTab === 'forecast'  && <PredictorSection />}
       </div>
 
-      {/* Chat */}
       <div style={{ marginTop: 32 }}>
         <AIChat />
       </div>

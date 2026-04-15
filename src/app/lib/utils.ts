@@ -1,6 +1,17 @@
 // Utility functions for WEEG platform
 
-export const formatCurrency = (amount?: number | string | null): string => {
+/**
+ * Formate un montant en Dinars Libyens (LYD).
+ * RÈGLE 3 : Le taux LYD/USD est la devise de référence pour toute l'application.
+ * Tous les montants stockés en base sont en LYD — on n'utilise jamais $ ici.
+ *
+ * compact = true  → 1 234 567 LYD s'affiche "1.23M LYD"
+ * compact = false → affichage complet avec séparateurs de milliers
+ */
+export const formatCurrency = (
+  amount?: number | string | null,
+  compact = true,
+): string => {
   let n = 0;
   if (typeof amount === "number" && isFinite(amount)) {
     n = amount;
@@ -8,10 +19,60 @@ export const formatCurrency = (amount?: number | string | null): string => {
     const parsed = parseFloat(amount);
     n = isFinite(parsed) ? parsed : 0;
   }
-  return new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: 0,
+
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : "";
+
+  if (compact) {
+    if (abs >= 1_000_000_000)
+      return sign + (abs / 1_000_000_000).toFixed(2) + "B LYD";
+    if (abs >= 1_000_000)
+      return sign + (abs / 1_000_000).toFixed(2) + "M LYD";
+    if (abs >= 1_000)
+      return (
+        sign +
+        Math.round(abs).toLocaleString("fr-FR", { useGrouping: true }) +
+        " LYD"
+      );
+  }
+
+  // Montant < 1 000 ou compact = false : affichage complet
+  return (
+    sign +
+    new Intl.NumberFormat("fr-FR", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(abs) +
+    " LYD"
+  );
+};
+
+/**
+ * Alias explicite — à utiliser quand on veut être précis dans le code
+ * que la valeur est en LYD (évite toute ambiguïté).
+ */
+export const formatLYD = formatCurrency;
+
+/**
+ * Convertit un montant LYD en USD pour l'affichage côte-à-côte.
+ * RÈGLE 3 : toujours utiliser le taux issu du backend (exchange_rate.usd_to_lyd).
+ *
+ * @param amountLYD  - Montant en LYD
+ * @param usdToLyd   - Taux de change 1 USD = X LYD (ex: 4.85)
+ */
+export const formatLYDwithUSD = (
+  amountLYD: number,
+  usdToLyd: number,
+): string => {
+  if (!usdToLyd || usdToLyd <= 0) return formatCurrency(amountLYD);
+  const usd = amountLYD / usdToLyd;
+  const lyd = formatCurrency(amountLYD);
+  const usdStr = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
     maximumFractionDigits: 0,
-  }).format(n) + " LYD";
+  }).format(usd);
+  return `${lyd} (≈ ${usdStr})`;
 };
 
 export const formatNumber = (num?: number | string | null): string => {
@@ -22,12 +83,12 @@ export const formatNumber = (num?: number | string | null): string => {
     const parsed = parseFloat(num);
     n = isFinite(parsed) ? parsed : 0;
   }
-  return new Intl.NumberFormat("en-US").format(n);
+  return new Intl.NumberFormat("fr-FR").format(n);
 };
 
 export const formatDate = (dateString: string): string => {
   const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString("fr-FR", {
     year: "numeric",
     month: "short",
     day: "numeric",
