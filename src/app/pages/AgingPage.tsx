@@ -34,6 +34,7 @@ import { useAgingDates, useAgingSnapshots, type AgingRow } from '../lib/dataHook
 import { formatCurrency } from '../lib/utils';
 import { DataTable } from '../components/DataTable';
 import { AgingHistoricalTrend } from '../components/AgingHistoricalTrend';
+import { CustomerGrowthRate } from '../components/CustomerGrowthRate';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function normalizeRow(r: AgingRow): AgingRow {
@@ -284,6 +285,7 @@ function KpiCard({ label, value, sub, icon: Icon, accent, trend }: {
       <div style={{ height: 3, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
         <div style={{ height: '100%', borderRadius: 999, width: '64%', background: `linear-gradient(90deg, ${accent}60, ${accent})` }} />
       </div>
+      
     </div>
   );
 }
@@ -334,6 +336,7 @@ function ChartTooltip({ active, payload, label }: any) {
           </div>
         ))}
       </div>
+
     </div>
   );
 }
@@ -834,7 +837,12 @@ export function AgingReceivablePage() {
               </div>
             </div>
           </div>
-
+           {/* Customer Growth Rate */}
+<SectionTitle title="Customer Growth Rate" sub="Monthly/Yearly customer acquisition trend" />
+<div >
+  <CustomerGrowthRate 
+  />
+</div>
           {/* ── Collection Rate Trend ── */}
           <SectionTitle title="Collection Rate" sub="Historical trend across all snapshots" />
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>

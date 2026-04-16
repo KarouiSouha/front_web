@@ -238,7 +238,9 @@ export function AgingHistoricalTrend({ snapshotCount, branch }: AgingHistoricalT
               </p>
             )}
           </div>
+          
         ))}
+        
       </div>
 
       {/* ── Chart ── */}
@@ -276,6 +278,7 @@ export function AgingHistoricalTrend({ snapshotCount, branch }: AgingHistoricalT
             )}
           </ComposedChart>
         </ResponsiveContainer>
+        
       </div>
 
       {/* ── Summary table ── */}
