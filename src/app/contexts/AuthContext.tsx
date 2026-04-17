@@ -198,11 +198,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       TokenStorage.clear();
       if (err instanceof ApiError) {
-        if (err.status === 401) return { success: false, message: 'Incorrect email or password' };
-        if (err.status === 403) return { success: false, message: 'Your account is pending validation' };
-        return { success: false, message: err.message };
+        return {
+          success: false,
+          message: err.message || 'Unable to login. Please check your credentials.',
+        };
       }
-      return { success: false, message: 'Connection error' };
+      return { success: false, message: 'Connection error. Please try again.' };
     } finally {
       setIsLoading(false);
     }

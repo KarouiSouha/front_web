@@ -5,6 +5,46 @@
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
+function flattenErrorMessages(value: unknown): string[] {
+  if (value == null) return [];
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap(flattenErrorMessages);
+  }
+  if (typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>).flatMap(([key, nested]) => {
+      const nestedMessages = flattenErrorMessages(nested);
+      if (!nestedMessages.length) return [];
+      if (key === 'detail' || key === 'message' || key === 'error' || key === 'non_field_errors') {
+        return nestedMessages;
+      }
+      return nestedMessages.map(msg => `${key}: ${msg}`);
+    });
+  }
+  return [];
+}
+
+function extractErrorMessage(errorData: unknown, status: number): string {
+  const fromCommonFields =
+    (errorData as any)?.message ||
+    (errorData as any)?.detail ||
+    (errorData as any)?.error;
+
+  if (typeof fromCommonFields === 'string' && fromCommonFields.trim()) {
+    return fromCommonFields;
+  }
+
+  const flattened = flattenErrorMessages(errorData);
+  if (flattened.length) {
+    return flattened.join(' | ');
+  }
+
+  return `Request failed (${status})`;
+}
+
 // ─────────────────────────────────────────────
 // Token Management
 // ─────────────────────────────────────────────
@@ -128,15 +168,7 @@ export async function apiFetch<T = unknown>(
       errorData = { detail: response.statusText || 'Unknown error' };
     }
 
-    const err = new Error(
-      (errorData as any)?.message ||
-      (errorData as any)?.detail ||
-      (errorData as any)?.error ||
-      `Request failed (${response.status})`
-    );
-
-    (err as any).status = response.status;
-    (err as any).data = errorData;
+    const err = new ApiError(response.status, errorData);
 
     if (response.status === 401) {
       console.warn('401 Unauthorized - Possible token issue');
@@ -195,12 +227,7 @@ export class ApiError extends Error {
   data: unknown;
 
   constructor(status: number, data: unknown) {
-    super(
-      (data as any)?.message ||
-      (data as any)?.detail ||
-      (data as any)?.error ||
-      `Error ${status}`
-    );
+    super(extractErrorMessage(data, status));
     this.status = status;
     this.data = data;
   }
