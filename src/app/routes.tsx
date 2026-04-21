@@ -9,7 +9,7 @@ import { KPIEnginePage } from './pages/KPIEnginePage';
 import { TransactionsPage } from './pages/TransactionsPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { AlertsPage } from './pages/AlertsPage';
-import { AgingReceivablePage  as AgingPage } from './pages/AgingPage';
+import { AgingReceivablePage as AgingPage } from './pages/AgingPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { AIInsightsPage } from './pages/AIInsightsPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -17,7 +17,6 @@ import { AdminVerificationPage } from './pages/AdminVerificationPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { TeamPage } from './pages/TeamPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
-import { CompetitiveBenchmarkPage } from './pages/CompetitiveBenchmarkPage';
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -34,10 +33,6 @@ export const router = createBrowserRouter([
   {
     path: '/forgot-password',
     element: <ForgotPasswordPage />,
-  },
-  {
-    path: '/benchmark',
-    element: <CompetitiveBenchmarkPage />,
   },
   {
     path: '/dashboard',

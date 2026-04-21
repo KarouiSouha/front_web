@@ -30,10 +30,10 @@ import {
   CheckCircle,
   LayoutDashboard,
   Star,
-  Zap,
 } from 'lucide-react';
 import { ImageWithFallback } from '../components/image/ImageWithFallback';
 import dashboardImage from '../components/image/logo.jpeg';
+import weegDemoVideo from '../components/image/weeg_demo.mp4';
 
 // ── WEEG inline SVG logo mark ──────────────────────────────────────────────
 function WeegMark({ size = 40 }: { size?: number }) {
@@ -156,11 +156,6 @@ export function LandingPage() {
 
             {/* Nav actions */}
             <div className="flex items-center gap-3">
-              <Link to="/benchmark">
-                <Button variant="ghost" size="lg" className="text-sm font-semibold text-slate-600 hover:text-sky-600">
-                  Why WEEG?
-                </Button>
-              </Link>
               <Link to="/login">
                 <Button variant="ghost" size="lg" className="text-sm font-semibold text-slate-600 hover:text-sky-600">
                   Sign In
@@ -420,80 +415,46 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ── 4.5 COMPETITIVE ADVANTAGE ──────────────────────────────────── */}
-      <section className="py-20 bg-gradient-to-r from-blue-50 to-indigo-50 border-t border-b border-slate-200">
+      {/* ── 4.5 WHY WEEG ────────────────────────────────────────────────── */}
+      <section id="competitive-advantage" className="py-20 bg-white dark:bg-gray-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold mb-5"
-                   style={{ background: '#f0f9ff', color: '#0284c7', border: '1px solid #bae6fd' }}>
-                <Brain className="h-4 w-4" />
-                Why WEEG?
-              </div>
-              <h2 className="text-4xl lg:text-5xl font-bold mb-5" style={{ color: '#0f172a' }}>
-                Not Just Another ERP
-              </h2>
-              <p className="text-slate-600 text-lg mb-8 leading-relaxed">
-                Classic ERPs are powerful but slow. WEEG adds AI intelligence that doesn't just track your business — it predicts and recommends actions automatically.
-              </p>
-              <div className="space-y-4 mb-8">
-                {[
-                  { icon: Zap, text: '90% less time on manual reports' },
-                  { icon: Brain, text: 'Predictive analytics 24/7' },
-                  { icon: TrendingUp, text: 'Recover 90% of receivables' },
-                  { icon: Clock, text: 'Deploy in 2-4 weeks, not 6-12 months' },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-white flex items-center justify-center shadow-sm"
-                         style={{ borderColor: '#bae6fd', border: '1px solid' }}>
-                      <item.icon className="h-5 w-5" style={{ color: '#0284c7' }} />
-                    </div>
-                    <span className="font-semibold text-slate-800">{item.text}</span>
-                  </div>
-                ))}
-              </div>
-              <Link to="/benchmark">
-                <Button
-                  size="lg"
-                  className="text-white font-bold text-base shadow-lg"
-                  style={{ background: 'linear-gradient(135deg, #0284c7, #0ea5e9)' }}
-                >
-                  <BarChart3 className="mr-2 h-5 w-5" />
-                  View Detailed Comparison
-                </Button>
-              </Link>
-            </div>
+          <div className="rounded-3xl p-12 lg:p-16 border-2 overflow-hidden relative"
+               style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #fff7ed 100%)', borderColor: '#bae6fd' }}>
+            <div className="absolute -bottom-10 -right-10 w-60 h-60 rounded-full opacity-20 blur-3xl"
+                 style={{ background: '#0284c7' }} />
 
-            {/* Comparison preview */}
-            <div className="bg-white rounded-2xl p-8 border-2 border-slate-200 shadow-xl">
-              <div className="mb-6">
-                <p className="text-sm font-bold text-slate-500 uppercase mb-1">Feature Comparison</p>
-                <h3 className="text-lg font-bold text-slate-900">Core Capabilities</h3>
+            <div className="grid lg:grid-cols-2 gap-12 items-center relative z-10">
+              <div>
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold mb-5"
+                     style={{ background: '#e0f2fe', color: '#0284c7', border: '1px solid #bae6fd' }}>
+                  <Brain className="h-4 w-4" />
+                  Why WEEG?
+                </div>
+                <h2 className="text-4xl lg:text-5xl font-bold mb-5" style={{ color: '#0f172a' }}>
+                  Not Just Another ERP
+                </h2>
+                <p className="text-slate-500 text-lg mb-8 leading-relaxed">
+                  Watch how WEEG combines analytics, AI, and smart alerts to turn your operational data into concrete decisions in real-time.
+                </p>
               </div>
-              <div className="space-y-3">
-                {[
-                  { feature: 'Manual Reports', classic: '24-48h', weeg: 'Real-time' },
-                  { feature: 'Anomaly Detection', classic: '❌', weeg: '✓ Automated' },
-                  { feature: 'Stock Predictions', classic: '❌', weeg: '✓ ML-powered' },
-                  { feature: 'Risk Alerts', classic: 'Dumb', weeg: '✓ Smart + Actions' },
-                  { feature: 'Recommendations', classic: '❌', weeg: '✓ Proactive' },
-                ].map((row, i) => (
-                  <div key={i} className="flex items-center justify-between pb-3 border-b border-slate-100"
-                       style={{ borderColor: i === 4 ? 'transparent' : '#e2e8f0' }}>
-                    <span className="font-medium text-slate-700 text-sm">{row.feature}</span>
-                    <div className="flex items-center gap-4">
-                      <span className="text-xs text-slate-500">{row.classic}</span>
-                      <div className="h-6 w-0.5 bg-slate-200"></div>
-                      <span className="text-xs font-semibold" style={{ color: '#0284c7' }}>{row.weeg}</span>
-                    </div>
+
+              <div className="relative">
+                <div className="rounded-2xl overflow-hidden shadow-2xl" style={{ border: '3px solid white' }}>
+                  <video
+                    src={weegDemoVideo}
+                    controls
+                    preload="metadata"
+                    className="w-full"
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                </div>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="h-20 w-20 rounded-full bg-white/90 flex items-center justify-center shadow-2xl">
+                    <PlayCircle className="h-11 w-11" style={{ color: '#0284c7' }} />
                   </div>
-                ))}
+                </div>
               </div>
-              <p className="text-xs text-slate-400 mt-6 text-center">
-                <Link to="/benchmark" className="underline hover:text-slate-600">
-                  See full benchmark comparing 10+ features
-                </Link>
-              </p>
             </div>
           </div>
         </div>
