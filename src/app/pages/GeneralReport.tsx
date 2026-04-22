@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
@@ -17,9 +16,6 @@ import {
 import { salesKpiApi, stockKpiApi, MOVEMENT_TYPES } from '../lib/dataApi';
 import { formatCurrency, formatNumber } from '../lib/utils';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Design tokens (identical to ReportsPage palette)
-// ─────────────────────────────────────────────────────────────────────────────
 const C = {
   indigo: '#6366f1', violet: '#8b5cf6', cyan: '#0ea5e9',
   teal: '#14b8a6', emerald: '#10b981', amber: '#f59e0b',
@@ -40,13 +36,12 @@ const card: React.CSSProperties = {
   background: css.card, borderRadius: 16, padding: 24,
   boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 4px 20px rgba(0,0,0,0.05)',
   border: `1px solid ${css.border}`,
+  breakInside: 'avoid' as any,
+  pageBreakInside: 'avoid' as any,
 };
 const ax = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' };
 const legendStyle = { fontSize: 11, paddingTop: 8 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 const num = (v: unknown): number => { const n = Number(v); return isFinite(n) ? n : 0; };
 const pct = (a: number, b: number) => b > 0 ? +((a / b) * 100).toFixed(1) : 0;
 function auth() {
@@ -54,9 +49,6 @@ function auth() {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Atoms
-// ─────────────────────────────────────────────────────────────────────────────
 function Spin() {
   return <Loader2 size={20} className="animate-spin" style={{ color: C.indigo }} />;
 }
@@ -120,7 +112,6 @@ function KCard({ label, value, sub, accent, Icon, badge }: { label: string; valu
   );
 }
 
-// Portal dropdown
 function StyledDropdown({ label, options, value, onChange, isOpen, onToggle, onClose }: {
   label: string; options: { key: string; label: string }[];
   value: string; onChange: (v: string) => void;
@@ -170,9 +161,6 @@ function StyledDropdown({ label, options, value, onChange, isOpen, onToggle, onC
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Rank bar (for product/customer tables)
-// ─────────────────────────────────────────────────────────────────────────────
 function RankBar({ value, max, accent, label, sub, rank }: { value: number; max: number; accent: string; label: string; sub?: string; rank: number }) {
   const share = max > 0 ? (value / max) * 100 : 0;
   return (
@@ -196,9 +184,6 @@ function RankBar({ value, max, accent, label, sub, rank }: { value: number; max:
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Margin badge
-// ─────────────────────────────────────────────────────────────────────────────
 function MarginBadge({ pct: p }: { pct: number }) {
   const color = p >= 30 ? C.emerald : p >= 15 ? C.amber : C.rose;
   return (
@@ -208,9 +193,6 @@ function MarginBadge({ pct: p }: { pct: number }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main report component
-// ─────────────────────────────────────────────────────────────────────────────
 export function GeneralReport() {
   const currentYear = new Date().getFullYear();
   const yearOptions = [currentYear, currentYear - 1, currentYear - 2].map(y => ({ key: String(y), label: String(y) }));
@@ -219,7 +201,6 @@ export function GeneralReport() {
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [openDropdown, setOpenDropdown] = useState<'year' | 'branch' | null>(null);
 
-  // ── Data state ──────────────────────────────────────────────────────────
   const [salesKPI, setSalesKPI]             = useState<any>(null);
   const [stockKPI, setStockKPI]             = useState<any>(null);
   const [purchaseBranches, setPurchaseBranches] = useState<any[]>([]);
@@ -230,11 +211,9 @@ export function GeneralReport() {
   const [purchBranchNames, setPurchBranchNames]       = useState<string[]>([]);
   const [availableBranches, setAvailableBranches]     = useState<string[]>([]);
   const [monthlySummary, setMonthlySummary] = useState<any[]>([]);
-
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
 
-  // ── Fetch ────────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     setLoading(true); setError('');
     const year = Number(selectedYear);
@@ -269,13 +248,9 @@ export function GeneralReport() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // ── Derived data ─────────────────────────────────────────────────────────
   const totalRevenue = num(salesKPI?.ca?.total);
-
-  // filtered branch data
   const filterBranch = <T extends { branch: string }>(arr: T[]) =>
     selectedBranch === 'all' ? arr : arr.filter(b => b.branch === selectedBranch);
-
   const filteredPurchBranches = filterBranch(purchaseBranches);
   const totalPurchases = useMemo(() => filteredPurchBranches.reduce((s, b) => s + num(b.total), 0), [filteredPurchBranches]);
   const grossProfit = useMemo(
@@ -284,14 +259,9 @@ export function GeneralReport() {
   );
   const grossMarginPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
-  const visibleSalesBranchNames = selectedBranch === 'all'
-    ? salesBranchNames
-    : salesBranchNames.filter(b => b === selectedBranch);
-  const visiblePurchBranchNames = selectedBranch === 'all'
-    ? purchBranchNames
-    : purchBranchNames.filter(b => b === selectedBranch);
+  const visibleSalesBranchNames = selectedBranch === 'all' ? salesBranchNames : salesBranchNames.filter(b => b === selectedBranch);
+  const visiblePurchBranchNames = selectedBranch === 'all' ? purchBranchNames : purchBranchNames.filter(b => b === selectedBranch);
 
-  // Monthly combined for sales vs purchases chart
   const combinedMonthly = useMemo(() => {
     const months = monthlySummary
       .sort((a, b) => (a.year * 100 + a.month) - (b.year * 100 + b.month))
@@ -304,7 +274,6 @@ export function GeneralReport() {
     }));
   }, [monthlySummary]);
 
-  // Products with margins
   const productMargins = useMemo(() =>
     (salesKPI?.product_margins ?? []).map((p: any) => ({
       name: (p.material_name ?? '').slice(0, 32),
@@ -317,7 +286,6 @@ export function GeneralReport() {
   const topMarginProducts  = productMargins.slice(0, 10);
   const poorMarginProducts = [...productMargins].sort((a: any, b: any) => a.margin - b.margin).slice(0, 8);
 
-  // Top products by revenue
   const topProducts = useMemo(() =>
     (salesKPI?.top_products ?? []).slice(0, 12).map((p: any, i: number) => ({
       name: (p.material_name ?? '').slice(0, 30),
@@ -330,7 +298,6 @@ export function GeneralReport() {
   );
   const maxProductRevenue = topProducts[0]?.revenue ?? 1;
 
-  // Slow-moving / low-rotation products
   const lowRotation = useMemo(() =>
     (stockKPI?.low_rotation_products ?? []).slice(0, 10).map((p: any) => ({
       name: (p.product_name ?? '').slice(0, 32),
@@ -342,7 +309,6 @@ export function GeneralReport() {
     [stockKPI]
   );
 
-  // Top customers
   const topClients = useMemo(() =>
     (salesKPI?.top_clients ?? []).slice(0, 12).map((c: any, i: number) => ({
       name: (c.customer_name ?? '').slice(0, 32),
@@ -355,7 +321,6 @@ export function GeneralReport() {
   );
   const maxClientRevenue = topClients[0]?.revenue ?? 1;
 
-  // Purchase branch chart data
   const purchBranchChart = useMemo(() =>
     filteredPurchBranches.map((b: any, i: number) => ({
       branch: (b.branch ?? '').slice(0, 14),
@@ -366,7 +331,6 @@ export function GeneralReport() {
     [filteredPurchBranches]
   );
 
-  // Branch sales vs purchases side-by-side
   const branchCompare = useMemo(() => {
     const names = Array.from(new Set([...saleBranches.map(b => b.branch), ...purchaseBranches.map(b => b.branch)]));
     return names
@@ -384,7 +348,35 @@ export function GeneralReport() {
     ...availableBranches.map(b => ({ key: b, label: b })),
   ];
 
-  // ── Print ────────────────────────────────────────────────────────────────
+  // ── Print CSS renforcé — toutes les sections restent ensemble ────────────
+  const PRINT_CSS = `
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'DM Sans',sans-serif;background:#fff;color:#111827;padding:16px 20px;font-size:13px;}
+    @page{size:A4 landscape;margin:8mm 10mm;}
+
+    /* ── FIX: break-inside élargi à toutes les cards ── */
+    div[style*="border-radius:16px"],div[style*="border-radius: 16px"],
+    div[style*="border-radius:14px"],div[style*="border-radius: 14px"],
+    div[style*="border-radius:12px"],div[style*="border-radius: 12px"],
+    div[style*="border-radius:11px"],div[style*="border-radius: 11px"]{
+      break-inside:avoid!important;page-break-inside:avoid!important;
+      border:1px solid #e5e7eb!important;margin-bottom:12px;
+    }
+    /* ── FIX: recharts ne se coupe plus ── */
+    .recharts-wrapper,.recharts-responsive-container{
+      break-inside:avoid!important;page-break-inside:avoid!important;
+    }
+    /* ── FIX: grids ne se coupent plus ── */
+    div[style*="1fr 1fr"],div[style*="repeat(3"],div[style*="repeat(4"],
+    div[style*="grid-template"],div[style*="display: grid"],div[style*="display:grid"]{
+      break-inside:avoid!important;page-break-inside:avoid!important;
+    }
+    /* ── FIX: attribut data-no-break universel ── */
+    [data-no-break]{break-inside:avoid!important;page-break-inside:avoid!important;}
+
+    div[data-print="section"]{break-before:page!important;page-break-before:always!important;break-inside:avoid!important;}
+  `;
+
   const handlePrint = () => {
     const printable = document.getElementById('pmr-printable');
     if (!printable) return;
@@ -405,19 +397,10 @@ export function GeneralReport() {
     };
     replaceVars(clone);
 
-    // Print-only pagination controls for requested blocks.
     const marginDistributionBlock = clone.querySelector('[data-print-block="margin-distribution"]') as HTMLElement | null;
     const branchPurchaseSummaryBlock = clone.querySelector('[data-print-block="branch-purchase-summary"]') as HTMLElement | null;
-
-    if (marginDistributionBlock) {
-      marginDistributionBlock.style.breakBefore = 'page';
-      marginDistributionBlock.style.pageBreakBefore = 'always';
-    }
-
-    if (branchPurchaseSummaryBlock) {
-      branchPurchaseSummaryBlock.style.breakBefore = 'page';
-      branchPurchaseSummaryBlock.style.pageBreakBefore = 'always';
-    }
+    if (marginDistributionBlock) { marginDistributionBlock.style.breakBefore = 'page'; marginDistributionBlock.style.pageBreakBefore = 'always'; }
+    if (branchPurchaseSummaryBlock) { branchPurchaseSummaryBlock.style.breakBefore = 'page'; branchPurchaseSummaryBlock.style.pageBreakBefore = 'always'; }
 
     const iframe = document.createElement('iframe');
     iframe.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:-1;visibility:hidden;';
@@ -427,38 +410,33 @@ export function GeneralReport() {
 
     doc.open();
     doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/>
-<title>Pricing & Margins — ${selectedYear}</title>
+<title>General Report — ${selectedYear}</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet"/>
 <style>
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:'DM Sans',sans-serif;background:#fff;color:#111827;padding:16px 20px;font-size:13px;}
-  @page{size:A4 landscape;margin:8mm 10mm;}
-  .cover{width:100%;height:190mm;display:grid;break-after:page!important;page-break-after:always!important;position:relative;overflow:hidden;}
-  .cover-stripe{position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,${C.emerald} 0%,${C.teal} 45%,${C.cyan} 100%);z-index:3;}
-  .cover-left-bar{position:absolute;top:0;left:0;width:5px;height:100%;background:linear-gradient(180deg,${C.emerald} 0%,${C.teal} 55%,${C.cyan} 100%);z-index:3;}
-  .cover-bg{position:absolute;top:0;right:0;width:52%;height:100%;background:linear-gradient(148deg,#ecfdf5 0%,#d1fae5 40%,#a7f3d0 80%,#6ee7b7 100%);clip-path:polygon(15% 0,100% 0,100% 100%,0% 100%);z-index:0;}
-  .cover-inner{position:relative;z-index:4;display:grid;grid-template-rows:auto 1fr auto;height:100%;padding:28px 48px 26px;}
-  .cover-top{display:flex;align-items:center;justify-content:space-between;padding-bottom:18px;border-bottom:1px solid #e5e7eb;}
-  .cover-company{font-size:12px;font-weight:700;color:#374151;letter-spacing:0.08em;text-transform:uppercase;}
-  .cover-pill{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:${C.emerald};background:#ecfdf5;border:1.5px solid #a7f3d0;padding:4px 13px;border-radius:20px;}
-  .cover-main{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;padding:24px 0 20px;}
-  .cover-title{font-family:'Playfair Display',Georgia,serif;font-size:52px;font-weight:900;color:#0f172a;letter-spacing:-0.03em;line-height:1.0;}
-  .cover-title-accent{color:${C.emerald};font-style:italic;}
-  .cover-subtitle{font-size:15px;color:#6b7280;margin:12px 0 20px;}
-  .cover-desc{font-size:12px;color:#9ca3af;line-height:1.85;border-left:3px solid #a7f3d0;padding-left:16px;max-width:380px;}
-  .cover-kpi{background:rgba(255,255,255,0.75);border:1px solid rgba(255,255,255,0.9);border-radius:14px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;box-shadow:0 2px 12px rgba(16,185,129,0.07);}
-  .ck-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.11em;color:#9ca3af;}
-  .ck-value{font-family:'Playfair Display',Georgia,serif;font-size:26px;font-weight:700;letter-spacing:-0.02em;color:#0f172a;line-height:1.1;}
-  .ck-note{font-size:10px;color:#9ca3af;}
-  .badge-good{background:#d1fae5;color:#059669;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;}
-  .badge-warn{background:#fef3c7;color:#d97706;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;}
-  .cover-bottom{border-top:1px solid #e5e7eb;padding-top:14px;display:flex;justify-content:space-between;align-items:center;}
-  .cover-meta{display:flex;align-items:center;gap:12px;font-size:10px;color:#9ca3af;}
-  .cover-confidential{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#6ee7b7;border:1.5px solid #a7f3d0;padding:3px 10px;border-radius:20px;background:#f0fdf4;}
-  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important;}
-  div[data-print="section"]{break-before:page!important;page-break-before:always!important;break-inside:avoid!important;}
-  div[style*="border-radius:16px"]{break-inside:avoid!important;border:1px solid #e5e7eb!important;margin-bottom:12px;}
-  div[style*="1fr 1fr"],div[style*="repeat(3"],div[style*="repeat(4"]{break-inside:avoid!important;}
+${PRINT_CSS}
+.cover{width:100%;height:190mm;display:grid;break-after:page!important;page-break-after:always!important;position:relative;overflow:hidden;}
+.cover-stripe{position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,${C.emerald} 0%,${C.teal} 45%,${C.cyan} 100%);z-index:3;}
+.cover-left-bar{position:absolute;top:0;left:0;width:5px;height:100%;background:linear-gradient(180deg,${C.emerald} 0%,${C.teal} 55%,${C.cyan} 100%);z-index:3;}
+.cover-bg{position:absolute;top:0;right:0;width:52%;height:100%;background:linear-gradient(148deg,#ecfdf5 0%,#d1fae5 40%,#a7f3d0 80%,#6ee7b7 100%);clip-path:polygon(15% 0,100% 0,100% 100%,0% 100%);z-index:0;}
+.cover-inner{position:relative;z-index:4;display:grid;grid-template-rows:auto 1fr auto;height:100%;padding:28px 48px 26px;}
+.cover-top{display:flex;align-items:center;justify-content:space-between;padding-bottom:18px;border-bottom:1px solid #e5e7eb;}
+.cover-company{font-size:12px;font-weight:700;color:#374151;letter-spacing:0.08em;text-transform:uppercase;}
+.cover-pill{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:${C.emerald};background:#ecfdf5;border:1.5px solid #a7f3d0;padding:4px 13px;border-radius:20px;}
+.cover-main{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;padding:24px 0 20px;}
+.cover-title{font-family:'Playfair Display',Georgia,serif;font-size:52px;font-weight:900;color:#0f172a;letter-spacing:-0.03em;line-height:1.0;}
+.cover-title-accent{color:${C.emerald};font-style:italic;}
+.cover-subtitle{font-size:15px;color:#6b7280;margin:12px 0 20px;}
+.cover-desc{font-size:12px;color:#9ca3af;line-height:1.85;border-left:3px solid #a7f3d0;padding-left:16px;max-width:380px;}
+.cover-kpi{background:rgba(255,255,255,0.75);border:1px solid rgba(255,255,255,0.9);border-radius:14px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;box-shadow:0 2px 12px rgba(16,185,129,0.07);}
+.ck-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.11em;color:#9ca3af;}
+.ck-value{font-family:'Playfair Display',Georgia,serif;font-size:26px;font-weight:700;letter-spacing:-0.02em;color:#0f172a;line-height:1.1;}
+.ck-note{font-size:10px;color:#9ca3af;}
+.badge-good{background:#d1fae5;color:#059669;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;}
+.badge-warn{background:#fef3c7;color:#d97706;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;}
+.cover-bottom{border-top:1px solid #e5e7eb;padding-top:14px;display:flex;justify-content:space-between;align-items:center;}
+.cover-meta{display:flex;align-items:center;gap:12px;font-size:10px;color:#9ca3af;}
+.cover-confidential{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#6ee7b7;border:1.5px solid #a7f3d0;padding:3px 10px;border-radius:20px;background:#f0fdf4;}
+*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important;}
 </style></head><body>
 <div class="cover">
   <div class="cover-stripe"></div><div class="cover-left-bar"></div><div class="cover-bg"></div>
@@ -469,8 +447,8 @@ export function GeneralReport() {
     </div>
     <div class="cover-main">
       <div>
-        <h1 class="cover-title">Pricing &amp;<br/><span class="cover-title-accent">Margins</span></h1>
-        <p class="cover-subtitle">Full Profitability Analysis — ${selectedYear}${selectedBranch !== 'all' ? ` · ${selectedBranch}` : ''}</p>
+        <h1 class="cover-title">General<br/><span class="cover-title-accent">Report</span></h1>
+        <p class="cover-subtitle">Full Analysis — ${selectedYear}${selectedBranch !== 'all' ? ` · ${selectedBranch}` : ''}</p>
         <p class="cover-desc">Sales performance, gross margins, product profitability, purchase analysis, top customers and supplier breakdown — all by branch and month.</p>
       </div>
       <div>
@@ -502,10 +480,9 @@ ${clone.outerHTML}
     if (iframe.contentWindow) { iframe.contentWindow.onafterprint = cleanup; setTimeout(cleanup, 90000); }
   };
 
-  // ── Early states ─────────────────────────────────────────────────────────
   if (loading) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, minHeight: 400, justifyContent: 'center' }}>
-      <Spin /><p style={{ fontSize: 14, color: css.mutedFg }}>Loading pricing & margins data…</p>
+      <Spin /><p style={{ fontSize: 14, color: css.mutedFg }}>Loading data…</p>
     </div>
   );
   if (error) return (
@@ -519,7 +496,7 @@ ${clone.outerHTML}
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
 
-      {/* ══ REPORT HEADER ══ */}
+      {/* REPORT HEADER */}
       <div style={{ ...card, background: `linear-gradient(135deg, ${C.emerald}08, ${C.teal}05)`, marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -542,8 +519,6 @@ ${clone.outerHTML}
             </button>
           </div>
         </div>
-
-        {/* Filters */}
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', paddingTop: 16, borderTop: `1px solid ${css.border}` }}>
           <StyledDropdown label="Year" options={yearOptions} value={selectedYear}
             onChange={v => setSelectedYear(v)}
@@ -554,11 +529,11 @@ ${clone.outerHTML}
         </div>
       </div>
 
-      {/* ══ PRINTABLE CONTENT ══ */}
+      {/* PRINTABLE CONTENT */}
       <div id="pmr-printable">
 
-        {/* ── GLOBAL KPIs ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 36 }}>
+        {/* GLOBAL KPIs */}
+        <div data-no-break style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 36, breakInside: 'avoid' as any }}>
           <KCard label="Total Revenue" value={formatCurrency(totalRevenue)} sub={`${selectedYear} sales`} accent={C.indigo} Icon={TrendingUp} />
           <KCard label="Gross Profit" value={formatCurrency(grossProfit)} sub="(Sale Price − Balance Price) × Qty Out" accent={grossProfit >= 0 ? C.emerald : C.rose} Icon={DollarSign}
             badge={{ text: `${grossMarginPct.toFixed(1)}% margin`, good: grossMarginPct >= 20 }} />
@@ -566,34 +541,24 @@ ${clone.outerHTML}
           <KCard label="Best Margin Product" value={(topMarginProducts[0]?.name ?? '—').slice(0, 20)} sub={topMarginProducts[0] ? `${topMarginProducts[0].margin.toFixed(1)}% margin` : ''} accent={C.teal} Icon={Star} />
         </div>
 
-        {/* ════════════════════════════════════════
-            SECTION 1 — SALES REPORT
-        ════════════════════════════════════════ */}
+        {/* SECTION 1 — SALES */}
         <div style={{ marginBottom: 52 }}>
           <SecHead n={1} title="Sales Report" sub="Total revenue · monthly breakdown · by branch · by product" color={C.indigo} />
-
-          {/* Sales KPIs row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 16 }}>
+          <div data-no-break style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 16, breakInside: 'avoid' as any }}>
             <KCard label="Total Revenue" value={formatCurrency(totalRevenue)} sub={`${selectedYear}`} accent={C.indigo} Icon={TrendingUp} />
             <KCard label="Avg Daily Revenue" value={formatCurrency(num(salesKPI?.sales_velocity?.avg_daily_revenue))} sub={`Over ${num(salesKPI?.sales_velocity?.n_days)} days`} accent={C.violet} Icon={BarChart3} />
             <KCard label="Avg Daily Qty" value={formatNumber(num(salesKPI?.sales_velocity?.avg_daily_qty))} sub="Units sold per day" accent={C.cyan} Icon={Package} />
           </div>
-
-          {/* Sales monthly trend + Branch monthly */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-            <div style={card}>
+          <div data-no-break style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16, breakInside: 'avoid' as any }}>
+            <div data-no-break style={{ ...card }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Monthly Sales & Purchases</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Revenue, purchases, and backend profit formula by month — {selectedYear}</p>
               {combinedMonthly.length === 0 ? <Empty /> : (
                 <ResponsiveContainer width="100%" height={260}>
                   <ComposedChart data={combinedMonthly} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                     <defs>
-                      <linearGradient id="pmrGS" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={C.indigo} stopOpacity={0.2} /><stop offset="95%" stopColor={C.indigo} stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="pmrGP" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={C.emerald} stopOpacity={0.2} /><stop offset="95%" stopColor={C.emerald} stopOpacity={0} />
-                      </linearGradient>
+                      <linearGradient id="pmrGS" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.indigo} stopOpacity={0.2} /><stop offset="95%" stopColor={C.indigo} stopOpacity={0} /></linearGradient>
+                      <linearGradient id="pmrGP" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.emerald} stopOpacity={0.2} /><stop offset="95%" stopColor={C.emerald} stopOpacity={0} /></linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="4 4" stroke={css.border} vertical={false} />
                     <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false} />
@@ -607,8 +572,7 @@ ${clone.outerHTML}
                 </ResponsiveContainer>
               )}
             </div>
-
-            <div style={card}>
+            <div data-no-break style={{ ...card }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Monthly Sales by Branch</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Revenue trend per branch — {selectedYear}</p>
               {branchMonthlySales.length === 0 ? <Empty /> : (
@@ -627,10 +591,8 @@ ${clone.outerHTML}
               )}
             </div>
           </div>
-
-          {/* Sales by branch bar */}
           {branchCompare.length > 0 && (
-            <div style={card}>
+            <div data-no-break style={{ ...card }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Sales vs. Purchases by Branch</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Branch-level comparison — {selectedYear}</p>
               <ResponsiveContainer width="100%" height={220}>
@@ -648,20 +610,16 @@ ${clone.outerHTML}
           )}
         </div>
 
-        {/* ════════════════════════════════════════
-            SECTION 2 — PROFIT ANALYSIS
-        ════════════════════════════════════════ */}
+        {/* SECTION 2 — PROFIT */}
         <div data-print="section" style={{ marginBottom: 52 }}>
           <SecHead n={2} title="Profit Analysis" sub="Gross profit per product · margin percentage · profitability ranking" color={C.emerald} />
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 16 }}>
+          <div data-no-break style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 16, breakInside: 'avoid' as any }}>
             <KCard label="Gross Profit" value={formatCurrency(grossProfit)} sub="Σ((Sale Price − Balance Price) × Qty Out)" accent={C.emerald} Icon={DollarSign} badge={{ text: `${grossMarginPct.toFixed(1)}%`, good: grossMarginPct >= 20 }} />
             <KCard label="Avg Product Margin" value={`${productMargins.length > 0 ? (productMargins.reduce((s: number, p: any) => s + p.margin, 0) / productMargins.length).toFixed(1) : 0}%`} sub={`Across ${productMargins.length} products`} accent={C.teal} Icon={Target} />
             <KCard label="High Margin Products" value={String(productMargins.filter((p: any) => p.margin >= 30).length)} sub="Margin ≥ 30%" accent={C.violet} Icon={Star} />
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
-            <div style={card}>
+          <div data-no-break style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, breakInside: 'avoid' as any }}>
+            <div data-no-break style={{ ...card }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Top 10 Products by Margin</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Gross margin % per product — green = healthy</p>
               {topMarginProducts.length === 0 ? <Empty /> : (
@@ -680,9 +638,7 @@ ${clone.outerHTML}
                 </ResponsiveContainer>
               )}
             </div>
-
-            {/* Monthly profit line */}
-            <div style={card}>
+            <div data-no-break style={{ ...card }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Monthly Gross Profit</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Profit trend across months</p>
               {combinedMonthly.length === 0 ? <Empty h={280} /> : (
@@ -705,16 +661,11 @@ ${clone.outerHTML}
           </div>
         </div>
 
-        {/* ════════════════════════════════════════
-            SECTION 3 — PRICING & PROFITABILITY
-        ════════════════════════════════════════ */}
+        {/* SECTION 3 — PRICING */}
         <div data-print="section" style={{ marginBottom: 52 }}>
           <SecHead n={3} title="Pricing & Profitability" sub="Best and lowest margin products · profitability distribution" color={C.violet} />
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-
-            {/* Best margin */}
-            <div style={card}>
+          <div data-no-break style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16, breakInside: 'avoid' as any }}>
+            <div data-no-break style={{ ...card }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: C.emerald, margin: '0 0 4px' }}>🏆 Most Profitable Products</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Highest gross margin % — top pricing strategy</p>
               {topMarginProducts.length === 0 ? <Empty /> : (
@@ -732,9 +683,7 @@ ${clone.outerHTML}
                 </div>
               )}
             </div>
-
-            {/* Worst margin */}
-            <div style={card}>
+            <div data-no-break style={{ ...card }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: C.rose, margin: '0 0 4px' }}>⚠️ Low-Margin Products</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Lowest gross margin — review pricing strategy</p>
               {poorMarginProducts.length === 0 ? <Empty /> : (
@@ -753,12 +702,10 @@ ${clone.outerHTML}
               )}
             </div>
           </div>
-
-          {/* Margin distribution scatter-like bar */}
           {productMargins.length > 0 && (
-            <div style={card} data-print-block="margin-distribution">
+            <div data-no-break style={{ ...card }} data-print-block="margin-distribution">
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Margin Distribution — All Products</h3>
-              <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 4 }}>Margin % vs. revenue contribution (bubble size = revenue)</p>
+              <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 4 }}>Margin % vs. revenue contribution</p>
               <div style={{ display: 'flex', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
                 {[{ label: 'High ≥ 30%', color: C.emerald }, { label: 'Medium 15–30%', color: C.amber }, { label: 'Low < 15%', color: C.rose }].map(b => (
                   <span key={b.label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: css.mutedFg }}>
@@ -783,21 +730,17 @@ ${clone.outerHTML}
           )}
         </div>
 
-        {/* ════════════════════════════════════════
-            SECTION 4 — PURCHASE REPORT
-        ════════════════════════════════════════ */}
+        {/* SECTION 4 — PURCHASES */}
         <div data-print="section" style={{ marginBottom: 52 }}>
           <SecHead n={4} title="Purchase Report" sub="Total purchases · by branch · monthly trend" color={C.amber} />
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 16 }}>
+          <div data-no-break style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 16, breakInside: 'avoid' as any }}>
             <KCard label="Total Purchases" value={formatCurrency(totalPurchases)} sub={`${selectedYear}`} accent={C.amber} Icon={ShoppingCart} />
             <KCard label="Purchase / Revenue Ratio" value={totalRevenue > 0 ? `${((totalPurchases / totalRevenue) * 100).toFixed(1)}%` : '—'} sub="Cost of goods as % of sales" accent={C.orange} Icon={BarChart3}
               badge={{ text: totalRevenue > 0 && (totalPurchases / totalRevenue) < 0.7 ? 'Healthy' : 'High cost', good: totalRevenue > 0 && (totalPurchases / totalRevenue) < 0.7 }} />
             <KCard label="Branches Purchasing" value={String(filteredPurchBranches.length)} sub="Active purchasing branches" accent={C.cyan} Icon={Package} />
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div style={card}>
+          <div data-no-break style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, breakInside: 'avoid' as any }}>
+            <div data-no-break style={{ ...card }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Monthly Purchases by Branch</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Purchase volume per branch — {selectedYear}</p>
               {branchMonthlyPurchases.length === 0 ? <Empty /> : (
@@ -815,8 +758,7 @@ ${clone.outerHTML}
                 </ResponsiveContainer>
               )}
             </div>
-
-            <div style={card}>
+            <div data-no-break style={{ ...card }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Purchases by Branch — {selectedYear}</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Total purchase value per branch</p>
               {purchBranchChart.length === 0 ? <Empty /> : (
@@ -836,16 +778,11 @@ ${clone.outerHTML}
           </div>
         </div>
 
-        {/* ════════════════════════════════════════
-            SECTION 5 — TOP SELLING PRODUCTS
-        ════════════════════════════════════════ */}
+        {/* SECTION 5 — TOP PRODUCTS */}
         <div data-print="section" style={{ marginBottom: 52 }}>
           <SecHead n={5} title="Top Selling Products" sub="Best sellers by revenue · slow-moving items · sales velocity" color={C.cyan} />
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-
-            {/* Top by revenue */}
-            <div style={card}>
+          <div data-no-break style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16, breakInside: 'avoid' as any }}>
+            <div data-no-break style={{ ...card }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Best Sellers by Revenue</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Top {Math.min(topProducts.length, 12)} products by total revenue</p>
               {topProducts.length === 0 ? <Empty /> : (
@@ -856,10 +793,8 @@ ${clone.outerHTML}
                 </div>
               )}
             </div>
-
-            {/* Sales velocity + slow movers */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={card}>
+              <div data-no-break style={{ ...card }}>
                 <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Top 10 Products by Revenue — Chart</h3>
                 <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 10 }}>Revenue bar chart</p>
                 {topProducts.length === 0 ? <Empty h={180} /> : (
@@ -876,8 +811,7 @@ ${clone.outerHTML}
                   </ResponsiveContainer>
                 )}
               </div>
-
-              <div style={card}>
+              <div data-no-break style={{ ...card }}>
                 <h3 style={{ fontSize: 14, fontWeight: 700, color: C.orange, margin: '0 0 4px' }}>🐢 Slow-Moving Products</h3>
                 <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 10 }}>Low rotation rate — stock at risk</p>
                 {lowRotation.length === 0 ? <Empty h={120} text="No slow-moving products detected" /> : (
@@ -899,10 +833,9 @@ ${clone.outerHTML}
               </div>
             </div>
           </div>
-
-          {/* Sales velocity by product */}
+          {/* Sales Velocity — FIX: data-no-break pour éviter la coupure */}
           {(salesKPI?.sales_velocity?.by_product ?? []).length > 0 && (
-            <div style={card}>
+            <div data-no-break style={{ ...card, breakInside: 'avoid' as any, pageBreakInside: 'avoid' as any }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Sales Velocity by Product</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Avg daily revenue · days to sell 100 units</p>
               <ResponsiveContainer width="100%" height={220}>
@@ -920,21 +853,16 @@ ${clone.outerHTML}
           )}
         </div>
 
-        {/* ════════════════════════════════════════
-            SECTION 6 — CUSTOMER REPORT
-        ════════════════════════════════════════ */}
+        {/* SECTION 6 — CUSTOMERS */}
         <div data-print="section" style={{ marginBottom: 52 }}>
           <SecHead n={6} title="Customer Report" sub="Top customers by purchase volume · revenue per customer · sales concentration" color={C.rose} />
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 16 }}>
+          <div data-no-break style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 16, breakInside: 'avoid' as any }}>
             <KCard label="Top Customer Revenue" value={formatCurrency(topClients[0]?.revenue ?? 0)} sub={topClients[0]?.name ?? '—'} accent={C.rose} Icon={Users} />
             <KCard label="Top 5 Customers Share" value={`${topClients.slice(0, 5).reduce((s: number, c: any) => s + c.share, 0).toFixed(1)}%`} sub="of total revenue" accent={C.violet} Icon={BarChart3} />
             <KCard label="Customers Tracked" value={String(topClients.length)} sub="With revenue data" accent={C.cyan} Icon={Users} />
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-
-            <div style={card}>
+          <div data-no-break style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, breakInside: 'avoid' as any }}>
+            <div data-no-break style={{ ...card }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Top Customers by Revenue</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Revenue ranking — highest purchasing customers</p>
               {topClients.length === 0 ? <Empty /> : (
@@ -945,9 +873,8 @@ ${clone.outerHTML}
                 </div>
               )}
             </div>
-
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={card}>
+              <div data-no-break style={{ ...card }}>
                 <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Top 10 Customers — Chart</h3>
                 <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 10 }}>Bar chart by revenue</p>
                 {topClients.length === 0 ? <Empty h={220} /> : (
@@ -964,10 +891,8 @@ ${clone.outerHTML}
                   </ResponsiveContainer>
                 )}
               </div>
-
-              {/* Customer concentration pie */}
               {topClients.length >= 3 && (
-                <div style={card}>
+                <div data-no-break style={{ ...card }}>
                   <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 12px' }}>Revenue Concentration</h3>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <ResponsiveContainer width={140} height={140}>
@@ -995,22 +920,17 @@ ${clone.outerHTML}
           </div>
         </div>
 
-        {/* ════════════════════════════════════════
-            SECTION 7 — SUPPLIER / PURCHASE ANALYSIS
-        ════════════════════════════════════════ */}
+        {/* SECTION 7 — SUPPLIER */}
         <div data-print="section" style={{ marginBottom: 52 }}>
           <SecHead n={7} title="Supplier & Purchase Analysis" sub="Purchases by branch · invoice amounts · monthly purchase breakdown" color={C.orange} />
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-            {/* Purchase branch table */}
-            <div style={card}>
+          <div data-no-break style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16, breakInside: 'avoid' as any }}>
+            <div data-no-break style={{ ...card }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Purchases by Branch</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Total invoice amounts per branch — {selectedYear}</p>
               {purchBranchChart.length === 0 ? <Empty /> : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {purchBranchChart.map((b: any, i: number) => {
-                    const maxVal = purchBranchChart[0]?.total ?? 1;
-                    const share = maxVal > 0 ? (b.total / totalPurchases) * 100 : 0;
+                    const share = totalPurchases > 0 ? (b.total / totalPurchases) * 100 : 0;
                     return (
                       <div key={i}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
@@ -1025,7 +945,7 @@ ${clone.outerHTML}
                           </div>
                         </div>
                         <div style={{ height: 6, borderRadius: 999, background: css.muted, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', borderRadius: 999, width: `${Math.min(100, (b.total / (purchBranchChart[0]?.total ?? 1)) * 100)}%`, background: `linear-gradient(90deg, ${b.color}70, ${b.color})`, transition: 'width 0.6s ease' }} />
+                          <div style={{ height: '100%', borderRadius: 999, width: `${Math.min(100, (b.total / (purchBranchChart[0]?.total ?? 1)) * 100)}%`, background: `linear-gradient(90deg, ${b.color}70, ${b.color})` }} />
                         </div>
                       </div>
                     );
@@ -1033,9 +953,7 @@ ${clone.outerHTML}
                 </div>
               )}
             </div>
-
-            {/* Purchase trend */}
-            <div style={card}>
+            <div data-no-break style={{ ...card }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 4px' }}>Monthly Purchase Trend</h3>
               <p style={{ fontSize: 12, color: css.mutedFg, marginBottom: 14 }}>Purchase cost evolution — {selectedYear}</p>
               {combinedMonthly.length === 0 ? <Empty /> : (
@@ -1056,10 +974,8 @@ ${clone.outerHTML}
               )}
             </div>
           </div>
-
-          {/* Summary table — branch purchase KPIs */}
           {purchBranchChart.length > 0 && (
-            <div style={card} data-print-block="branch-purchase-summary">
+            <div data-no-break style={{ ...card }} data-print-block="branch-purchase-summary">
               <h3 style={{ fontSize: 14, fontWeight: 700, color: css.cardFg, margin: '0 0 16px' }}>Branch Purchase Summary</h3>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>

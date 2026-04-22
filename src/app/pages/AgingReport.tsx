@@ -170,7 +170,6 @@ function CustomerTable({ customers, showOverdue = true, maxRows = 999 }: { custo
               const cr = r.total > 0 ? ((r.total - r.overdue_total) / r.total * 100) : 0;
               const risk = r.risk_score ?? 'low';
               const rc = RISK_CFG[risk];
-              // Dynamic color from branch index
               const branchColor = C.indigo;
               return (
                 <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : `${css.muted}50` }}>
@@ -207,7 +206,7 @@ function AgingDetailPrintTable({ branchBuckets, grandTotal }: { branchBuckets: a
   const td = (x?: React.CSSProperties): React.CSSProperties => ({ padding: '9px 12px', fontSize: 11, borderBottom: `1px solid ${css.border}`, ...x });
   return (
     <div style={{ marginTop: 20, paddingTop: 18, borderTop: `1px solid ${css.border}` }}>
-      <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#94a3b8', marginBottom: 12 }}>📋 Branch × Aging Bucket — Detailed Summary</p>
+      <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#94a3b8', marginBottom: 12 }}>Branch × Aging Bucket — Detailed Summary</p>
       <div style={{ overflowX: 'auto', borderRadius: 8, border: `1px solid ${css.border}` }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
@@ -279,19 +278,11 @@ function AgingDetailPrintTable({ branchBuckets, grandTotal }: { branchBuckets: a
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// NEW PRINT-READY BRANCH CHART — Carte gauche
-// Barres horizontales annotées · zéro tooltip
-// ═══════════════════════════════════════════════════════════════════
-function BranchHBarChart({
-  branchBuckets, loadRows,
-}: { branchBuckets: any[]; loadRows: boolean }) {
+function BranchHBarChart({ branchBuckets, loadRows }: { branchBuckets: any[]; loadRows: boolean }) {
   if (loadRows || branchBuckets.length === 0) return <Empty h={300} />;
   const maxVal = Math.max(...branchBuckets.map(b => b.total), 1);
-
   return (
     <div>
-      {/* Légende */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
         {[
           { color: C.emerald, label: 'On-track (current)' },
@@ -303,41 +294,28 @@ function BranchHBarChart({
           </span>
         ))}
       </div>
-
       {branchBuckets.map((b, i) => {
-        const totalPct    = (b.total / maxVal) * 100;
-        const onTrackPct  = b.total > 0 ? ((b.total - b.overdue) / b.total) * 100 : 0;
-        const overduePct  = b.total > 0 ? (b.overdue / b.total) * 100 : 0;
-        const cr          = b.total > 0 ? ((b.total - b.overdue) / b.total * 100) : 0;
-
+        const totalPct   = (b.total / maxVal) * 100;
+        const onTrackPct = b.total > 0 ? ((b.total - b.overdue) / b.total) * 100 : 0;
+        const overduePct = b.total > 0 ? (b.overdue / b.total) * 100 : 0;
+        const cr         = b.total > 0 ? ((b.total - b.overdue) / b.total * 100) : 0;
         return (
           <div key={b.branch} style={{
             display: 'grid', gridTemplateColumns: '130px 1fr',
             alignItems: 'center', gap: 12, padding: '10px 0',
             borderBottom: i < branchBuckets.length - 1 ? `1px solid ${css.border}` : 'none',
           }}>
-            {/* Label */}
             <div style={{ textAlign: 'right' }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: css.cardFg, display: 'block', lineHeight: 1.2 }}>
-                {b.branch}
-              </span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: css.cardFg, display: 'block', lineHeight: 1.2 }}>{b.branch}</span>
               <span style={{ fontSize: 10, color: '#94a3b8' }}>{b.count} clients</span>
             </div>
-
-            {/* Barre + annotations */}
             <div>
-              {/* Barre de fond gris → remplie proportionnellement */}
-              <div style={{
-                position: 'relative', height: 22, borderRadius: 5,
-                background: '#f1f5f9', overflow: 'hidden', marginBottom: 4,
-              }}>
-                {/* On-track */}
+              <div style={{ position: 'relative', height: 22, borderRadius: 5, background: '#f1f5f9', overflow: 'hidden', marginBottom: 4 }}>
                 <div style={{
                   position: 'absolute', left: 0, top: 0, height: '100%',
                   width: `${(onTrackPct / 100) * totalPct}%`,
                   background: `linear-gradient(90deg, ${C.emerald}70, ${C.emerald})`,
-                  display: 'flex', alignItems: 'center', paddingLeft: 6,
-                  overflow: 'hidden',
+                  display: 'flex', alignItems: 'center', paddingLeft: 6, overflow: 'hidden',
                 }}>
                   {(onTrackPct / 100) * totalPct > 18 && (
                     <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap' }}>
@@ -345,14 +323,12 @@ function BranchHBarChart({
                     </span>
                   )}
                 </div>
-                {/* Overdue */}
                 {b.overdue > 0 && (
                   <div style={{
                     position: 'absolute', left: `${(onTrackPct / 100) * totalPct}%`, top: 0, height: '100%',
                     width: `${(overduePct / 100) * totalPct}%`,
                     background: `linear-gradient(90deg, ${C.rose}70, ${C.rose})`,
-                    display: 'flex', alignItems: 'center', paddingLeft: 4,
-                    overflow: 'hidden',
+                    display: 'flex', alignItems: 'center', paddingLeft: 4, overflow: 'hidden',
                   }}>
                     {(overduePct / 100) * totalPct > 14 && (
                       <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap' }}>
@@ -362,23 +338,12 @@ function BranchHBarChart({
                   </div>
                 )}
               </div>
-
-              {/* Ligne de chiffres sous la barre */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: css.cardFg, fontVariantNumeric: 'tabular-nums' }}>
-                    {formatCurrency(b.total)}
-                  </span>
-                  <span style={{ fontSize: 10, color: C.emerald, fontWeight: 600 }}>
-                    ✓ {onTrackPct.toFixed(0)}%
-                  </span>
-                  {b.overdue > 0 && (
-                    <span style={{ fontSize: 10, color: C.rose, fontWeight: 600 }}>
-                      ⚠ {overduePct.toFixed(0)}%
-                    </span>
-                  )}
+                  <span style={{ fontSize: 11, fontWeight: 800, color: css.cardFg, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(b.total)}</span>
+                  <span style={{ fontSize: 10, color: C.emerald, fontWeight: 600 }}>✓ {onTrackPct.toFixed(0)}%</span>
+                  {b.overdue > 0 && <span style={{ fontSize: 10, color: C.rose, fontWeight: 600 }}>⚠ {overduePct.toFixed(0)}%</span>}
                 </div>
-                {/* Badge CR% */}
                 <span style={{
                   fontSize: 10, fontWeight: 800, padding: '2px 9px', borderRadius: 20, whiteSpace: 'nowrap',
                   background: cr >= 70 ? '#d1fae5' : '#ffe4e6',
@@ -392,15 +357,11 @@ function BranchHBarChart({
           </div>
         );
       })}
-
-      {/* Total */}
       <div style={{
         marginTop: 14, paddingTop: 12, borderTop: `2px solid ${css.border}`,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Total — All Branches
-        </span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total — All Branches</span>
         <span style={{ fontSize: 16, fontWeight: 900, color: C.indigo, fontVariantNumeric: 'tabular-nums' }}>
           {formatCurrency(branchBuckets.reduce((s, b) => s + b.total, 0))}
         </span>
@@ -409,19 +370,11 @@ function BranchHBarChart({
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// NEW PRINT-READY BRANCH CHART — Carte droite
-// Tableau visuel stacked · chaque ligne = 1 agence · tout annoté
-// ═══════════════════════════════════════════════════════════════════
-function BranchStackedVisual({
-  branchBuckets, loadRows,
-}: { branchBuckets: any[]; loadRows: boolean }) {
+function BranchStackedVisual({ branchBuckets, loadRows }: { branchBuckets: any[]; loadRows: boolean }) {
   if (loadRows || branchBuckets.length === 0) return <Empty h={300} />;
   const grandTotal = branchBuckets.reduce((s, b) => s + b.total, 0);
-
   return (
     <div>
-      {/* Légende */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
         {[
           { color: C.emerald, label: 'Current (not due)' },
@@ -434,104 +387,56 @@ function BranchStackedVisual({
           </span>
         ))}
       </div>
-
       {branchBuckets.map((b, i) => {
         const currPct  = b.total > 0 ? (b.current / b.total) * 100 : 0;
         const d60Pct   = b.total > 0 ? (b.d1_60   / b.total) * 100 : 0;
         const ovPct    = b.total > 0 ? (b.overdue  / b.total) * 100 : 0;
         const sharePct = grandTotal > 0 ? (b.total / grandTotal) * 100 : 0;
         const cr       = b.total > 0 ? ((b.total - b.overdue) / b.total * 100) : 0;
-
         return (
-          <div key={b.branch} style={{
-            padding: '11px 0',
-            borderBottom: i < branchBuckets.length - 1 ? `1px solid ${css.border}` : 'none',
-          }}>
-            {/* Header */}
+          <div key={b.branch} style={{ padding: '11px 0', borderBottom: i < branchBuckets.length - 1 ? `1px solid ${css.border}` : 'none' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 11, height: 11, borderRadius: 3, background: b.color, flexShrink: 0 }} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: css.cardFg }}>{b.branch}</span>
-                <span style={{
-                  fontSize: 10, color: '#94a3b8', padding: '1px 7px',
-                  borderRadius: 12, background: css.muted,
-                }}>
+                <span style={{ fontSize: 10, color: '#94a3b8', padding: '1px 7px', borderRadius: 12, background: css.muted }}>
                   {sharePct.toFixed(1)}% du total · {b.count} clients
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 800, color: b.color, fontVariantNumeric: 'tabular-nums' }}>
-                  {formatCurrency(b.total)}
-                </span>
-                <span style={{
-                  fontSize: 10, fontWeight: 800, padding: '2px 9px', borderRadius: 20,
-                  background: cr >= 70 ? '#d1fae5' : '#ffe4e6',
-                  color: cr >= 70 ? C.emerald : C.rose,
-                }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: b.color, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(b.total)}</span>
+                <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 9px', borderRadius: 20, background: cr >= 70 ? '#d1fae5' : '#ffe4e6', color: cr >= 70 ? C.emerald : C.rose }}>
                   CR {cr.toFixed(1)}%
                 </span>
               </div>
             </div>
-
-            {/* Barre stacked */}
             <div style={{ height: 20, borderRadius: 5, overflow: 'hidden', display: 'flex', background: '#f1f5f9', marginBottom: 6 }}>
-              {/* Current */}
               {currPct > 0 && (
-                <div style={{
-                  width: `${currPct}%`, height: '100%',
-                  background: `linear-gradient(90deg, ${C.emerald}80, ${C.emerald})`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-                }}>
-                  {currPct > 12 && (
-                    <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', padding: '0 3px' }}>
-                      {formatCurrency(b.current)}
-                    </span>
-                  )}
+                <div style={{ width: `${currPct}%`, height: '100%', background: `linear-gradient(90deg, ${C.emerald}80, ${C.emerald})`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  {currPct > 12 && <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', padding: '0 3px' }}>{formatCurrency(b.current)}</span>}
                 </div>
               )}
-              {/* 1–60d */}
               {d60Pct > 0 && (
-                <div style={{
-                  width: `${d60Pct}%`, height: '100%',
-                  background: `linear-gradient(90deg, ${C.amber}80, ${C.amber})`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-                }}>
-                  {d60Pct > 12 && (
-                    <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', padding: '0 3px' }}>
-                      {formatCurrency(b.d1_60)}
-                    </span>
-                  )}
+                <div style={{ width: `${d60Pct}%`, height: '100%', background: `linear-gradient(90deg, ${C.amber}80, ${C.amber})`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  {d60Pct > 12 && <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', padding: '0 3px' }}>{formatCurrency(b.d1_60)}</span>}
                 </div>
               )}
-              {/* Overdue */}
               {ovPct > 0 && (
-                <div style={{
-                  width: `${ovPct}%`, height: '100%',
-                  background: `linear-gradient(90deg, ${C.rose}80, ${C.rose})`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-                }}>
-                  {ovPct > 12 && (
-                    <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', padding: '0 3px' }}>
-                      {formatCurrency(b.overdue)}
-                    </span>
-                  )}
+                <div style={{ width: `${ovPct}%`, height: '100%', background: `linear-gradient(90deg, ${C.rose}80, ${C.rose})`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  {ovPct > 12 && <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', padding: '0 3px' }}>{formatCurrency(b.overdue)}</span>}
                 </div>
               )}
             </div>
-
-            {/* Annotations texte sous la barre */}
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
               {[
-                { val: b.current, pct: currPct, color: C.emerald, label: 'Current',  show: b.current > 0 },
-                { val: b.d1_60,   pct: d60Pct,  color: C.amber,   label: '1–60d',    show: b.d1_60 > 0 },
-                { val: b.overdue, pct: ovPct,   color: C.rose,    label: '>60d',     show: b.overdue > 0 },
+                { val: b.current, pct: currPct, color: C.emerald, label: 'Current', show: b.current > 0 },
+                { val: b.d1_60,   pct: d60Pct,  color: C.amber,   label: '1–60d',   show: b.d1_60 > 0 },
+                { val: b.overdue, pct: ovPct,   color: C.rose,    label: '>60d',    show: b.overdue > 0 },
               ].filter(x => x.show).map(x => (
                 <span key={x.label} style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
                   <span style={{ width: 7, height: 7, borderRadius: 2, background: x.color, flexShrink: 0 }} />
                   <span style={{ color: '#64748b' }}>{x.label}:</span>
-                  <span style={{ fontWeight: 700, color: x.color, fontVariantNumeric: 'tabular-nums' }}>
-                    {formatCurrency(x.val)}
-                  </span>
+                  <span style={{ fontWeight: 700, color: x.color, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(x.val)}</span>
                   <span style={{ color: '#94a3b8' }}>({x.pct.toFixed(0)}%)</span>
                 </span>
               ))}
@@ -539,18 +444,9 @@ function BranchStackedVisual({
           </div>
         );
       })}
-
-      {/* Footer total */}
-      <div style={{
-        marginTop: 14, paddingTop: 12, borderTop: `2px solid ${css.border}`,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Total — All Branches
-        </span>
-        <span style={{ fontSize: 16, fontWeight: 900, color: C.indigo, fontVariantNumeric: 'tabular-nums' }}>
-          {formatCurrency(grandTotal)}
-        </span>
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: `2px solid ${css.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total — All Branches</span>
+        <span style={{ fontSize: 16, fontWeight: 900, color: C.indigo, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(grandTotal)}</span>
       </div>
     </div>
   );
@@ -569,6 +465,8 @@ export function AgingReport() {
   const [loadKpi, setLoadKpi] = useState(true);
   const [loadBranch, setLoadBranch] = useState(true);
   const [error, setError] = useState('');
+  // ── FIX: état dédié pour le bouton Refresh ──────────────────────
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     axios.get('/api/aging/dates/', { headers: auth() }).then(r => {
@@ -580,25 +478,60 @@ export function AgingReport() {
       .catch(() => {}).finally(() => setLoadBranch(false));
   }, []);
 
+  // ── FIX: fetchRows — catch explicite avec message d'erreur lisible
   const fetchRows = useCallback(async (date: string) => {
     if (!date) return;
-    setLoadRows(true); setError('');
+    setLoadRows(true);
+    setError('');
     try {
-      const r = await axios.get('/api/aging/', { params: { report_date: date, page_size: 200 }, headers: auth() });
+      const r = await axios.get('/api/aging/', {
+        params: { report_date: date, page_size: 200 },
+        headers: auth(),
+      });
       setRows(((r.data?.records ?? r.data?.results ?? []) as AgingRow[]).map(norm));
-    } catch (e: any) { setError(e.message ?? 'Loading error'); }
-    finally { setLoadRows(false); }
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail ?? e?.response?.data?.message ?? e.message ?? 'Loading error';
+      setError(msg);
+    } finally {
+      setLoadRows(false);
+    }
   }, []);
 
+  // ── FIX: fetchKpi — le catch vide original avalait les erreurs silencieusement
   const fetchKpi = useCallback(async (date: string) => {
     setLoadKpi(true);
     try {
-      const r = await axios.get('/api/kpi/credit/', { params: { report_date: date || undefined }, headers: auth() });
+      const r = await axios.get('/api/kpi/credit/', {
+        params: { report_date: date || undefined },
+        headers: auth(),
+      });
       setKpi(r.data);
-    } catch {} finally { setLoadKpi(false); }
+    } catch (e: any) {
+      // On ne bloque pas l'UI mais on logge pour faciliter le debug
+      console.warn('[AgingReport] fetchKpi error:', e?.response?.status, e?.response?.data ?? e.message);
+    } finally {
+      setLoadKpi(false);
+    }
   }, []);
 
-  useEffect(() => { if (activeDate) { fetchRows(activeDate); fetchKpi(activeDate); } }, [activeDate]);
+  useEffect(() => {
+    if (activeDate) {
+      fetchRows(activeDate);
+      fetchKpi(activeDate);
+    }
+  }, [activeDate, fetchRows, fetchKpi]);
+
+  // ── FIX: handler Refresh — attend la fin des deux appels, gère le state refreshing
+  const handleRefresh = useCallback(async () => {
+    if (!activeDate || refreshing) return;
+    setRefreshing(true);
+    setError('');
+    try {
+      await Promise.all([fetchRows(activeDate), fetchKpi(activeDate)]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [activeDate, refreshing, fetchRows, fetchKpi]);
 
   // ── Derived ─────────────────────────────────────────────────────
   const totals = useMemo(() => ({
@@ -614,7 +547,6 @@ export function AgingReport() {
   const caTotal   = kpi?.summary?.ca_total ?? 0;
   const collected = Math.max(0, caTotal - totals.total);
 
-  // ── Branch colors generated dynamically from data ──────────────
   const rowsWithBranch = useMemo(() =>
     rows.map(r => ({ ...r, resolvedBranch: resolveRowBranch(r) } as AgingRowWithBranch)), [rows]);
 
@@ -762,15 +694,12 @@ body{font-family:'DM Sans',sans-serif;background:#fff;color:#0f172a;font-size:12
 *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important;}
 div[style*="maxHeight"],div[style*="overflow"]{max-height:none!important;overflow:visible!important;}
 button{display:none!important;}
-/* ── Prevent cards and sections from breaking across pages ── */
 section{break-inside:avoid;page-break-inside:avoid;}
 div[style*="border-radius: 12px"],div[style*="border-radius:12px"]{break-inside:avoid;page-break-inside:avoid;}
 div[style*="border: 1px solid"]{break-inside:avoid;page-break-inside:avoid;}
 table{break-inside:avoid;page-break-inside:avoid;}
 tr{break-inside:avoid;page-break-inside:avoid;}
-/* Grids: keep each grid together */
 div[style*="grid-template-columns"]{break-inside:avoid;page-break-inside:avoid;}
-/* Each branch row block */
 div[style*="border-top:"]{break-inside:avoid;page-break-inside:avoid;}
 </style></head><body>
 <div class="cover">
@@ -833,16 +762,31 @@ div[style*="border-top:"]{break-inside:avoid;page-break-inside:avoid;}
       <Spin /><p style={{ fontSize: 13, color: '#64748b' }}>Loading aging data…</p>
     </div>
   );
-  if (error) return (
+  if (error && rows.length === 0) return (
     <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 12, color: C.rose }}>
-      <AlertCircle size={16} /><span style={{ flex: 1, fontSize: 13 }}>{error}</span>
-      <button onClick={() => { fetchRows(activeDate); fetchKpi(activeDate); }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, border: `1px solid ${css.border}`, background: css.card, cursor: 'pointer' }}>Retry</button>
+      <AlertCircle size={16} />
+      <span style={{ flex: 1, fontSize: 13 }}>{error}</span>
+      <button
+        onClick={handleRefresh}
+        style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, border: `1px solid ${css.border}`, background: css.card, cursor: 'pointer' }}
+      >
+        Retry
+      </button>
     </div>
   );
 
   // ═══════════════════════════════════════════════════════════════
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+
+      {/* ── Bannière d'erreur non-bloquante (données déjà chargées) ── */}
+      {error && rows.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 10, background: '#ffe4e6', border: `1px solid ${C.rose}30`, marginBottom: 16, fontSize: 13, color: C.rose }}>
+          <AlertCircle size={15} />
+          <span style={{ flex: 1 }}>{error}</span>
+          <button onClick={() => setError('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.rose, fontWeight: 700, fontSize: 16, lineHeight: 1 }}>×</button>
+        </div>
+      )}
 
       {/* ── TOOLBAR ──────────────────────────────────────────── */}
       <div style={{ ...card, background: `linear-gradient(135deg, ${C.indigo}08, ${C.violet}04)`, marginBottom: 28 }}>
@@ -861,13 +805,29 @@ div[style*="border-top:"]{break-inside:avoid;page-break-inside:avoid;}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => { fetchRows(activeDate); fetchKpi(activeDate); }}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, border: `1px solid ${css.border}`, background: css.card, color: '#64748b', fontSize: 13, cursor: 'pointer' }}>
-              <RefreshCw size={13} />Refresh
+            {/* ── FIX: bouton Refresh avec état de chargement et protection double-clic ── */}
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '8px 16px', borderRadius: 10,
+                border: `1px solid ${css.border}`,
+                background: css.card,
+                color: 'hsl(var(--card-foreground))',
+                fontSize: 13, cursor: refreshing ? 'not-allowed' : 'pointer',
+                opacity: refreshing ? 0.65 : 1,
+                transition: 'opacity 0.15s',
+              }}
+            >
+              <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? 'Refreshing…' : 'Refresh'}
             </button>
-            <button onClick={handlePrint}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, border: `1px solid ${C.indigo}40`, background: `${C.indigo}10`, color: C.indigo, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-              <Printer size={13} />Print / Export PDF
+            <button
+              onClick={handlePrint}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, border: `1px solid ${C.indigo}40`, background: `${C.indigo}10`, color: C.indigo, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+            >
+              <Printer size={13} />Print
             </button>
           </div>
         </div>
@@ -1067,7 +1027,6 @@ div[style*="border-top:"]{break-inside:avoid;page-break-inside:avoid;}
         <section style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
           <PartieHeader letter="B" label="Analysis by Agency" color={C.violet} />
 
-          {/* Monthly area */}
           <div style={{ ...card, marginBottom: 24 }}>
             <h3 style={{ fontSize: 14, fontWeight: 700, color: css.fg, margin: '0 0 3px' }}>Monthly Credit Revenue by Branch — Last 12 Months</h3>
             <p style={{ fontSize: 12, color: '#64748b', marginBottom: 14 }}>Trend and seasonality per branch</p>
@@ -1097,34 +1056,19 @@ div[style*="border-top:"]{break-inside:avoid;page-break-inside:avoid;}
             )}
           </div>
 
-          {/* ── 2 cartes print-ready ─────────────────────────── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24, breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-
-            {/* Carte gauche — barres horizontales annotées */}
             <div style={card}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: css.fg, margin: '0 0 3px' }}>
-                Receivables by Branch — {activeDate}
-              </h3>
-              <p style={{ fontSize: 12, color: '#64748b', marginBottom: 14 }}>
-                On-track vs. overdue · montants et taux de recouvrement
-              </p>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: css.fg, margin: '0 0 3px' }}>Receivables by Branch — {activeDate}</h3>
+              <p style={{ fontSize: 12, color: '#64748b', marginBottom: 14 }}>On-track vs. overdue · montants et taux de recouvrement</p>
               <BranchHBarChart branchBuckets={branchBuckets} loadRows={loadRows} />
             </div>
-
-            {/* Carte droite — stacked visuel annoté */}
             <div style={card}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: css.fg, margin: '0 0 3px' }}>
-                Aging Breakdown per Branch — {activeDate}
-              </h3>
-              <p style={{ fontSize: 12, color: '#64748b', marginBottom: 14 }}>
-                Current · 1–60d · Overdue &gt;60d — montants annotés par agence
-              </p>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: css.fg, margin: '0 0 3px' }}>Aging Breakdown per Branch — {activeDate}</h3>
+              <p style={{ fontSize: 12, color: '#64748b', marginBottom: 14 }}>Current · 1–60d · Overdue &gt;60d — montants annotés par agence</p>
               <BranchStackedVisual branchBuckets={branchBuckets} loadRows={loadRows} />
             </div>
-
           </div>
 
-          {/* Branch detail table */}
           {branchBuckets.length > 0 && (
             <div style={card}>
               <AgingDetailPrintTable branchBuckets={branchBuckets} grandTotal={totals.total} />

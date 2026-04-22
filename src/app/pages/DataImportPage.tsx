@@ -255,48 +255,120 @@ export function DataImportPage() {
     }
   };
 
-  const handleUpload = async () => {
-    if (!selectedFile) return;
-    setIsUploading(true);
-    setErrorMsg(null);
-    setValidationDetails(null);
-    setErrorCode(null);
-    setUploadResult(null);
-    setUploadProgress(0);
-    try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      const token = localStorage.getItem('fasi_access_token');
-      const response = await axios.post<ImportResult>(
-        '/api/import/upload/',
-        formData,
-        {
-          headers: { Authorization: token ? `Bearer ${token}` : '' },
-          onUploadProgress: (progressEvent) => {
-            if (progressEvent.total) {
-              const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-              setUploadProgress(percent);
-            }
-          },
-        }
-      );
-      setUploadResult(response.data);
-      setUploadProgress(100);
-    } catch (err: any) {
-      const apiError = err.response?.data;
-      const msg = apiError?.error || apiError?.message || err.message || 'Import failed';
 
-      setErrorMsg(msg);
-      setErrorCode(apiError?.error_code || null);
+const handleUpload = async () => {
+  if (!selectedFile) return;
 
-      if (apiError?.validation_details) {
-        setValidationDetails(apiError.validation_details as ValidationDetails);
-      }
-    } finally {
-      setIsUploading(false);
-    }
+  setIsUploading(true);
+  setErrorMsg(null);
+  setValidationDetails(null);
+  setErrorCode(null);
+  setUploadResult(null);
+  setUploadProgress(1); // démarre à 1% immédiatement
+
+  /**
+   * Anime `current` vers `ceiling` par easings exponentiels.
+   * Retourne une fonction stop() pour interrompre l'animation.
+   */
+  const animateTo = (
+    from: number,
+    ceiling: number,
+    intervalMs: number,
+    ease: number
+  ): (() => void) => {
+    let current = from;
+    let stopped = false;
+    const tick = () => {
+      if (stopped) return;
+      const step = Math.max(0.4, (ceiling - current) * ease);
+      current = Math.min(ceiling, current + step);
+      setUploadProgress(Math.round(current));
+      if (current < ceiling) setTimeout(tick, intervalMs);
+    };
+    setTimeout(tick, intervalMs);
+    return () => { stopped = true; };
   };
 
+  // Phase 1 → 20 % : animation fictive pendant la préparation axios
+  const stopPre = animateTo(1, 20, 120, 0.12);
+
+  // Référence mutable vers le stop de la phase traitement serveur
+  let stopProcessingRef: (() => void) | null = null;
+  let networkStarted = false;
+
+  const startProcessingAnim = () => {
+    if (stopProcessingRef) return; // déjà démarré
+    const stop: (() => void) = animateTo(85, 99, 300, 0.045);
+    stopProcessingRef = stop;
+  };
+
+  const stopAll = () => {
+    stopPre();
+    stopProcessingRef?.();
+  };
+
+  try {
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    const token = localStorage.getItem('fasi_access_token');
+
+    const response = await axios.post<ImportResult>(
+      '/api/import/upload/',
+      formData,
+      {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : '',
+        },
+        onUploadProgress: (progressEvent) => {
+          if (!progressEvent.total) return;
+
+          // Arrêter l'animation fictive au 1er vrai événement réseau
+          if (!networkStarted) {
+            networkStarted = true;
+            stopPre();
+          }
+
+          const ratio = progressEvent.loaded / progressEvent.total;
+
+          if (ratio < 1) {
+            // Phase réseau réelle : 20 % → 85 %
+            // Math.max(prev, …) : la barre ne recule jamais
+            const real = Math.round(20 + ratio * 65);
+            setUploadProgress((prev) => Math.max(prev, real));
+          } else {
+            // Upload réseau terminé → animation traitement serveur : 85 → 99 %
+            setUploadProgress(85);
+            startProcessingAnim();
+          }
+        },
+      }
+    );
+
+    stopAll();
+    setUploadProgress(100);
+    setUploadResult(response.data);
+
+  } catch (err: any) {
+    stopAll();
+    const apiError = err.response?.data;
+    const msg =
+      apiError?.error ||
+      apiError?.message ||
+      err.message ||
+      'Import failed';
+    setErrorMsg(msg);
+    setErrorCode(apiError?.error_code || null);
+    if (apiError?.validation_details) {
+      setValidationDetails(
+        apiError.validation_details as ValidationDetails
+      );
+    }
+  } finally {
+    setIsUploading(false);
+  }
+};
+
+  
   const formatStructureError = (error: ValidationStructureError) => {
     if (error.expected !== undefined && error.actual !== undefined) {
       if (error.position !== undefined) {

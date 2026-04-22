@@ -716,7 +716,7 @@ export function SupplyPolicyPage() {
           </button>
           <button onClick={printReport} disabled={loading}
             style={{ display:'flex', alignItems:'center', gap:6, height:36, padding:'0 14px', borderRadius:10, border:`1px solid ${C.indigo}40`, background:`${C.indigo}10`, color:C.indigo, fontSize:13, fontWeight:600, cursor:'pointer', opacity:loading?0.5:1 }}>
-            <Printer size={14} /> Print Report
+            <Printer size={14} /> Print 
           </button>
         </div>
       </div>

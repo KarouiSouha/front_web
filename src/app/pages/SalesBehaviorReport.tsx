@@ -1218,7 +1218,7 @@ section{break-inside:avoid;page-break-inside:avoid;}
             </button>
             <button onClick={handlePrint} disabled={anyLoading}
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, border: `1px solid ${C.violet}40`, background: `${C.violet}10`, color: C.violet, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-              <Printer size={13} />Print / PDF
+              <Printer size={13} />Print 
             </button>
           </div>
         </div>
