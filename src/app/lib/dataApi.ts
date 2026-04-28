@@ -86,8 +86,10 @@ export interface DetectResult {
   preview_rows: Record<string, string>[];
   total_rows_estimate?: number | null;
 }
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 export const dataImportApi = {
+
   uploadFile: async (
     file: File,
     options: {
@@ -107,7 +109,7 @@ export const dataImportApi = {
 
     const token = localStorage.getItem("fasi_access_token");
 
-    const response = await fetch("/api/import/upload/", {
+    const response = await fetch(`${API_BASE}/import/upload/`, {
       method: "POST",
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -138,7 +140,7 @@ export const dataImportApi = {
 
     const token = localStorage.getItem("fasi_access_token");
 
-    const response = await fetch("/api/import/detect/", {
+    const response = await fetch(`${API_BASE}/import/detect/`, {
       method: "POST",
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -156,7 +158,7 @@ export const dataImportApi = {
 
   getImportLogs: async (params?: { file_type?: string; status?: string }) => {
     const query = new URLSearchParams(params as any).toString();
-    const url = `/api/import/logs/${query ? `?${query}` : ""}`;
+    const url = `${API_BASE}/import/logs/${query ? `?${query}` : ""}`;
     const token = localStorage.getItem("fasi_access_token");
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
@@ -167,7 +169,7 @@ export const dataImportApi = {
 
   downloadTemplate: async (type: string) => {
     const token = localStorage.getItem("fasi_access_token");
-    const response = await fetch(`/api/import/template/${type}/`, {
+    const response = await fetch(`${API_BASE}/import/template/${type}/`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!response.ok) throw new Error("Template download failed");
