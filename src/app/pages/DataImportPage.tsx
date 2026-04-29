@@ -6,6 +6,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { dataImportApi, ImportResult, DetectResult } from '../lib/dataApi';
+
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 
@@ -177,6 +178,7 @@ export function DataImportPage() {
   const userRole = 'manager'; // Replace with real role from auth context
 
   // ── All handlers are 100% unchanged ───────────────────────────────────────
+ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
   const handleDownloadTemplate = (e: React.MouseEvent, template: typeof templates[0]) => {
   e.stopPropagation();
@@ -313,7 +315,7 @@ const handleUpload = async () => {
     const token = localStorage.getItem('fasi_access_token');
 
     const response = await axios.post<ImportResult>(
-      '/api/import/upload/',
+      `${API_BASE}/import/upload/`,
       formData,
       {
         headers: {
