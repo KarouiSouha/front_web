@@ -135,8 +135,7 @@ export const authApi = {
   logout: async (): Promise<void> => {
     const refresh = TokenStorage.getRefresh();
     const access = TokenStorage.getAccess();
-    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-
+    const API_BASE = import.meta.env.VITE_API_URL ?? 'https://fasi-backend.onrender.com/api';
     if (refresh) {
       try {
         await fetch(`${API_BASE}/auth/logout/`, {
