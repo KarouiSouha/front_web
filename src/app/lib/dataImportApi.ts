@@ -71,7 +71,9 @@ export interface ImportResult {
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 const IMPORT_BASE = `${API_BASE}/import`;
-
+const axiosImport = axios.create({
+  baseURL: API_BASE,
+});
 /**
  * Data Import API methods
  */
@@ -83,7 +85,7 @@ export const dataImportApi = {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await axios.post<DetectResult>(
+    const response = await axiosImport.post<DetectResult>(
       `${IMPORT_BASE}/detect/`,
       formData,
       {
@@ -107,7 +109,7 @@ export const dataImportApi = {
       formData.append('file_type', fileType);
     }
 
-    const response = await axios.post<{
+    const response = await axiosImport.post<{
       filename: string;
       validation: ValidateResult;
       can_import: boolean;
@@ -137,7 +139,7 @@ export const dataImportApi = {
     }
 
     const token = localStorage.getItem('fasi_access_token');
-    const response = await axios.post<ImportResult>(
+    const response = await axiosImport.post<ImportResult>(
       `${IMPORT_BASE}/upload/`,
       formData,
       {
