@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  ComposedChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, Line,
+    ComposedChart, Bar, XAxis, YAxis, CartesianGrid,
+    Tooltip, Legend, ResponsiveContainer, Line,
 } from 'recharts';
 
 interface SnapshotTrend {
@@ -113,10 +113,10 @@ export function AgingHistoricalTrend({ snapshotCount, branch }: AgingHistoricalT
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    fetch('/api/aging/historical-trend/', { headers })
-      .then(r => r.json())
-      .then(d => { setAllData(d.trend ?? []); setLoading(false); })
-      .catch(() => { setError('Failed to load'); setLoading(false); });
+    import('../lib/api').then(({ api }) => {
+      api.get<{ trend: SnapshotTrend[] }>('/aging/historical-trend/').then(d => { setAllData(d.trend ?? []); setLoading(false); })
+        .catch(() => { setError('Failed to load'); setLoading(false); });
+    }).catch(() => { setError('Failed to load'); setLoading(false); });
   }, []);
 
   useEffect(() => { fetchTrend(); }, [fetchTrend]);

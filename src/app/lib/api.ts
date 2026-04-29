@@ -3,8 +3,14 @@
  * Centralized HTTP client with JWT authentication, auto-refresh, and error handling
  */
 
-const BASE_URL = import.meta.env.VITE_API_URL || 
-  (import.meta.env.DEV ? 'http://localhost:8000/api' : 'https://fasi-backend.onrender.com/api');
+// Normalise la variable d'environnement `VITE_API_URL`.
+// Accepte `VITE_API_URL` avec ou sans `/api` à la fin.
+const RAW_API_URL = import.meta.env.VITE_API_URL as string | undefined;
+const BACKEND_HOST = RAW_API_URL
+  ? RAW_API_URL.replace(/\/api\/?$/i, '')
+  : (import.meta.env.DEV ? 'http://localhost:8000' : 'https://fasi-backend.onrender.com');
+
+export const BASE_URL = `${BACKEND_HOST}/api`;
   
 function flattenErrorMessages(value: unknown): string[] {
   if (value == null) return [];

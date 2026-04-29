@@ -20,7 +20,7 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, KeyboardEvent } from 'react';
-import { api } from '../lib/api';
+import { api, BASE_URL } from '../lib/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design system
@@ -330,7 +330,7 @@ function useTTS() {
         .slice(0, 500);
 
       const token = localStorage.getItem('fasi_access_token') || '';
-      const resp  = await fetch('/api/ai-insights/voice/speak/', {
+      const resp  = await fetch(`${BASE_URL}/ai-insights/voice/speak/`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ text: clean, voice: 'nova' }),
@@ -376,15 +376,8 @@ function ExplainPanel({ answer, onClose }: { answer: string; onClose: () => void
     let mounted = true;
     (async () => {
       try {
-        const token = localStorage.getItem('fasi_access_token') || '';
-        const resp  = await fetch('/api/ai-insights/chat/explain/', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body:    JSON.stringify({ answer }),
-        });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
-        if (mounted) { setResult(data); setLoading(false); }
+        const data = await api.post('/ai-insights/chat/explain/', { answer }, { skipAuth: false });
+        if (mounted) { setResult(data as ExplainResult); setLoading(false); }
       } catch (e: any) {
         if (mounted) { setError(e.message); setLoading(false); }
       }
@@ -983,17 +976,16 @@ export function AIChat({ className = '' }: AIChatProps) {
         const formData = new FormData();
         formData.append('audio', blob, 'audio.webm');
         const token = localStorage.getItem('fasi_access_token') || '';
-        const resp = await fetch('/api/ai-insights/voice/transcribe/', {
-          method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData,
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data.transcription) {
+        try {
+          const data = await api.post<{ transcription?: string }>('/ai-insights/voice/transcribe/', formData);
+          if (data && data.transcription) {
             voice.setVoiceState('idle');
             send(data.transcription);
             voice.setLiveText('');
             return;
           }
+        } catch {
+          // fall through to fallback below
         }
       } catch { /* fall through */ }
 

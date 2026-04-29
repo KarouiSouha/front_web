@@ -7,8 +7,8 @@
 // ─────────────────────────────────────────────────────────────────
 import { useEffect, useState, useCallback } from 'react';
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine, Cell,
+    ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
+    Tooltip, ResponsiveContainer, ReferenceLine
 } from 'recharts';
 
 interface GrowthYear {
@@ -213,13 +213,10 @@ export function CustomerGrowthRate() {
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    fetch('/api/aging/customer-growth/', { headers })
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d: GrowthResponse) => { setData(d.years ?? []); setLoading(false); })
-      .catch(e => { setError(e.message || 'Failed to load'); setLoading(false); });
+    import('../lib/api').then(({ api }) => {
+      api.get<GrowthResponse>('/aging/customer-growth/').then((d) => { setData(d.years ?? []); setLoading(false); })
+        .catch(e => { setError(e.message || 'Failed to load'); setLoading(false); });
+    }).catch(() => { setError('Failed to load'); setLoading(false); });
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
