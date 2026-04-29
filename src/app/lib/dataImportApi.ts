@@ -71,9 +71,8 @@ export interface ImportResult {
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 const IMPORT_BASE = `${API_BASE}/import`;
-const axiosImport = axios.create({
-  baseURL: API_BASE,
-});
+const axiosImport = axios.create();
+
 /**
  * Data Import API methods
  */
