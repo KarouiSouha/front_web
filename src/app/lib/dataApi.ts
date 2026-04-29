@@ -86,8 +86,9 @@ export interface DetectResult {
   preview_rows: Record<string, string>[];
   total_rows_estimate?: number | null;
 }
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-
+const API_BASE = import.meta.env.VITE_API_URL || 
+  (import.meta.env.DEV ? 'http://localhost:8000/api' : 'https://fasi-backend.onrender.com/api');
+  
 export const dataImportApi = {
 
   uploadFile: async (
