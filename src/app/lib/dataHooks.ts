@@ -1,34 +1,34 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ApiError } from "./api";
 import {
-    salesKpiApi,
-    stockKpiApi,
-    creditKpiApi,
-    SalesKPIData,
-    StockKPIData,
-    CreditKPIData,
-    productsApi,
-    customersApi,
-    inventoryApi,
-    transactionsApi,
-    agingApi,
-    kpiApi,
-    MOVEMENT_TYPES,
-    type Product,
-    type Customer,
-    type InventorySnapshot,
-    type InventorySnapshotLine,
-    type InventoryLinesResponse,
-    type Movement,
-    type AgingRecord,
-    type AgingSnapshotItem,
-    type AgingRiskItem,
-    type AgingDistributionItem,
-    type MonthlySummaryItem,
-    type BranchSummary,
-    type CategoryBreakdown,
-    type KPIData,
-    type QueryParams,
+  salesKpiApi,
+  stockKpiApi,
+  creditKpiApi,
+  SalesKPIData,
+  StockKPIData,
+  CreditKPIData,
+  productsApi,
+  customersApi,
+  inventoryApi,
+  transactionsApi,
+  agingApi,
+  kpiApi,
+  MOVEMENT_TYPES,
+  type Product,
+  type Customer,
+  type InventorySnapshot,
+  type InventorySnapshotLine,
+  type InventoryLinesResponse,
+  type Movement,
+  type AgingRecord,
+  type AgingSnapshotItem,
+  type AgingRiskItem,
+  type AgingDistributionItem,
+  type MonthlySummaryItem,
+  type BranchSummary,
+  type CategoryBreakdown,
+  type KPIData,
+  type QueryParams,
 } from "./dataApi";
 import { notificationsApi } from "./notificationsApi";
 // ─────────────────────────────────────────────────────────────────────────────
@@ -457,6 +457,7 @@ export interface Notification {
   created_at: string;
   read_at?: string | null;
   metadata?: {
+    source?: string;
     product_code?: string;
     id?: string;
     [key: string]: any;
@@ -499,6 +500,10 @@ function deduplicateNotifications(items: Notification[]): Notification[] {
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 }
+
+function isSmartAlertsNotification(notification: Notification): boolean {
+  return notification.metadata?.source === 'alerts_page';
+}
  
 export function useNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -512,16 +517,12 @@ export function useNotifications() {
       if (withDetect) {
         await notificationsApi.detect().catch(() => {});
       }
-      const [res, criticalRes] = await Promise.all([
-        notificationsApi.list({ page: 1 }),
-        notificationsApi.list({ page: 1, severity: 'critical', is_read: false }),
-      ]);
+      const res = await notificationsApi.list({ page: 1 });
       const data = res as any;
-      const criticalData = criticalRes as any;
       const raw: Notification[] = data.results ?? [];
  
       // Dédupliquer avant affichage
-      const unique = deduplicateNotifications(raw);
+      const unique = deduplicateNotifications(raw).filter(isSmartAlertsNotification);
  
       setNotifications(unique.slice(0, 15));
  
@@ -530,11 +531,7 @@ export function useNotifications() {
       setUnreadCount(unique.filter(n => !n.is_read).length);
 
       // Compteur global des critiques non lues (pas limite aux 15 notifs affichées)
-      if (typeof criticalData?.count === 'number') {
-        setCriticalUnreadCount(criticalData.count);
-      } else {
-        setCriticalUnreadCount(unique.filter(n => n.severity === 'critical' && !n.is_read).length);
-      }
+      setCriticalUnreadCount(unique.filter(n => n.severity === 'critical' && !n.is_read).length);
     } catch (err) {
       console.error('[useNotifications] load error:', err);
     } finally {

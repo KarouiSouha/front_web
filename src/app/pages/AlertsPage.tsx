@@ -562,7 +562,7 @@ export function AlertsPage() {
       title:       a.message.length > 90 ? a.message.slice(0, 87) + '…' : a.message,
       message:     a.message,
       detail:      a.detail,
-      metadata:    a.metadata,
+      metadata:    { ...(a.metadata ?? {}), source: 'alerts_page' },
     }));
 
     notificationsApi.syncAlerts(payload).catch(() => {
