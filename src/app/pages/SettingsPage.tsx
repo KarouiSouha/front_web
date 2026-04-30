@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Building, Bell, Shield, Loader2, Eye, EyeOff, Check, ChevronRight } from 'lucide-react';
-import { Switch } from '../components/ui/switch';
+import { User, Building, Shield, Loader2, Eye, EyeOff, Check, ChevronRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 import { toast } from 'sonner';
@@ -137,18 +136,6 @@ const STYLE = `
   }
   .s-btn-primary:disabled { opacity: .5; cursor: not-allowed; }
 
-  /* Notification rows */
-  .notif-row {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: .85rem 0; border-bottom: 1px solid var(--border);
-  }
-  .notif-row:last-child { border-bottom: none; }
-  .notif-row-left label {
-    font-size: .875rem; font-weight: 500; color: var(--card-foreground);
-    display: block; margin-bottom: .15rem; cursor: pointer;
-  }
-  .notif-row-left p { font-size: .8rem; color: var(--muted-foreground); margin: 0; }
-
   /* Company badge */
   .info-row { display: flex; flex-direction: column; gap: .4rem; }
   .info-row label {
@@ -209,12 +196,11 @@ function Field({ label, hint, error, children }: {
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'company' | 'notifications' | 'security';
+type Tab = 'profile' | 'company' | 'security';
 
 const NAV: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'profile',       label: 'Profile',       icon: <User size={15} /> },
   { id: 'company',       label: 'Company',        icon: <Building size={15} /> },
-  { id: 'notifications', label: 'Notifications',  icon: <Bell size={15} /> },
   { id: 'security',      label: 'Security',       icon: <Shield size={15} /> },
 ];
 
@@ -225,11 +211,11 @@ export function SettingsPage() {
   const [tab, setTab] = useState<Tab>('profile');
   const isAdmin = (user?.role ?? '').toLowerCase().includes('admin');
   const visibleNav = isAdmin
-    ? NAV.filter(item => item.id !== 'company' && item.id !== 'notifications')
+    ? NAV.filter(item => item.id !== 'company')
     : NAV;
 
   useEffect(() => {
-    if (isAdmin && (tab === 'company' || tab === 'notifications')) {
+    if (isAdmin && tab === 'company') {
       setTab('profile');
     }
   }, [isAdmin, tab]);
@@ -378,34 +364,6 @@ export function SettingsPage() {
               <div className="info-row">
                 <label>Current ERP</label>
                 <div className="info-badge">{user?.companyCurrentErp || 'Not provided'}</div>
-              </div>
-            </SCard>
-          )}
-
-          {/* ── NOTIFICATIONS ── */}
-          {!isAdmin && tab === 'notifications' && (
-            <SCard icon={<Bell size={16} />} title="Notification preferences" desc="Choose which alerts you receive">
-              <div>
-                {[
-                  { id: 'email-alerts', label: 'Email Alerts',      desc: 'Critical alerts via email',                  on: true },
-                  { id: 'low-stock',    label: 'Stock Alerts',       desc: 'Notify when stock is low',                   on: true },
-                  { id: 'overdue',      label: 'Overdue Payments',   desc: 'Alerts for overdue customer payments',       on: true },
-                  { id: 'ai-insights',  label: 'AI Insights',        desc: 'AI-powered recommendations and suggestions', on: true },
-                  { id: 'weekly',       label: 'Weekly Report',      desc: 'Weekly performance summary',                 on: false },
-                ].map(item => (
-                  <div key={item.id} className="notif-row">
-                    <div className="notif-row-left">
-                      <label htmlFor={item.id}>{item.label}</label>
-                      <p>{item.desc}</p>
-                    </div>
-                    <Switch id={item.id} defaultChecked={item.on} />
-                  </div>
-                ))}
-              </div>
-              <div>
-                <button className="s-btn s-btn-primary">
-                  <Check size={14} /> Save preferences
-                </button>
               </div>
             </SCard>
           )}
