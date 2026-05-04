@@ -6,7 +6,7 @@ import { Link, useNavigate } from 'react-router';
 import { ArrowLeft, Mail, KeyRound, Lock, Eye, EyeOff, CheckCircle2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-const API_BASE = '/api/users';
+const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
 
 type Step = 'request' | 'verify' | 'reset' | 'done';
 
@@ -122,7 +122,7 @@ export function ForgotPasswordPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/forgot-password/request/`, {
+      const res = await fetch(`${API_BASE}/users/forgot-password/request/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -139,7 +139,7 @@ export function ForgotPasswordPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/forgot-password/verify/`, {
+      const res = await fetch(`${API_BASE}/users/forgot-password/verify/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, code }),
@@ -160,7 +160,7 @@ export function ForgotPasswordPage() {
     if (newPassword !== confirmPassword) { toast.error('Passwords do not match.'); return; }
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/forgot-password/reset/`, {
+      const res = await fetch(`${API_BASE}/users/forgot-password/reset/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reset_token: resetToken, new_password: newPassword, new_password_confirm: confirmPassword }),
