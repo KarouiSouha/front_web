@@ -178,7 +178,10 @@ export async function apiFetch<T = unknown>(
     const err = new ApiError(response.status, errorData);
 
     if (response.status === 401) {
-      console.warn('401 Unauthorized - Possible token issue');
+      console.warn('401 Unauthorized - Clearing tokens and redirecting to login');
+      TokenStorage.clear();
+      window.location.href = '/login';
+      throw err;
     }
 
     throw err;

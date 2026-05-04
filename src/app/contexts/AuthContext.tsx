@@ -183,6 +183,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Periodic token validation ───────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(async () => {
+      try {
+        await authApi.getProfile(); // If this fails with 401, tokens are revoked
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          // Tokens revoked, force logout
+          TokenStorage.clear();
+          setUser(null);
+          setUsers([]);
+        }
+      }
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [user]);
+
   // ── LOGIN ──────────────────────────────────────────────────────────────
   const login = async (email: string, password: string): Promise<{ success: boolean; message: string }> => {
     setIsLoading(true);

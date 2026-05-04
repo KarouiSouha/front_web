@@ -154,6 +154,26 @@ export const authApi = {
     TokenStorage.clear();
   },
 
+  logoutAll: async (): Promise<{ message: string; sessions_revoked: number }> => {
+    const API_BASE = import.meta.env.VITE_API_URL ?? 'https://fasi-backend.onrender.com/api';
+    const access = TokenStorage.getAccess();
+    const response = await fetch(`${API_BASE}/auth/logout-all/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(access ? { Authorization: `Bearer ${access}` } : {}),
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to logout from all devices');
+    }
+
+    const result = await response.json();
+    TokenStorage.clear();
+    return result;
+  },
+
   // ── Profile ─────────────────────────
 
   getProfile: (): Promise<BackendUser> =>
