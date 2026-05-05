@@ -100,7 +100,8 @@ async function refreshAccessToken(): Promise<string> {
   if (!res.ok) {
     TokenStorage.clear();
     window.location.href = '/login';
-    throw new Error('Refresh token invalid or expired');
+    const errorData = await res.json().catch(() => ({ error: 'Refresh token invalid or expired' }));
+    throw new ApiError(res.status, errorData);
   }
 
   const data = await res.json();
