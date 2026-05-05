@@ -183,24 +183,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Periodic token validation ───────────────────────────────────────────
+  // ── Proactive logout detection ─────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
 
-    const interval = setInterval(async () => {
+    const performAuthCheck = async () => {
       try {
-        await authApi.getProfile(); // If this fails with 401, tokens are revoked
+        await authApi.getProfile();
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
-          // Tokens revoked, force logout
           TokenStorage.clear();
           setUser(null);
           setUsers([]);
+          window.location.href = '/login';
         }
       }
-    }, 10000); // Check every 10 seconds
+    };
 
-    return () => clearInterval(interval);
+    const interval = setInterval(performAuthCheck, 5000); // Re-check every 5 seconds
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        performAuthCheck();
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', performAuthCheck);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', performAuthCheck);
+    };
   }, [user]);
 
   // ── LOGIN ──────────────────────────────────────────────────────────────
