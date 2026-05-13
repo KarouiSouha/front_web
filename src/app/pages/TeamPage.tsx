@@ -582,13 +582,12 @@ export function TeamPage() {
         {/* ── Stat cards ── */}
         <div style={{
           display:             'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateColumns: 'repeat(2, 1fr)',
           gap:                  16,
           marginBottom:         24,
         }}>
           <StatCard label="Total Agents"  value={agents.length}    accent={C.indigo}  />
           <StatCard label="Active"        value={activeCount}       accent={C.emerald} />
-          <StatCard label="Suspended"     value={suspendedCount}    accent={C.rose}    />
         </div>
 
         {/* ── Search ── */}
