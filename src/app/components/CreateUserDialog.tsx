@@ -172,7 +172,7 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
             <Label htmlFor="tempPassword">Temporary password</Label>
             <Input
               id="tempPassword"
-              type="text"
+              type="password"
               placeholder="Leave blank for default password"
               value={formData.tempPassword}
               onChange={(e) => setFormData({ ...formData, tempPassword: e.target.value })}
