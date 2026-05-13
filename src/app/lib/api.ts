@@ -83,11 +83,16 @@ const onRefreshed = (token: string) => {
   refreshSubscribers = [];
 };
 
+const authRoutes = ['/login', '/signup', '/forgot-password'];
+const isAuthRoute = () => authRoutes.includes(window.location.pathname);
+
 async function refreshAccessToken(): Promise<string> {
   const refreshToken = TokenStorage.getRefresh();
   if (!refreshToken) {
     TokenStorage.clear();
-    window.location.href = '/login';
+    if (!isAuthRoute()) {
+      window.location.href = '/login';
+    }
     throw new Error('No refresh token available');
   }
 
@@ -99,7 +104,9 @@ async function refreshAccessToken(): Promise<string> {
 
   if (!res.ok) {
     TokenStorage.clear();
-    window.location.href = '/login';
+    if (!isAuthRoute()) {
+      window.location.href = '/login';
+    }
     const errorData = await res.json().catch(() => ({ error: 'Refresh token invalid or expired' }));
     throw new ApiError(res.status, errorData);
   }
@@ -181,7 +188,9 @@ export async function apiFetch<T = unknown>(
     if (response.status === 401) {
       console.warn('401 Unauthorized - Clearing tokens and redirecting to login');
       TokenStorage.clear();
-      window.location.href = '/login';
+      if (!isAuthRoute()) {
+        window.location.href = '/login';
+      }
       throw err;
     }
 

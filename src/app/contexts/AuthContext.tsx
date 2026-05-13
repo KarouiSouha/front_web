@@ -187,7 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
 
-    const performAuthCheck = async () => {
+      const performAuthCheck = async () => {
       try {
         await authApi.getProfile();
       } catch (err) {
@@ -195,7 +195,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           TokenStorage.clear();
           setUser(null);
           setUsers([]);
-          window.location.href = '/login';
+          const authPaths = ['/login', '/signup', '/forgot-password'];
+          if (!authPaths.includes(window.location.pathname)) {
+            window.location.href = '/login';
+          }
         }
       }
     };

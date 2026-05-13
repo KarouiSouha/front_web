@@ -35,14 +35,17 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage('');
     const result = await login(formData.email, formData.password);
     if (result.success) {
       toast.success('Login successful');
       navigate('/dashboard');
     } else {
+      setErrorMessage(result.message);
       toast.error(result.message);
     }
   };
@@ -193,6 +196,12 @@ export function LoginPage() {
                   </button>
                 </div>
               </div>
+
+              {errorMessage ? (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  {errorMessage}
+                </div>
+              ) : null}
 
               <Button
                 type="submit"
