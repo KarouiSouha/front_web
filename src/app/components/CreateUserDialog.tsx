@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Building } from 'lucide-react';
+import { Check, Building, Eye, EyeOff } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -43,6 +43,7 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
     email: '',
     tempPassword: '',
   });
+  const [showTempPassword, setShowTempPassword] = useState(false);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const agentPermissions = AVAILABLE_PERMISSIONS.filter(p => p.id !== 'view-team');
@@ -170,13 +171,24 @@ export function CreateUserDialog({ open, onClose, onCreateUser }: CreateUserDial
           {/* Temporary password */}
           <div className="space-y-2">
             <Label htmlFor="tempPassword">Temporary password</Label>
-            <Input
-              id="tempPassword"
-              type="password"
-              placeholder="Leave blank for default password"
-              value={formData.tempPassword}
-              onChange={(e) => setFormData({ ...formData, tempPassword: e.target.value })}
-            />
+            <div className="relative">
+              <Input
+                id="tempPassword"
+                type={showTempPassword ? 'text' : 'password'}
+                placeholder="Leave blank for default password"
+                value={formData.tempPassword}
+                onChange={(e) => setFormData({ ...formData, tempPassword: e.target.value })}
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowTempPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+                aria-label={showTempPassword ? 'Hide password' : 'Show password'}
+              >
+                {showTempPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             <p className="text-xs text-muted-foreground">Default: Agent@123456</p>
           </div>
 
