@@ -81,7 +81,6 @@ export function LandingPage() {
       { icon: Calendar,     title: 'Seasonal Patterns',          description: 'Identify sales trends and cycles' },
     ],
     alerts: [
-      { icon: Settings,      title: 'Configurable Thresholds',  description: 'Define your own criteria' },
       { icon: Bell,          title: 'Real-time Notifications',  description: 'Receive instant alerts' },
       { icon: AlertTriangle, title: 'Proactive Risk Alerts',    description: 'Anticipate problems' },
       { icon: Clock,         title: 'Alert History',            description: 'View complete history' },
@@ -216,19 +215,7 @@ export function LandingPage() {
                 </Button>
               </div>
 
-              {/* Trust indicators */}
-              <div className="flex items-center gap-6">
-                {[
-                  { label: '500+', sub: 'Companies' },
-                  { label: '99.9%', sub: 'Uptime' },
-                  { label: '92%', sub: 'AI Accuracy' },
-                ].map((stat, i) => (
-                  <div key={i} className="text-center">
-                    <div className="text-2xl font-black" style={{ color: '#0284c7' }}>{stat.label}</div>
-                    <div className="text-xs text-slate-400 font-medium">{stat.sub}</div>
-                  </div>
-                ))}
-              </div>
+
             </div>
 
             {/* Right — dashboard screenshot */}
@@ -588,76 +575,56 @@ export function LandingPage() {
       {/* ── FOOTER ───────────────────────────────────────────────────────── */}
       <footer className="py-16 border-t" style={{ background: '#0c1a2e', borderColor: '#1e3a5f' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-4 gap-12 mb-12">
-            {/* Brand */}
-            <div className="md:col-span-1">
-              <div className="flex items-center gap-2.5 mb-4">
-                <WeegMark size={36} />
+<div className="grid md:grid-cols-1 place-items-center text-center gap-12 mb-12">
+              {/* Brand */}
+<div className="md:col-span-1 flex flex-col items-center text-center mx-auto">
+                <div className="flex items-center gap-2.5 mb-4">
+                <WeegMark size={45} />
                 <div>
                   <span className="font-black text-xl text-white">Weeg</span>
-                  <div className="text-[10px] text-slate-400 leading-tight">
+                  <div className="text-[20px] text-slate-400 leading-tight">
                     Where Data Finds <span style={{ color: '#f97316' }}>Balance</span>
                   </div>
                 </div>
               </div>
-              <p className="text-sm text-slate-400 leading-relaxed">
+              <p className="text-md text-slate-400 leading-relaxed">
                 The intelligent platform that transforms your business data into actionable insights.
               </p>
               {/* Brand accent line */}
-              <div className="mt-5 h-0.5 w-24 rounded-full"
+              <div className="mt-5 h-1 w-70 rounded-full"
                    style={{ background: 'linear-gradient(90deg, #0284c7, #f97316)' }} />
             </div>
 
-            {/* Product */}
-            <div>
-              <h4 className="font-bold text-white mb-4 text-sm uppercase tracking-wide">Product</h4>
-              <ul className="space-y-3 text-sm text-slate-400">
-                {['Features', 'Pricing', 'Demo', 'API'].map(l => (
-                  <li key={l}><a href="#" className="hover:text-sky-400 transition-colors">{l}</a></li>
-                ))}
-              </ul>
-            </div>
 
-            {/* Resources */}
-            <div>
-              <h4 className="font-bold text-white mb-4 text-sm uppercase tracking-wide">Resources</h4>
-              <ul className="space-y-3 text-sm text-slate-400">
-                {['Documentation', 'Guides', 'Blog', 'Support'].map(l => (
-                  <li key={l}><a href="#" className="hover:text-sky-400 transition-colors">{l}</a></li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Contact */}
-            <div>
-              <h4 className="font-bold text-white mb-4 text-sm uppercase tracking-wide">Contact</h4>
-              <ul className="space-y-3 text-sm text-slate-400">
-                <li className="flex items-center gap-2">
-                  <Mail className="h-4 w-4" style={{ color: '#0ea5e9' }} />
-                  <a href="mailto:weeg@digitalia.ly" className="hover:text-sky-400 transition-colors">weeg@digitalia.ly</a>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Phone className="h-4 w-4" style={{ color: '#0ea5e9' }} />
-                  <span>+216 21547607</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 mt-0.5" style={{ color: '#0ea5e9' }} />
-                  <span>Bizerte, Tunisia</span>
-                </li>
-              </ul>
-            </div>
           </div>
 
           {/* Bottom */}
           <div className="pt-8 border-t flex flex-col md:flex-row justify-between items-center gap-4"
-               style={{ borderColor: '#1e3a5f' }}>
-            <div className="text-sm text-slate-500">© 2026 Weeg. All rights reserved.</div>
-            <div className="flex gap-6 text-sm text-slate-500">
-              {['Legal', 'Privacy', 'Terms'].map(l => (
-                <a key={l} href="#" className="hover:text-sky-400 transition-colors">{l}</a>
-              ))}
+              style={{ borderColor: '#1e3a5f' }}>
+            
+            <div className="text-sm text-slate-500">
+              © 2026 Weeg. All rights reserved.
+            </div>
+
+            {/* Contact moved here */}
+            <div className="flex flex-wrap gap-6 text-sm text-slate-400">
+          <a href="mailto:weeg@digitalia.ly" className="flex items-center gap-2 hover:text-sky-400 transition-colors">
+            <Mail className="h-4 w-4" style={{ color: '#0ea5e9' }} />
+            weeg@digitalia.ly
+          </a>
+
+              <span className="flex items-center gap-2">
+                <Phone className="h-4 w-4" style={{ color: '#0ea5e9' }} />
+                +216 21547607
+              </span>
+
+              <span className="flex items-center gap-2">
+                <MapPin className="h-4 w-4" style={{ color: '#0ea5e9' }} />
+                Bizerte, Tunisia
+              </span>
             </div>
           </div>
+
         </div>
       </footer>
     </div>
