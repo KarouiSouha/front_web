@@ -340,7 +340,7 @@ export function LandingPage() {
               </div>
               <h3 className="text-2xl font-bold text-slate-800">Alerts & Monitoring</h3>
             </div>
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {features.alerts.map((f, i) => (
                 <div key={i} className="p-6 rounded-xl bg-white border transition-all hover:shadow-lg hover:-translate-y-0.5"
                      style={{ borderColor: '#e2e8f0' }}>
