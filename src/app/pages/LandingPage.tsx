@@ -30,6 +30,7 @@ import {
   CheckCircle,
   LayoutDashboard,
   Star,
+  Shield ,
 } from 'lucide-react';
 import { ImageWithFallback } from '../components/image/ImageWithFallback';
 import dashboardImage from '../components/image/logo.jpeg';
@@ -54,7 +55,6 @@ function WeegMark({ size = 40 }: { size?: number }) {
     </svg>
   );
 }
-
 export function LandingPage() {
   const [activeRole, setActiveRole] = useState<'agent' | 'manager' | 'admin'>('manager');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
@@ -68,17 +68,17 @@ export function LandingPage() {
 
   const features = {
     analytics: [
-      { icon: Upload,        title: 'Automated Excel Import',      description: 'Import your data with one click' },
-      { icon: LineChart,     title: 'Real-time KPI Calculation',   description: 'Track your indicators instantly' },
-      { icon: FileSpreadsheet, title: 'Detailed Report Generation', description: 'Complete and customizable reports' },
-      { icon: Download,      title: 'PDF/Excel Export',            description: 'Export your data easily' },
+      { icon: Upload,          title: 'Automated Excel Import',      description: 'Import your data with one click' },
+      { icon: LineChart,       title: 'Real-time KPI Calculation',   description: 'Track your indicators instantly' },
+      { icon: FileSpreadsheet, title: 'Detailed Report Generation',  description: 'Complete and customizable reports' },
+      { icon: Download,        title: 'PDF/Excel Export',            description: 'Export your data easily' },
     ],
     ai: [
-      { icon: TrendingUp,   title: 'Sales Predictions',          description: 'Anticipate your future performance' },
+      { icon: TrendingUp,    title: 'Sales Predictions',         description: 'Anticipate your future performance' },
       { icon: AlertTriangle, title: 'Anomaly Detection',         description: 'Identify problems before they worsen' },
-      { icon: TrendingDown, title: 'Customer Churn Analysis',    description: 'Predict customer loss risks' },
-      { icon: Package,      title: 'Inventory Optimization',     description: 'Intelligent restocking recommendations' },
-      { icon: Calendar,     title: 'Seasonal Patterns',          description: 'Identify sales trends and cycles' },
+      { icon: TrendingDown,  title: 'Customer Churn Analysis',   description: 'Predict customer loss risks' },
+      { icon: Package,       title: 'Inventory Optimization',    description: 'Intelligent restocking recommendations' },
+      { icon: Calendar,      title: 'Seasonal Patterns',         description: 'Identify sales trends and cycles' },
     ],
     alerts: [
       { icon: Bell,          title: 'Real-time Notifications',  description: 'Receive instant alerts' },
@@ -92,44 +92,65 @@ export function LandingPage() {
       title: 'For Agents',
       subtitle: 'Save time on your daily reports',
       benefits: [
-        { icon: Upload,          text: 'Quick data import' },
-        { icon: LayoutDashboard, text: 'Customizable dashboards' },
-        { icon: Eye,             text: 'Instant customer history' },
+        { icon: Upload,          text: 'Import movements & inventory files' },
+        { icon: BarChart3, text: 'Access reports & KPI dashboards' },
+        { icon: Eye,             text: 'Instant customer & aging history' },
       ],
     },
     manager: {
       title: 'For Managers',
       subtitle: 'Lead your team with powerful insights',
       benefits: [
-        { icon: FileSpreadsheet, text: 'Detailed multi-period reports' },
-        { icon: BarChart3,       text: 'Performance comparison' },
-        { icon: Users,           text: 'Simplified team management' },
+        { icon: Users, text: 'Create and manage agent accounts' },
+        { icon: Lock,       text: 'Assign and control agent permissions' },
+        { icon: Brain,           text: 'AI chatbot for decision support' },
       ],
     },
     admin: {
       title: 'For Admins',
       subtitle: 'Control and secure your platform',
       benefits: [
-        { icon: Users,     text: 'User management' },
-        { icon: UserCheck, text: 'Account validation' },
-        { icon: Lock,      text: 'Permission control' },
+        { icon: Users,     text: 'View all managers and agents' },
+        { icon: UserCheck, text: 'Approve or reject manager registrations' },
+        { icon: Shield,      text: 'Suspend or reactivate manager accounts' },
       ],
     },
   };
 
   const steps = [
-    { number: '01', title: 'Import Your Data',    description: 'Upload your Excel files in just a few clicks',            icon: Upload,  color: '#0284c7' },
-    { number: '02', title: 'Analyze Automatically', description: 'AI calculates your KPIs and identifies trends',         icon: Brain,   color: '#0ea5e9' },
-    { number: '03', title: 'Receive Alerts',       description: 'Intelligent notifications and real-time predictions',    icon: Bell,    color: '#f97316' },
-    { number: '04', title: 'Act Effectively',      description: 'Make decisions based on concrete recommendations',        icon: Target,  color: '#ea580c' },
+    { number: '01', title: 'Import Your Data',      description: 'Upload your Excel files in just a few clicks',         icon: Upload, color: '#0284c7' },
+    { number: '02', title: 'Analyze Automatically', description: 'AI calculates your KPIs and identifies trends',        icon: Brain,  color: '#0ea5e9' },
+    { number: '03', title: 'Receive Alerts',        description: 'Intelligent notifications and real-time predictions',  icon: Bell,   color: '#f97316' },
+    { number: '04', title: 'Act Effectively',       description: 'Make decisions based on concrete recommendations',     icon: Target, color: '#ea580c' },
   ];
 
+  // ── FAQ ── (corrections applied to Q3 and Q4)
   const faqs = [
-    { question: 'How do I import my data?',        answer: 'You can import your data in just a few clicks through our intuitive interface. We support Excel files (.xlsx, .xls), CSV, and Google Sheets. A wizard guides you through each step to correctly map your columns.' },
-    { question: 'Is the AI accurate?',              answer: 'Our AI uses advanced machine learning algorithms trained on millions of transactions. The average accuracy of our predictions is 92%. The more you use the platform, the better the predictions become through continuous learning.' },
-    { question: 'Can I customize KPIs?',            answer: 'Absolutely! You can create custom KPIs according to your specific needs, define your own calculation formulas, and configure alert thresholds adapted to your business.' },
-    { question: 'What about data security?',        answer: 'We take security very seriously. Your data is encrypted in transit (SSL/TLS) and at rest (AES-256). We are GDPR compliant and host your data in Europe. Security audits are performed regularly.' },
-    { question: 'Can I change my plan at any time?', answer: 'Yes, you can upgrade or downgrade your plan at any time. Changes take effect immediately and billing is prorated.' },
+    {
+      question: 'How do I import my data?',
+      answer:
+       'You can import your data easily through our intuitive interface. The platform supports Excel files (.xlsx and .xls), and a guided wizard helps you map your columns correctly step by step.',
+    },
+    {
+      question: 'Is the AI accurate?',
+      answer:
+        'Our AI uses advanced machine learning algorithms, including Holt-Winters triple exponential smoothing, to analyze historical data and generate predictions and recommendations. The more data you provide, the more reliable the forecasts become.',
+    },
+    {
+      question: 'Can I customize KPIs?',
+      answer:
+        'The application provides predefined KPIs related to sales, inventory, and client credit. Users can monitor these indicators and set alert thresholds to track performance in real time.',
+    },
+    {
+      question: 'What about data security?',
+      answer:
+       'We take data security very seriously. Your data is encrypted in transit using SSL/TLS, and the platform includes secure authentication with email verification. We continuously improve our protection measures to keep your information safe.',
+    },
+    {
+      question: 'Can I change my plan at any time?',
+      answer:
+        'You can contact our team to discuss the plan that best fits your needs. We offer flexible options for businesses of different sizes.',
+    },
   ];
 
   return (
@@ -188,7 +209,6 @@ export function LandingPage() {
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             {/* Left */}
             <div>
-              
               <h1 className="text-5xl lg:text-6xl font-extrabold tracking-tight mb-7 leading-[1.1]" style={{ color: '#0f172a' }}>
                 Transform Your{' '}
                 <span className="relative inline-block">
@@ -214,8 +234,6 @@ export function LandingPage() {
                   Watch Demo
                 </Button>
               </div>
-
-
             </div>
 
             {/* Right — dashboard screenshot */}
@@ -450,12 +468,10 @@ export function LandingPage() {
       {/* ── 5. HOW IT WORKS ──────────────────────────────────────────────── */}
       <section className="py-24 text-white relative overflow-hidden"
                style={{ background: 'linear-gradient(135deg, #0c2340 0%, #0f2f5a 50%, #1a1a2e 100%)' }}>
-        {/* Decorative */}
         <div className="absolute top-0 right-0 w-[400px] h-[400px] rounded-full opacity-10 blur-3xl"
              style={{ background: 'radial-gradient(circle, #38bdf8, transparent)' }} />
         <div className="absolute bottom-0 left-0 w-[300px] h-[300px] rounded-full opacity-10 blur-3xl"
              style={{ background: 'radial-gradient(circle, #f97316, transparent)' }} />
-        {/* Orange sweep line */}
         <div className="absolute top-0 left-0 right-0 h-[3px]"
              style={{ background: 'linear-gradient(90deg, transparent, #f97316, #0ea5e9, transparent)' }} />
 
@@ -468,19 +484,15 @@ export function LandingPage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             {steps.map((step, i) => (
               <div key={i} className="relative text-center group">
-                {/* Step number watermark */}
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-8xl font-black opacity-5 select-none">
                   {step.number}
                 </div>
-                {/* Icon */}
                 <div className="relative z-10 h-20 w-20 rounded-2xl mx-auto mb-6 flex items-center justify-center shadow-2xl transition-transform group-hover:-translate-y-1"
                      style={{ background: step.color }}>
                   <step.icon className="h-10 w-10 text-white" />
                 </div>
                 <h3 className="text-xl font-bold mb-3">{step.title}</h3>
                 <p className="text-sky-200 text-sm leading-relaxed">{step.description}</p>
-
-                {/* Connector */}
                 {i < 3 && (
                   <div className="hidden lg:block absolute top-10 left-[calc(50%+48px)] w-[calc(100%-96px)] h-px opacity-30"
                        style={{ background: 'linear-gradient(90deg, #38bdf8, #f97316)' }} />
@@ -496,7 +508,6 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="rounded-3xl p-12 lg:p-16 border-2 overflow-hidden relative"
                style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #fff7ed 100%)', borderColor: '#bae6fd' }}>
-            {/* Decorative swoosh */}
             <div className="absolute -bottom-10 -right-10 w-60 h-60 rounded-full opacity-20 blur-3xl"
                  style={{ background: '#f97316' }} />
 
@@ -575,10 +586,9 @@ export function LandingPage() {
       {/* ── FOOTER ───────────────────────────────────────────────────────── */}
       <footer className="py-16 border-t" style={{ background: '#0c1a2e', borderColor: '#1e3a5f' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-<div className="grid md:grid-cols-1 place-items-center text-center gap-12 mb-12">
-              {/* Brand */}
-<div className="md:col-span-1 flex flex-col items-center text-center mx-auto">
-                <div className="flex items-center gap-2.5 mb-4">
+          <div className="grid md:grid-cols-1 place-items-center text-center gap-12 mb-12">
+            <div className="md:col-span-1 flex flex-col items-center text-center mx-auto">
+              <div className="flex items-center gap-2.5 mb-4">
                 <WeegMark size={45} />
                 <div>
                   <span className="font-black text-xl text-white">Weeg</span>
@@ -590,41 +600,32 @@ export function LandingPage() {
               <p className="text-md text-slate-400 leading-relaxed">
                 The intelligent platform that transforms your business data into actionable insights.
               </p>
-              {/* Brand accent line */}
               <div className="mt-5 h-1 w-70 rounded-full"
                    style={{ background: 'linear-gradient(90deg, #0284c7, #f97316)' }} />
             </div>
-
-
           </div>
 
           {/* Bottom */}
           <div className="pt-8 border-t flex flex-col md:flex-row justify-between items-center gap-4"
-              style={{ borderColor: '#1e3a5f' }}>
-            
+               style={{ borderColor: '#1e3a5f' }}>
             <div className="text-sm text-slate-500">
               © 2026 Weeg. All rights reserved.
             </div>
-
-            {/* Contact moved here */}
             <div className="flex flex-wrap gap-6 text-sm text-slate-400">
-          <a href="mailto:weeg@digitalia.ly" className="flex items-center gap-2 hover:text-sky-400 transition-colors">
-            <Mail className="h-4 w-4" style={{ color: '#0ea5e9' }} />
-            weeg@digitalia.ly
-          </a>
-
+              <a href="mailto:weeg@digitalia.ly" className="flex items-center gap-2 hover:text-sky-400 transition-colors">
+                <Mail className="h-4 w-4" style={{ color: '#0ea5e9' }} />
+                weeg@digitalia.ly
+              </a>
               <span className="flex items-center gap-2">
                 <Phone className="h-4 w-4" style={{ color: '#0ea5e9' }} />
                 +216 21547607
               </span>
-
               <span className="flex items-center gap-2">
                 <MapPin className="h-4 w-4" style={{ color: '#0ea5e9' }} />
                 Bizerte, Tunisia
               </span>
             </div>
           </div>
-
         </div>
       </footer>
     </div>
