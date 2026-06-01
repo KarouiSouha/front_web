@@ -187,7 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
 
-      const performAuthCheck = async () => {
+    const performAuthCheck = async () => {
       try {
         await authApi.getProfile();
       } catch (err) {
@@ -203,7 +203,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    const interval = setInterval(performAuthCheck, 5000); // Re-check every 5 seconds
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -215,7 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener('focus', performAuthCheck);
 
     return () => {
-      clearInterval(interval);
+
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', performAuthCheck);
     };
