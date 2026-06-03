@@ -479,7 +479,7 @@ export function AgingReceivablePage() {
       .then(res => setCreditKPI(res.data)).catch(() => {}).finally(() => setCreditKPILoading(false));
   }, [effectiveAgingParams]);
 
-  // ── ✅ filtered = aging rows after applying ALL 4 filters ─────────────────
+  // ── ✅ filtered = aging rows after applying ALL 3 filters ─────────────────
   const filtered = useMemo(() => {
     let data = [...rows];
     // Risk filter (client-side)

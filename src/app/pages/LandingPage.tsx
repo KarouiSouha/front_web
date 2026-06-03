@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import { Button } from '../components/ui/button';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   BarChart3,
   Users,
@@ -30,11 +30,11 @@ import {
   CheckCircle,
   LayoutDashboard,
   Star,
-  Shield ,
+  Shield,
 } from 'lucide-react';
 import { ImageWithFallback } from '../components/image/ImageWithFallback';
 import dashboardImage from '../components/image/logo.jpeg';
-import weegDemoVideo from '../components/image/weeg_demo.mp4';
+import weegDemoVideo from '../components/image/demo.mp4';
 
 // ── WEEG inline SVG logo mark ──────────────────────────────────────────────
 function WeegMark({ size = 40 }: { size?: number }) {
@@ -55,9 +55,21 @@ function WeegMark({ size = 40 }: { size?: number }) {
     </svg>
   );
 }
+
 export function LandingPage() {
   const [activeRole, setActiveRole] = useState<'agent' | 'manager' | 'admin'>('manager');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  // ── Refs pour le scroll + autoplay ──────────────────────────────────────
+  const demoSectionRef = useRef<HTMLElement>(null);
+  const demoVideoRef = useRef<HTMLVideoElement>(null);
+
+  const handleWatchDemo = () => {
+    demoSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => {
+      demoVideoRef.current?.play();
+    }, 600);
+  };
 
   const problemSolutions = [
     { problem: 'Time-consuming manual Excel reports',     solution: 'Automatic import and instant reports',              icon: Upload },
@@ -92,9 +104,9 @@ export function LandingPage() {
       title: 'For Agents',
       subtitle: 'Save time on your daily reports',
       benefits: [
-        { icon: Upload,          text: 'Import movements & inventory files' },
+        { icon: Upload,    text: 'Import movements & inventory files' },
         { icon: BarChart3, text: 'Access reports & KPI dashboards' },
-        { icon: Eye,             text: 'Instant customer & aging history' },
+        { icon: Eye,       text: 'Instant customer & aging history' },
       ],
     },
     manager: {
@@ -102,8 +114,8 @@ export function LandingPage() {
       subtitle: 'Lead your team with powerful insights',
       benefits: [
         { icon: Users, text: 'Create and manage agent accounts' },
-        { icon: Lock,       text: 'Assign and control agent permissions' },
-        { icon: Brain,           text: 'AI chatbot for decision support' },
+        { icon: Lock,  text: 'Assign and control agent permissions' },
+        { icon: Brain, text: 'AI chatbot for decision support' },
       ],
     },
     admin: {
@@ -112,24 +124,23 @@ export function LandingPage() {
       benefits: [
         { icon: Users,     text: 'View all managers and agents' },
         { icon: UserCheck, text: 'Approve or reject manager registrations' },
-        { icon: Shield,      text: 'Suspend or reactivate manager accounts' },
+        { icon: Shield,    text: 'Suspend or reactivate manager accounts' },
       ],
     },
   };
 
   const steps = [
-    { number: '01', title: 'Import Your Data',      description: 'Upload your Excel files in just a few clicks',         icon: Upload, color: '#0284c7' },
-    { number: '02', title: 'Analyze Automatically', description: 'AI calculates your KPIs and identifies trends',        icon: Brain,  color: '#0ea5e9' },
-    { number: '03', title: 'Receive Alerts',        description: 'Intelligent notifications and real-time predictions',  icon: Bell,   color: '#f97316' },
-    { number: '04', title: 'Act Effectively',       description: 'Make decisions based on concrete recommendations',     icon: Target, color: '#ea580c' },
+    { number: '01', title: 'Import Your Data',      description: 'Upload your Excel files in just a few clicks',        icon: Upload, color: '#0284c7' },
+    { number: '02', title: 'Analyze Automatically', description: 'AI calculates your KPIs and identifies trends',       icon: Brain,  color: '#0ea5e9' },
+    { number: '03', title: 'Receive Alerts',        description: 'Intelligent notifications and real-time predictions', icon: Bell,   color: '#f97316' },
+    { number: '04', title: 'Act Effectively',       description: 'Make decisions based on concrete recommendations',    icon: Target, color: '#ea580c' },
   ];
 
-  // ── FAQ ── (corrections applied to Q3 and Q4)
   const faqs = [
     {
       question: 'How do I import my data?',
       answer:
-       'You can import your data easily through our intuitive interface. The platform supports Excel files (.xlsx and .xls), and a guided wizard helps you map your columns correctly step by step.',
+        'You can import your data easily through our intuitive interface. The platform supports Excel files (.xlsx and .xls), and a guided wizard helps you map your columns correctly step by step.',
     },
     {
       question: 'Is the AI accurate?',
@@ -144,7 +155,7 @@ export function LandingPage() {
     {
       question: 'What about data security?',
       answer:
-       'We take data security very seriously. Your data is encrypted in transit using SSL/TLS, and the platform includes secure authentication with email verification. We continuously improve our protection measures to keep your information safe.',
+        'We take data security very seriously. Your data is encrypted in transit using SSL/TLS, and the platform includes secure authentication with email verification. We continuously improve our protection measures to keep your information safe.',
     },
     {
       question: 'Can I change my plan at any time?',
@@ -228,8 +239,14 @@ export function LandingPage() {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 mb-12">
-                <Button size="lg" variant="outline" className="text-base px-8 py-6 h-auto border-2 font-semibold text-slate-600"
-                        style={{ borderColor: '#e2e8f0' }}>
+                {/* ── Bouton Watch Demo : scroll + autoplay ── */}
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={handleWatchDemo}
+                  className="text-base px-8 py-6 h-auto border-2 font-semibold text-slate-600 cursor-pointer"
+                  style={{ borderColor: '#e2e8f0' }}
+                >
                   <PlayCircle className="mr-2 h-5 w-5" style={{ color: '#f97316' }} />
                   Watch Demo
                 </Button>
@@ -503,8 +520,11 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ── 6. DEMO ──────────────────────────────────────────────────────── */}
-      <section className="py-20 bg-white dark:bg-gray-950">
+      {/* ── 6. SEE WEEG IN ACTION (DEMO) ─────────────────────────────────
+           ref={demoSectionRef} → cible du scroll depuis le bouton Watch Demo
+           ref={demoVideoRef}   → autoplay déclenché après le scroll
+      ── */}
+      <section ref={demoSectionRef} className="py-20 bg-white dark:bg-gray-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="rounded-3xl p-12 lg:p-16 border-2 overflow-hidden relative"
                style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #fff7ed 100%)', borderColor: '#bae6fd' }}>
@@ -514,32 +534,38 @@ export function LandingPage() {
             <div className="grid lg:grid-cols-2 gap-12 items-center relative z-10">
               <div>
                 <h2 className="text-4xl lg:text-5xl font-bold mb-5" style={{ color: '#0f172a' }}>
-                  See <span style={{ background: 'linear-gradient(135deg, #0284c7, #0ea5e9)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Weeg</span> in Action
+                  See{' '}
+                  <span style={{ background: 'linear-gradient(135deg, #0284c7, #0ea5e9)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                    Weeg
+                  </span>{' '}
+                  in Action
                 </h2>
                 <p className="text-slate-500 text-lg mb-8">
                   Watch how Weeg transforms your data into actionable insights in just a few clicks.
                 </p>
                 <Button
                   size="lg"
-                  className="text-white font-bold text-base px-8 py-6 h-auto shadow-xl"
+                  onClick={handleWatchDemo}
+                  className="text-white font-bold text-base px-8 py-6 h-auto shadow-xl cursor-pointer"
                   style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}
                 >
                   <PlayCircle className="mr-2 h-6 w-6" />
                   Watch Demo Video
                 </Button>
               </div>
+
+              {/* ── Vidéo avec ref pour autoplay ── */}
               <div className="relative">
                 <div className="rounded-2xl overflow-hidden shadow-2xl" style={{ border: '3px solid white' }}>
-                  <ImageWithFallback
-                    src="https://images.unsplash.com/photo-1759661966728-4a02e3c6ed91?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkYXRhJTIwYW5hbHl0aWNzJTIwdmlzdWFsaXphdGlvbnxlbnwxfHx8fDE3NzEyMTQ0OTF8MA&ixlib=rb-4.1.0&q=80&w=1080"
-                    alt="Weeg Demo"
+                  <video
+                    ref={demoVideoRef}
+                    src={weegDemoVideo}
+                    controls
+                    preload="metadata"
                     className="w-full"
-                  />
-                </div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="h-20 w-20 rounded-full bg-white/95 flex items-center justify-center cursor-pointer hover:scale-110 transition-transform shadow-2xl">
-                    <PlayCircle className="h-11 w-11" style={{ color: '#f97316' }} />
-                  </div>
+                  >
+                    Your browser does not support the video tag.
+                  </video>
                 </div>
               </div>
             </div>
