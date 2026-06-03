@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Users, UserPlus, Shield, Trash2, Loader2,
-  Mail, Building2, RefreshCw, AlertTriangle, Search,
+  Mail, Building2, RefreshCw, Search,XCircle ,
 } from 'lucide-react';
 import { CreateUserDialog } from '../components/CreateUserDialog';
 import { ManagePermissionsDialog } from '../components/ManagePermissionsDialog';
@@ -43,7 +43,7 @@ const css = {
 };
 
 const cardStyle: React.CSSProperties = {
-  background:   css.card,
+  background:   '#ffffff',
   borderRadius: 16,
   padding:      24,
   boxShadow:    '0 1px 3px rgba(0,0,0,0.08), 0 4px 20px rgba(0,0,0,0.05)',
@@ -274,107 +274,89 @@ function AgentCard({ agent, onDelete }: { agent: Agent; onDelete: () => void }) 
 }
 
 // ── Delete confirm modal ──────────────────────────────────────────────────
-
-function DeleteConfirmModal({
-  agent, onConfirm, onCancel, isLoading,
-}: {
-  agent: Agent; onConfirm: () => void; onCancel: () => void; isLoading: boolean;
-}) {
+function DeleteConfirmModal({ agent, onConfirm, onCancel, isLoading }) {
   return (
     <div style={{
-      position:       'fixed',
-      inset:           0,
-      zIndex:          50,
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
-      background:     'rgba(0,0,0,0.5)',
-      padding:         16,
+      position: 'fixed', inset: 0, zIndex: 50,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(0,0,0,0.45)', padding: 16,
     }}>
       <div style={{
-        ...cardStyle,
-        width:    '100%',
-        maxWidth: 440,
+        background: '#ffffff', borderRadius: 20,
+        border: `0.5px solid ${css.border}`,
+        width: '100%', maxWidth: 420, overflow: 'hidden',
       }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
+        <div style={{ padding: '20px 20px 16px', borderBottom: `0.5px solid ${css.border}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 8,
+              background: '#FCEBEB', display: 'flex',
+              alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <Trash2 size={18} style={{ color: '#A32D2D' }} />
+            </div>
+            <div>
+              <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: css.cardFg }}>
+                Delete agent account
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: 13, color: css.mutedFg }}>
+                {agent.full_name} · {agent.email}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '16px 20px' }}>
           <div style={{
-            width:          44,
-            height:         44,
-            borderRadius:   13,
-            background:    `${C.rose}15`,
-            border:        `1px solid ${C.rose}30`,
-            display:        'flex',
-            alignItems:     'center',
-            justifyContent: 'center',
-            flexShrink:     0,
+            background: '#FCEBEB', padding: '12px 14px',
+            borderLeft: '3px solid #E24B4A',
+            borderRadius: '0 8px 8px 0',
           }}>
-            <AlertTriangle size={18} style={{ color: C.rose }} />
+            <p style={{ margin: 0, fontSize: 13, color: '#791F1F', lineHeight: 1.6 }}>
+              This action is <strong>permanent and cannot be undone.</strong> All sessions
+              will be revoked and account data removed immediately.
+            </p>
           </div>
-          <div>
-            <h3 style={{ fontSize: 15, fontWeight: 800, color: css.cardFg, margin: 0 }}>
-              Delete agent account
-            </h3>
-            <p style={{ fontSize: 12, color: css.mutedFg, marginTop: 2 }}>{agent.full_name}</p>
+
+          <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[
+              'Account and profile permanently deleted',
+              'All active sessions immediately revoked',
+              'Action cannot be reversed',
+            ].map((item) => (
+              <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: css.mutedFg }}>
+                <XCircle size={15} style={{ color: '#E24B4A', flexShrink: 0 }} />
+                {item}
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Warning box */}
+        {/* Footer */}
         <div style={{
-          padding:      '12px 14px',
-          borderRadius:  12,
-          background:   `${C.rose}08`,
-          border:       `1px solid ${C.rose}25`,
-          marginBottom:  20,
+          padding: '16px 20px', borderTop: `0.5px solid ${css.border}`,
+          display: 'flex', gap: 8,
         }}>
-          <p style={{ fontSize: 13, color: C.rose, margin: 0, lineHeight: 1.5 }}>
-            ⚠️ This action is <strong>irreversible</strong>. The account of{' '}
-            <strong>{agent.full_name}</strong> ({agent.email}) will be permanently deleted.
-            All sessions will also be revoked.
-          </p>
-        </div>
-
-        {/* Buttons */}
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            onClick={onConfirm}
-            disabled={isLoading}
-            style={{
-              flex:           1,
-              height:          40,
-              display:        'flex',
-              alignItems:     'center',
-              justifyContent: 'center',
-              gap:             6,
-              borderRadius:    11,
-              border:         'none',
-              background:      isLoading ? `${C.rose}70` : C.rose,
-              color:          '#fff',
-              fontSize:        13,
-              fontWeight:      700,
-              cursor:           isLoading ? 'not-allowed' : 'pointer',
-            }}
-          >
+          <button onClick={onConfirm} disabled={isLoading} style={{
+            flex: 1, height: 38, borderRadius: 8, border: 'none',
+            background: isLoading ? '#f09595' : '#E24B4A',
+            color: '#fff', fontSize: 13, fontWeight: 500,
+            cursor: isLoading ? 'not-allowed' : 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}>
             {isLoading
               ? <><Loader2 size={14} className="animate-spin" /> Deleting…</>
-              : <><Trash2 size={14} /> Confirm deletion</>
+              : <><Trash2 size={14} /> Delete account</>
             }
           </button>
-          <button
-            onClick={onCancel}
-            disabled={isLoading}
-            style={{
-              height:       40,
-              padding:      '0 20px',
-              borderRadius:  11,
-              border:       `1px solid ${css.border}`,
-              background:    css.card,
-              color:         css.cardFg,
-              fontSize:      13,
-              fontWeight:    600,
-              cursor:         isLoading ? 'not-allowed' : 'pointer',
-            }}
-          >
+          <button onClick={onCancel} disabled={isLoading} style={{
+            height: 38, padding: '0 18px', borderRadius: 8,
+            border: `0.5px solid ${css.border}`,
+            background: css.card, color: css.cardFg,
+            fontSize: 13, cursor: isLoading ? 'not-allowed' : 'pointer',
+          }}>
             Cancel
           </button>
         </div>
@@ -382,7 +364,6 @@ function DeleteConfirmModal({
     </div>
   );
 }
-
 // ── TeamPage ──────────────────────────────────────────────────────────────
 
 export function TeamPage() {
