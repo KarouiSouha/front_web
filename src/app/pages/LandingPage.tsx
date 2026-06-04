@@ -35,6 +35,7 @@ import {
 import { ImageWithFallback } from '../components/image/ImageWithFallback';
 import dashboardImage from '../components/image/logo.jpeg';
 import weegDemoVideo from '../components/image/demo.mp4';
+import notebookvideo from '../components/image/weeg_demo.mp4';
 
 // ── WEEG inline SVG logo mark ──────────────────────────────────────────────
 function WeegMark({ size = 40 }: { size?: number }) {
@@ -463,7 +464,7 @@ export function LandingPage() {
               <div className="relative">
                 <div className="rounded-2xl overflow-hidden shadow-2xl" style={{ border: '3px solid white' }}>
                   <video
-                    src={weegDemoVideo}
+                    src={notebookvideo}
                     controls
                     preload="metadata"
                     className="w-full"
