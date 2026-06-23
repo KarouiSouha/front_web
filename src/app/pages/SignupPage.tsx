@@ -203,12 +203,14 @@ export function SignupPage() {
       currentErp:  DEFAULT_ERP,
     });
 
-    if (result.success) {
-      toast.success(result.message);
-      setTimeout(() => navigate('/login'), 2000);
-    } else {
-      toast.error(result.message);
-    }
+  if (result.success) {
+    navigate('/signup/verify-email', {
+       state: { email: formData.email },
+       replace: true,
+     });
+   } else {
+     toast.error(result.message);
+   }
   };
 
   const textField = (

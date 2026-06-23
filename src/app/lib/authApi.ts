@@ -34,6 +34,7 @@ export interface BackendUser {
   company_is_active?: boolean | null;
   must_change_password: boolean;
   is_verified: boolean;
+  is_email_verified: boolean;   // NEW — manager email verification step
   created_at: string;
 }
 
@@ -45,10 +46,16 @@ export interface ManagerSignupPayload {
   company_name: string;
   password: string;
   password_confirm: string;
-  industry?: string;   // ← NEW
-  country?: string;   // ← NEW
-  city?: string;   // ← NEW
-  current_erp?: string; 
+  industry?: string;
+  country?: string;
+  city?: string;
+  current_erp?: string;
+}
+
+export interface ManagerSignupResponse {
+  message: string;
+  status: 'email_verification_pending';
+  email: string;
 }
 
 export interface CreateAgentPayload {
@@ -59,7 +66,6 @@ export interface CreateAgentPayload {
   branch?: string;
   permissions_list: string[];
   temporary_password: string;
-// NB: the company is automatically inherited from the manager on the backend side
 }
 
 export interface ChangePasswordPayload {
@@ -147,10 +153,9 @@ export const authApi = {
           body: JSON.stringify({ refresh }),
         });
       } catch {
-        // réseau mort — logout local garanti
+        // network down — local logout guaranteed
       }
     }
-
     TokenStorage.clear();
   },
 
@@ -184,10 +189,23 @@ export const authApi = {
 
   // ── Signup Manager ──────────────────────────────────────────────────────
 
-  managerSignup: (payload: ManagerSignupPayload) =>
-    apiFetch<{ message: string; email: string }>('/users/signup/', {
+  managerSignup: (payload: ManagerSignupPayload): Promise<ManagerSignupResponse> =>
+    apiFetch<ManagerSignupResponse>('/users/signup/', {
       method: 'POST',
       body: JSON.stringify(payload),
+      skipAuth: true,
+    }),
+
+  // ── Email verification (NEW) ─────────────────────────────────────────────
+
+  /**
+   * Resend the email verification link to a manager who hasn't verified yet.
+   * Called from the EmailVerificationPendingPage.
+   */
+  resendVerificationEmail: (email: string): Promise<{ message: string }> =>
+    apiFetch<{ message: string }>('/users/resend-verification/', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
       skipAuth: true,
     }),
 

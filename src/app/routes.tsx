@@ -18,6 +18,12 @@ import { ProfilePage } from './pages/ProfilePage';
 import { TeamPage } from './pages/TeamPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { SupplyPolicyPage } from './pages/SupplyPolicyPage';
+
+// NEW — email verification flow pages
+import { EmailVerificationPendingPage } from './pages/EmailVerificationPendingPage';
+import { VerifiedSuccessPage } from './pages/VerifiedSuccessPage';
+import { VerificationFailedPage } from './pages/VerificationFailedPage';
+
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -35,6 +41,25 @@ export const router = createBrowserRouter([
     path: '/forgot-password',
     element: <ForgotPasswordPage />,
   },
+
+  // ── Email verification flow (NEW) ──────────────────────────────────────
+  {
+    // Step 1: shown right after signup — "check your inbox"
+    path: '/signup/verify-email',
+    element: <EmailVerificationPendingPage />,
+  },
+  {
+    // Step 2: backend redirects here after token validated
+    path: '/signup/verified',
+    element: <VerifiedSuccessPage />,
+  },
+  {
+    // Shown when the token is invalid or expired
+    path: '/signup/verification-failed',
+    element: <VerificationFailedPage />,
+  },
+  // ──────────────────────────────────────────────────────────────────────
+
   {
     path: '/dashboard',
     element: <MainLayout />,
@@ -75,7 +100,6 @@ export const router = createBrowserRouter([
         path: 'reports',
         element: <ReportsPage />,
       },
-      
       {
         path: 'supply',
         element: <SupplyPolicyPage />,
@@ -96,7 +120,6 @@ export const router = createBrowserRouter([
         path: 'profile',
         element: <ProfilePage />,
       },
-      
     ],
   },
 ]);
