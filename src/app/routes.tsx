@@ -17,6 +17,7 @@ import { AdminVerificationPage } from './pages/AdminVerificationPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { TeamPage } from './pages/TeamPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { SupplyPolicyPage } from './pages/SupplyPolicyPage';
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -74,6 +75,11 @@ export const router = createBrowserRouter([
         path: 'reports',
         element: <ReportsPage />,
       },
+      
+      {
+        path: 'supply',
+        element: <SupplyPolicyPage />,
+      },
       {
         path: 'ai-insights',
         element: <AIInsightsPage />,
@@ -90,6 +96,7 @@ export const router = createBrowserRouter([
         path: 'profile',
         element: <ProfilePage />,
       },
+      
     ],
   },
 ]);

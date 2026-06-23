@@ -13,6 +13,7 @@ import {
   X,
   ShieldCheck,
   Bell,
+  Truck,
 } from 'lucide-react';
 import weegLogo from './image/logo.jpeg';
 import weegLogoDark from './image/logoDark.png';
@@ -32,23 +33,24 @@ const menuGroups = [
     items: [
       { id: '', label: 'Dashboard', icon: LayoutDashboard, permission: 'view-dashboard' },
       { id: 'team', label: 'My Team', icon: Users, permission: 'view-team' },
-      { id: 'alerts', label: 'Smart Alerts', icon: Bell, permission: 'receive-notifications'},
+      { id: 'alerts', label: 'Smart Alerts', icon: Bell, permission: 'receive-notifications' },
     ],
   },
   {
     label: 'Data',
     items: [
-      { id: 'import', label: 'Data Import', icon: Upload, permission: 'import-data' },
-      { id: 'kpi', label: 'KPI Engine', icon: TrendingUp, permission: 'view-kpi' },
-      { id: 'sales', label: 'Sales & Purchases', icon: ShoppingCart, permission: 'view-sales' },
-      { id: 'inventory', label: 'Multi-Branch Inventory', icon: Package, permission: 'view-inventory' },
-      { id: 'aging', label: 'Aging Receivables', icon: AlertTriangle, permission: 'view-aging' },
+      { id: 'import',    label: 'Data Import',            icon: Upload,        permission: 'import-data'    },
+      { id: 'kpi',       label: 'KPI Engine',             icon: TrendingUp,    permission: 'view-kpi'       },
+      { id: 'sales',     label: 'Sales & Purchases',      icon: ShoppingCart,  permission: 'view-sales'     },
+      { id: 'inventory', label: 'Multi-Branch Inventory', icon: Package,       permission: 'view-inventory' },
+      { id: 'supply',        label: 'Supply Policy',  icon: Truck,     permission: 'view-inventory' },
+      { id: 'aging',     label: 'Aging Receivables',      icon: AlertTriangle, permission: 'view-aging'     },
     ],
   },
   {
     label: 'Insights',
     items: [
-      { id: 'reports', label: 'Reports', icon: FileText, permission: 'view-reports' },
+      { id: 'reports',     label: 'Reports',     icon: FileText, permission: 'view-reports' },
       { id: 'ai-insights', label: 'AI Insights', icon: Sparkles, permission: 'ai-insights', highlight: true },
     ],
   },
@@ -62,7 +64,7 @@ const menuGroups = [
 
 const adminMenuItems = [
   { id: 'admin-verification', label: 'Verify Managers', icon: ShieldCheck },
-  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'settings',           label: 'Settings',        icon: Settings     },
 ];
 
 export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarProps) {
@@ -71,6 +73,7 @@ export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarPro
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
+  // Track dark mode by watching the <html> class list
   useEffect(() => {
     const check = () => setIsDarkMode(document.documentElement.classList.contains('dark'));
     check();
@@ -104,6 +107,7 @@ export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarPro
 
   return (
     <>
+      {/* Mobile overlay */}
       {isOpen && (
         <div
           className="fixed inset-0 z-40 lg:hidden"
@@ -118,8 +122,8 @@ export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarPro
           isOpen ? 'translate-x-0' : '-translate-x-full'
         )}
         style={{
-          background: dark ? '#0d1117' : '#ffffff',
-          borderRight: dark ? '1px solid rgba(255,255,255,0.07)' : '1px solid rgba(0,0,0,0.07)',
+          background:   dark ? '#0d1117' : '#ffffff',
+          borderRight:  dark ? '1px solid rgba(255,255,255,0.07)' : '1px solid rgba(0,0,0,0.07)',
         }}
       >
         {/* Top gradient stripe */}
@@ -130,7 +134,7 @@ export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarPro
 
         <div className="flex h-full flex-col">
 
-          {/* ── Logo header ── */}
+          {/* Logo header */}
           <div style={{
             height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '0 18px',
@@ -150,17 +154,16 @@ export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarPro
             </button>
           </div>
 
-          {/* ── User identity pill ── */}
+          {/* User identity pill */}
           {user && (
             <div style={{ padding: '12px 12px 0' }}>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 10,
-                padding: '9px 11px',
-                borderRadius: 12,
+                padding: '9px 11px', borderRadius: 12,
                 background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-                border: dark ? '1px solid rgba(255,255,255,0.07)' : '1px solid rgba(0,0,0,0.06)',
+                border:     dark ? '1px solid rgba(255,255,255,0.07)' : '1px solid rgba(0,0,0,0.06)',
               }}>
-                {/* Avatar */}
+                {/* Avatar initials */}
                 <div style={{
                   width: 32, height: 32, borderRadius: '50%',
                   background: 'linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%)',
@@ -185,18 +188,15 @@ export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarPro
             </div>
           )}
 
-          {/* ── Navigation groups ── */}
-          <nav style={{
-            flex: 1, overflowY: 'auto', padding: '12px 10px',
-            scrollbarWidth: 'none',
-          }}>
+          {/* Navigation groups */}
+          <nav style={{ flex: 1, overflowY: 'auto', padding: '12px 10px', scrollbarWidth: 'none' }}>
             {visibleGroups.map((group, gi) => (
               <div key={group.label} style={{ marginBottom: gi < visibleGroups.length - 1 ? 18 : 0 }}>
+
                 {/* Group label */}
                 <p style={{
                   fontSize: 10, fontWeight: 600, letterSpacing: '0.1em',
-                  textTransform: 'uppercase', margin: '0 0 3px',
-                  padding: '0 8px',
+                  textTransform: 'uppercase', margin: '0 0 3px', padding: '0 8px',
                   color: dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.25)',
                 }}>
                   {group.label}
@@ -204,11 +204,11 @@ export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarPro
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   {group.items.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = currentPage === item.id;
-                    const isHov = hoveredItem === item.id && !isActive;
+                    const Icon      = item.icon;
+                    const isActive  = currentPage === item.id;
+                    const isHov     = hoveredItem === item.id && !isActive;
                     const isHighlight = !!(item as any).highlight;
-                    const badge = (item as any).badge as number | undefined;
+                    const badge     = (item as any).badge as number | undefined;
 
                     return (
                       <button
@@ -280,7 +280,7 @@ export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarPro
                           }}>{badge}</span>
                         )}
 
-                        {/* Highlight dot */}
+                        {/* Highlight dot for AI Insights */}
                         {isHighlight && !isActive && !badge && (
                           <span style={{
                             width: 5, height: 5, borderRadius: '50%',
@@ -294,7 +294,7 @@ export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarPro
               </div>
             ))}
 
-            {/* ── Admin group ── */}
+            {/* Admin-only group */}
             {isAdmin && (
               <div>
                 <div style={{
@@ -309,9 +309,9 @@ export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarPro
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   {adminMenuItems.map((item) => {
-                    const Icon = item.icon;
+                    const Icon     = item.icon;
                     const isActive = currentPage === item.id;
-                    const isHov = hoveredItem === `adm-${item.id}` && !isActive;
+                    const isHov    = hoveredItem === `adm-${item.id}` && !isActive;
                     return (
                       <button
                         key={item.id}
@@ -344,7 +344,9 @@ export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarPro
                           background: isActive
                             ? (dark ? 'rgba(139,92,246,0.22)' : 'rgba(99,102,241,0.12)')
                             : (dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'),
-                          color: isActive ? '#a78bfa' : (dark ? 'rgba(255,255,255,0.42)' : 'rgba(0,0,0,0.42)'),
+                          color: isActive
+                            ? '#a78bfa'
+                            : (dark ? 'rgba(255,255,255,0.42)' : 'rgba(0,0,0,0.42)'),
                         }}>
                           <Icon size={14} />
                         </span>
@@ -362,15 +364,15 @@ export function Sidebar({ currentPage, onNavigate, isOpen, onClose }: SidebarPro
             )}
           </nav>
 
-          {/* ── AI footer card ── */}
+          {/* AI footer card */}
           <div style={{ padding: '0 10px 12px' }}>
             <div style={{
               borderRadius: 14, padding: '12px 14px',
               position: 'relative', overflow: 'hidden',
               background: dark ? 'rgba(99,102,241,0.11)' : 'rgba(99,102,241,0.06)',
-              border: dark ? '1px solid rgba(99,102,241,0.22)' : '1px solid rgba(99,102,241,0.16)',
+              border:     dark ? '1px solid rgba(99,102,241,0.22)' : '1px solid rgba(99,102,241,0.16)',
             }}>
-              {/* Decorative circle bg */}
+              {/* Decorative background circle */}
               <div style={{
                 position: 'absolute', top: -18, right: -18, width: 72, height: 72,
                 borderRadius: '50%', pointerEvents: 'none',

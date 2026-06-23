@@ -150,6 +150,8 @@ const COUNTRIES_CITIES: Record<string, string[]> = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+const DEFAULT_ERP = 'AL Mizen';
+
 export function SignupPage() {
   const { signup, isLoading } = useAuth();
   const navigate = useNavigate();
@@ -163,7 +165,7 @@ export function SignupPage() {
     industry: '',
     country: '',
     city: '',
-    currentErp: '',
+    currentErp: DEFAULT_ERP,
     password: '',
     confirmPassword: '',
   });
@@ -198,7 +200,7 @@ export function SignupPage() {
       industry:    formData.industry,
       country:     formData.country,
       city:        formData.city,
-      currentErp:  formData.currentErp,
+      currentErp:  DEFAULT_ERP,
     });
 
     if (result.success) {
@@ -335,7 +337,7 @@ export function SignupPage() {
                     true, !formData.country)}
                 </div>
 
-                {/* Current ERP — free text input ✅ */}
+                {/* Current ERP — fixed value, not editable ✅ */}
                 <div className="space-y-1.5">
                   <Label htmlFor="currentErp" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Current ERP / Software
@@ -346,9 +348,9 @@ export function SignupPage() {
                       <Server className="h-4 w-4" />
                     </span>
                     <Input id="currentErp" type="text"
-                      placeholder="e.g. SAP, Odoo, Custom software, None..."
-                      value={formData.currentErp}
-                      onChange={e => set('currentErp')(e.target.value)}
+                      placeholder="AL Mizen"
+                      value={DEFAULT_ERP}
+                      readOnly
                       disabled={isLoading}
                       className="pl-9 h-10 text-sm border-slate-200 focus:border-sky-400 focus:ring-sky-400/20 bg-slate-50 dark:bg-slate-800/50" />
                   </div>

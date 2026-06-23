@@ -269,7 +269,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         industry:         userData.industry    ?? '',
         country:          userData.country     ?? '',
         city:             userData.city        ?? '',
-        current_erp:      userData.currentErp  ?? '',
+        current_erp:      'AL Mizen',
         password:         userData.password,
         password_confirm: userData.password,
       });
