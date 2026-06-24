@@ -19,10 +19,8 @@ import { TeamPage } from './pages/TeamPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { SupplyPolicyPage } from './pages/SupplyPolicyPage';
 
-// NEW — email verification flow pages
-import { EmailVerificationPendingPage } from './pages/EmailVerificationPendingPage';
-import { VerifiedSuccessPage } from './pages/VerifiedSuccessPage';
-import { VerificationFailedPage } from './pages/VerificationFailedPage';
+import { VerifyEmailCallbackPage } from './pages/VerifyEmailCallbackPage';
+
 
 export const router = createBrowserRouter([
   {
@@ -42,23 +40,9 @@ export const router = createBrowserRouter([
     element: <ForgotPasswordPage />,
   },
 
-  // ── Email verification flow (NEW) ──────────────────────────────────────
-  {
-    // Step 1: shown right after signup — "check your inbox"
-    path: '/signup/verify-email',
-    element: <EmailVerificationPendingPage />,
+  { path: '/signup/verify-email', 
+    element: <VerifyEmailCallbackPage />
   },
-  {
-    // Step 2: backend redirects here after token validated
-    path: '/signup/verified',
-    element: <VerifiedSuccessPage />,
-  },
-  {
-    // Shown when the token is invalid or expired
-    path: '/signup/verification-failed',
-    element: <VerificationFailedPage />,
-  },
-  // ──────────────────────────────────────────────────────────────────────
 
   {
     path: '/dashboard',
