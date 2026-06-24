@@ -3,14 +3,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useLocation } from 'react-router';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { ImageWithFallback } from '../components/image/ImageWithFallback';
 import dashboardImage from '../components/image/logo.jpeg';
 
-// Fallback SVG mark for mobile header only
 function WeegMark({ size = 40 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -33,9 +32,14 @@ function WeegMark({ size = 40 }: { size?: number }) {
 export function LoginPage() {
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Message de succès passé depuis VerifyEmailCallbackPage après vérification
+  const successMessage = (location.state as { message?: string } | null)?.message;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,11 +96,11 @@ export function LoginPage() {
             }}
           >
             <ImageWithFallback
-                  src={dashboardImage}
-                  alt="Weeg Dashboard"
-                  className="w-85 object-contain"
-                  style={{ filter: 'drop-shadow(0 4px 24px rgba(14, 164, 233, 0.95))' }}
-                />
+              src={dashboardImage}
+              alt="Weeg Dashboard"
+              className="w-85 object-contain"
+              style={{ filter: 'drop-shadow(0 4px 24px rgba(14, 164, 233, 0.95))' }}
+            />
           </div>
 
           {/* Tagline */}
@@ -112,7 +116,7 @@ export function LoginPage() {
               { dot: '#34d399', text: 'Secure, GDPR-compliant data' },
             ].map((item, i) => (
               <div key={i} className="flex items-center gap-3 text-left px-4 py-3 rounded-xl"
-                   style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ background: item.dot }} />
                 <span className="text-sm text-slate-300">{item.text}</span>
               </div>
@@ -148,6 +152,13 @@ export function LoginPage() {
               <h2 className="text-2xl font-bold">Welcome back</h2>
               <p className="text-muted-foreground text-sm mt-1">Sign in to your account</p>
             </div>
+
+            {/* Message de succès après vérification email */}
+            {successMessage && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 mb-5">
+                ✅ {successMessage}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
