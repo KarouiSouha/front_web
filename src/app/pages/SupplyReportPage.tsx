@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
@@ -299,424 +298,339 @@ export function SupplyReportPage() {
 
   // ── Print Report ─────────────────────────────────────────────
   const printReport = () => {
-    const fC = formatCurrency;
-    const fN = formatNumber;
-    const today = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'long', year:'numeric' });
+    const printable = document.getElementById('spr-printable');
+    if (!printable) return;
 
-    // ── Shared CSS ────────────────────────────────────────────
-    const sharedCSS = `
+    const clone = printable.cloneNode(true) as HTMLElement;
+
+    const resolveVars = (el: HTMLElement) => {
+      if (el.style?.cssText) {
+        el.style.cssText = el.style.cssText
+          .replace(/hsl\(var\(--card\)\)/g,              '#ffffff')
+          .replace(/hsl\(var\(--card-foreground\)\)/g,   '#111827')
+          .replace(/hsl\(var\(--border\)\)/g,            '#e5e7eb')
+          .replace(/hsl\(var\(--muted\)\)/g,             '#f3f4f6')
+          .replace(/hsl\(var\(--muted-foreground\)\)/g,  '#6b7280')
+          .replace(/hsl\(var\(--background\)\)/g,        '#ffffff')
+          .replace(/hsl\(var\(--foreground\)\)/g,        '#111827');
+      }
+      Array.from(el.children).forEach(c => resolveVars(c as HTMLElement));
+    };
+    resolveVars(clone);
+
+    const fC  = formatCurrency;
+    const fN  = formatNumber;
+    const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+
+    const totalAlerts = outCount + criticalCount + lowCount;
+
+    const PRINT_CSS = `
       @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=DM+Sans:wght@300;400;500;600;700;800&display=swap');
-      *{box-sizing:border-box;margin:0;padding:0}
-      body{font-family:'DM Sans',sans-serif;background:#fff;color:#0f172a;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-      @page{size:A4 landscape;margin:0}
-      .cover{width:100%;height:210mm;background:#fff;break-after:page!important;page-break-after:always!important;position:relative;overflow:hidden;}
-      .cover-stripe{position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#0ea5e9,#14b8a6,#10b981);}
-      .cover-bg{position:absolute;top:0;right:0;width:48%;height:100%;background:linear-gradient(148deg,#ecfeff,#cffafe,#a5f3fc,#67e8f9);clip-path:polygon(12% 0,100% 0,100% 100%,0% 100%);}
-      .cover-inner{position:relative;z-index:2;display:grid;grid-template-rows:auto 1fr auto;height:100%;padding:28px 48px 24px;}
-      .cover-top{display:flex;align-items:center;justify-content:space-between;padding-bottom:18px;border-bottom:1px solid #e2e8f0;}
-      .cover-main{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center;padding:20px 0;}
-      .cover-title{font-family:'Playfair Display',serif;font-size:52px;font-weight:900;color:#0f172a;line-height:1.0;}
-      .cover-title em{color:#0ea5e9;font-style:italic;}
-      .cover-kc{background:rgba(255,255,255,.85);border:1px solid rgba(255,255,255,.95);border-radius:12px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
-      .kc-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#94a3b8;}
-      .kc-val{font-family:'Playfair Display',serif;font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.1;}
-      .kc-note{font-size:10px;color:#94a3b8;margin-top:2px;}
-      .badge{font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;}
-      .cover-footer{border-top:1px solid #e2e8f0;padding-top:14px;display:flex;justify-content:space-between;align-items:center;}
-      .page{width:297mm;min-height:210mm;padding:30px 42px 24px;page-break-after:always;break-after:page}
-      .page:last-child{page-break-after:auto;break-after:auto}
-      .page-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #f59e0b}
-      .sec-num{width:26px;height:26px;border-radius:8px;background:#f59e0b;color:#0f172a;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;margin-right:10px;flex-shrink:0}
-      .sec-title{font-size:15px;font-weight:800;color:#0f172a;display:inline}
-      .sec-sub{font-size:11px;color:#94a3b8;margin-top:2px;margin-left:36px}
-      .page-ref{font-size:9px;color:#cbd5e1;letter-spacing:.06em}
-      .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
-      .kc{background:#f8fafc;border-radius:12px;padding:15px 17px;border:1px solid #e2e8f0;border-top:3px solid #f59e0b;break-inside:avoid;page-break-inside:avoid}
-      .kc .l{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#64748b}
-      .kc .v{font-size:17px;font-weight:800;color:#0f172a;margin-top:5px;letter-spacing:-.03em}
-      .kc .s{font-size:10px;color:#94a3b8;margin-top:2px}
-      table{width:100%;border-collapse:collapse;font-size:11.5px}
-      thead tr{background:#f1f5f9}
-      th{padding:8px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#64748b;border-bottom:2px solid #e2e8f0;white-space:nowrap}
-      th.l{text-align:left} th.r{text-align:right}
-      tr{break-inside:avoid;page-break-inside:avoid}
-      .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;break-inside:avoid;page-break-inside:avoid}
-      .three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
-      .cd{background:#f8fafc;border-radius:12px;padding:16px;border:1px solid #e2e8f0;break-inside:avoid;page-break-inside:avoid}
-      .cd h3{font-size:12px;font-weight:700;color:#0f172a;margin-bottom:12px;padding-bottom:7px;border-bottom:1px solid #e2e8f0}
-      .insights{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px;background:#fffbeb;border-radius:12px;padding:14px;border:1px solid #fde68a;break-inside:avoid;page-break-inside:avoid}
-      .ic{background:#fff;border-radius:10px;padding:11px 13px;border:1px solid #fde68a}
-      .ic .l{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#92400e;margin-bottom:3px}
-      .ic .v{font-size:13px;font-weight:800;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-      .ic .s{font-size:10px;color:#92400e;margin-top:1px}
-      .status-out{color:#ef4444;background:#fef2f2;border:1px solid #fecaca;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
-      .status-critical{color:#f97316;background:#fff7ed;border:1px solid #fed7aa;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
-      .status-low{color:#f59e0b;background:#fffbeb;border:1px solid #fde68a;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
-      .status-ok{color:#10b981;background:#f0fdf4;border:1px solid #bbf7d0;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
-      *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+      *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: 'DM Sans', sans-serif; background: #fff; color: #111827; padding: 16px 20px; font-size: 13px; }
+      @page { size: A4 landscape; margin: 8mm 10mm; }
+      div[style*="border-radius:16px"], div[style*="border-radius: 16px"],
+      div[style*="border-radius:14px"], div[style*="border-radius: 14px"],
+      div[style*="border-radius:12px"], div[style*="border-radius: 12px"],
+      div[style*="border-radius:11px"], div[style*="border-radius: 11px"] {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        border: 1px solid #e5e7eb !important;
+        margin-bottom: 12px;
+      }
+      .recharts-wrapper, .recharts-responsive-container {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+      }
+      div[style*="1fr 1fr"], div[style*="repeat(3"],
+      div[style*="repeat(4"], div[style*="grid-template"],
+      div[style*="display: grid"], div[style*="display:grid"] {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+      }
+      [data-no-break] { break-inside: avoid !important; page-break-inside: avoid !important; }
+      div[data-print="section"] {
+        break-before: page !important;
+        page-break-before: always !important;
+        break-inside: avoid !important;
+      }
+      table { break-inside: avoid !important; page-break-inside: avoid !important; }
+      tr    { break-inside: avoid !important; page-break-inside: avoid !important; }
+      .cover {
+        width: 100%; height: 190mm;
+        display: grid;
+        break-after: page !important;
+        page-break-after: always !important;
+        position: relative; overflow: hidden;
+      }
+      .cover-stripe {
+        position: absolute; top: 0; left: 0; right: 0; height: 5px;
+        background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 45%, #0ea5e9 100%);
+        z-index: 3;
+      }
+      .cover-left-bar {
+        position: absolute; top: 0; left: 0; width: 5px; height: 100%;
+        background: linear-gradient(180deg, #6366f1 0%, #8b5cf6 55%, #0ea5e9 100%);
+        z-index: 3;
+      }
+      .cover-bg {
+        position: absolute; top: 0; right: 0; width: 52%; height: 100%;
+        background: linear-gradient(148deg, #eef2ff 0%, #e0e7ff 40%, #c7d2fe 80%, #a5b4fc 100%);
+        clip-path: polygon(15% 0, 100% 0, 100% 100%, 0% 100%);
+        z-index: 0;
+      }
+      .cover-inner {
+        position: relative; z-index: 4;
+        display: grid; grid-template-rows: auto 1fr auto;
+        height: 100%; padding: 28px 48px 26px;
+      }
+      .cover-top {
+        display: flex; align-items: center; justify-content: space-between;
+        padding-bottom: 18px; border-bottom: 1px solid #e5e7eb;
+      }
+      .cover-company { font-size: 12px; font-weight: 700; color: #374151; letter-spacing: 0.08em; text-transform: uppercase; }
+      .cover-pill {
+        font-size: 10px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.12em; color: #6366f1; background: #eef2ff;
+        border: 1.5px solid #c7d2fe; padding: 4px 13px; border-radius: 20px;
+      }
+      .cover-main { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; padding: 24px 0 20px; }
+      .cover-title { font-family: 'Playfair Display', Georgia, serif; font-size: 52px; font-weight: 900; color: #0f172a; letter-spacing: -0.03em; line-height: 1.0; }
+      .cover-title-accent { color: #6366f1; font-style: italic; }
+      .cover-subtitle { font-size: 15px; color: #6b7280; margin: 12px 0 20px; }
+      .cover-desc { font-size: 12px; color: #9ca3af; line-height: 1.85; border-left: 3px solid #c7d2fe; padding-left: 16px; max-width: 380px; }
+      .cover-kpi {
+        background: rgba(255,255,255,0.75); border: 1px solid rgba(255,255,255,0.9);
+        border-radius: 14px; padding: 14px 18px;
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 10px; box-shadow: 0 2px 12px rgba(99,102,241,0.07);
+      }
+      .ck-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.11em; color: #9ca3af; }
+      .ck-value { font-family: 'Playfair Display', Georgia, serif; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: #0f172a; line-height: 1.1; }
+      .ck-note  { font-size: 10px; color: #9ca3af; }
+      .badge-ok   { background: #d1fae5; color: #059669; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+      .badge-warn { background: #fef3c7; color: #d97706; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+      .badge-err  { background: #fee2e2; color: #dc2626; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+      .badge-info { background: #eef2ff; color: #6366f1; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+      .cover-bottom { border-top: 1px solid #e5e7eb; padding-top: 14px; display: flex; justify-content: space-between; align-items: center; }
+      .cover-meta   { display: flex; align-items: center; gap: 12px; font-size: 10px; color: #9ca3af; }
+      .cover-confidential {
+        font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;
+        color: #6366f1; border: 1.5px solid #c7d2fe; padding: 3px 10px;
+        border-radius: 20px; background: #eef2ff;
+      }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-shadow: none !important; }
     `;
 
-    // ── PAGE HEADER helper ────────────────────────────────────
-    const pageHdr = (num: number, title: string, sub: string, pageLabel: string) => `
-      <div class="page-hdr">
+    const alertBadgeClass = (outCount + criticalCount) > 0 ? 'badge-err' : totalAlerts > 0 ? 'badge-warn' : 'badge-ok';
+    const alertBadgeText  = (outCount + criticalCount) > 0 ? '⚠ Action Required' : totalAlerts > 0 ? '⚠ Low Stock' : '✓ Stock OK';
+
+    const coverHTML = `
+  <div class="cover">
+    <div class="cover-stripe"></div>
+    <div class="cover-left-bar"></div>
+    <div class="cover-bg"></div>
+    <div class="cover-inner">
+      <div class="cover-top">
+        <span class="cover-company">WEEG Financial · Supply Division</span>
+        <span class="cover-pill">Supply Report</span>
+      </div>
+      <div class="cover-main">
         <div>
-          <div><span class="sec-num">${num}</span><span class="sec-title">${title}</span></div>
-          <div class="sec-sub">${sub}</div>
-        </div>
-        <div class="page-ref">SUPPLY REPORT · ${yearFilter==='all'?'ALL YEARS':yearFilter} · ${pageLabel}</div>
-      </div>`;
-
-    // ── Row builders ──────────────────────────────────────────
-
-    // Supplier rows
-    const supplierRows = bySupplier.slice(0, 15).map((s, i) => {
-      const share = totalValue > 0 ? (s.value / totalValue * 100).toFixed(1) : '0';
-      const col = PAL[i % PAL.length];
-      return `<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
-        <td style="padding:6px 8px;text-align:center;color:#64748b;font-weight:700;font-size:11px">${i+1}</td>
-        <td style="padding:6px 8px;font-weight:600;color:#0f172a;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.name.length>46?s.name.slice(0,46)+'…':s.name}</td>
-        <td style="padding:6px 8px;text-align:right;color:#64748b">${s.sku_count}</td>
-        <td style="padding:6px 8px;text-align:right;font-weight:800;color:#0f172a">${fC(s.value)}</td>
-        <td style="padding:6px 8px;text-align:right">
-          <span style="font-weight:700;color:${col};background:${col}18;padding:2px 8px;border-radius:20px;font-size:10px">${share}%</span>
-        </td>
-      </tr>`;
-    }).join('');
-
-    // Branch rows
-    const branchRows = byBranch.map((b, i) => {
-      const share = totalValue > 0 ? (b.value / totalValue * 100).toFixed(1) : '0';
-      const col = branchColor(b.branch);
-      return `<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
-        <td style="padding:6px 8px;font-weight:600;color:#0f172a">
-          <span style="display:inline-flex;align-items:center;gap:6px">
-            <span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>${b.branch}
-          </span>
-        </td>
-        <td style="padding:6px 8px;text-align:right;font-weight:800;color:#0f172a">${fC(b.value)}</td>
-        <td style="padding:6px 8px;text-align:right">
-          <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end">
-            <div style="width:44px;height:4px;background:#e2e8f0;border-radius:999px">
-              <div style="height:100%;width:${Math.min(100,parseFloat(share))}%;background:${col};border-radius:999px"></div>
-            </div>
-            <span style="font-weight:700;color:${col};font-size:10px">${share}%</span>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:#94a3b8;margin-bottom:14px;">
+            Supply Chain Management
           </div>
-        </td>
-      </tr>`;
-    }).join('');
-
-    // Category rows
-    const catRows = byCategory.slice(0, 10).map((c, i) => {
-      const share = totalValue > 0 ? (c.value / totalValue * 100).toFixed(1) : '0';
-      const col = PAL[i % PAL.length];
-      return `<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
-        <td style="padding:6px 8px">
-          <span style="display:inline-flex;align-items:center;gap:6px">
-            <span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>
-            <span style="font-weight:600;color:#0f172a">${c.name||'Other'}</span>
-          </span>
-        </td>
-        <td style="padding:6px 8px;text-align:right;font-weight:800;color:#0f172a">${fC(c.value)}</td>
-        <td style="padding:6px 8px;text-align:right;font-weight:700;color:${col}">${share}%</td>
-      </tr>`;
-    }).join('');
-
-    // Branch × Month
-    const bxmHeaderCells = allMonths.slice(-6).map(m =>
-      `<th style="padding:6px 8px;text-align:right;font-size:9px;font-weight:700;text-transform:uppercase;color:#64748b;border-bottom:2px solid #e2e8f0;white-space:nowrap">${m}</th>`
-    ).join('');
-    const bxmBodyRows = allBranches.map((branch, bi) => {
-      const col = branchColor(branch);
-      const cells = allMonths.slice(-6).map(m => {
-        const d = branchMonth.find(r => r.branch === branch && r.month === m);
-        return `<td style="padding:6px 8px;text-align:right;font-size:10px;color:#6366f1;font-weight:${d?'700':'400'}">${d ? fC(d.value) : '—'}</td>`;
-      }).join('');
-      return `<tr style="background:${bi%2===0?'#fff':'#f8fafc'}">
-        <td style="padding:6px 8px;white-space:nowrap">
-          <span style="display:inline-flex;align-items:center;gap:6px">
-            <span style="width:8px;height:8px;border-radius:50%;background:${col}"></span>
-            <span style="font-weight:600;color:#0f172a">${branch}</span>
-          </span>
-        </td>${cells}
-      </tr>`;
-    }).join('');
-
-    // Supplier SKUs cards
-    const skuCards = supplierSKUs.map((s, si) => {
-      const col = PAL[si % PAL.length];
-      const itemRows = s.items.map((item, ii) =>
-        `<tr style="border-top:1px solid #e2e8f0">
-          <td style="padding:4px 0;color:#0f172a;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px">${item.name.length>28?item.name.slice(0,28)+'…':item.name}</td>
-          <td style="padding:4px 0;text-align:right;color:#64748b;font-size:10px">${fN(Math.round(item.qty))}</td>
-          <td style="padding:4px 0;text-align:right;font-weight:700;color:#6366f1;font-size:10px">${fC(item.value)}</td>
-        </tr>`
-      ).join('');
-      return `<div style="background:#f8fafc;border-radius:10px;padding:12px 14px;border:1px solid #e2e8f0;break-inside:avoid">
-        <p style="font-size:11px;font-weight:700;color:#0f172a;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-          <span style="width:8px;height:8px;border-radius:50%;background:${col};display:inline-block;margin-right:6px"></span>
-          ${s.supplier.length>38?s.supplier.slice(0,38)+'…':s.supplier}
-        </p>
-        <table style="font-size:10px">
-          <thead><tr>
-            <th style="text-align:left;color:#94a3b8;padding:2px 0;font-size:9px;font-weight:600;border-bottom:1px solid #e2e8f0">Item</th>
-            <th style="text-align:right;color:#94a3b8;padding:2px 0;font-size:9px;font-weight:600;border-bottom:1px solid #e2e8f0">Qty</th>
-            <th style="text-align:right;color:#94a3b8;padding:2px 0;font-size:9px;font-weight:600;border-bottom:1px solid #e2e8f0">Value</th>
-          </tr></thead>
-          <tbody>${itemRows}</tbody>
-        </table>
-      </div>`;
-    }).join('');
-
-    // Lead time rows — filter 0 days
-    const validLeadTimes = leadTimes.filter(s => s.avg_days > 0);
-    const leadRows = validLeadTimes.map((s, i) => {
-      const freq = s.avg_days<=7  ? {lbl:'Weekly',    col:'#10b981'}
-                 : s.avg_days<=14 ? {lbl:'Bi-weekly', col:'#14b8a6'}
-                 : s.avg_days<=31 ? {lbl:'Monthly',   col:'#f59e0b'}
-                 : s.avg_days<=90 ? {lbl:'Quarterly', col:'#f97316'}
-                 :                  {lbl:'Rare',       col:'#f43f5e'};
-      return `<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
-        <td style="padding:6px 10px;font-weight:600;color:#0f172a;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.supplier.length>52?s.supplier.slice(0,52)+'…':s.supplier}</td>
-        <td style="padding:6px 10px;text-align:right;color:#64748b">${s.orders}</td>
-        <td style="padding:6px 10px;text-align:right">
-          <span style="font-size:14px;font-weight:800;color:#6366f1">${s.avg_days}</span>
-          <span style="font-size:10px;color:#94a3b8;margin-left:3px">days</span>
-        </td>
-        <td style="padding:6px 10px;text-align:right">
-          <span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;background:${freq.col}18;color:${freq.col};border:1px solid ${freq.col}35">${freq.lbl}</span>
-        </td>
-      </tr>`;
-    }).join('');
-
-    // Reorder rows — top 30 urgent items (out + critical + low)
-    const urgentItems = [...reorderList]
-      .filter(i => i.status !== 'ok')
-      .sort((a,b) => { const o: Record<string,number>={out:0,critical:1,low:2,ok:3}; return o[a.status]-o[b.status]; })
-      .slice(0, 30);
-
-    const reorderRows = urgentItems.map((item, i) => {
-      const statusCls = item.status === 'out' ? 'status-out' : item.status === 'critical' ? 'status-critical' : 'status-low';
-      const statusLbl = item.status === 'out' ? '🔴 Out' : item.status === 'critical' ? '🟠 Critical' : '🟡 Low';
-      const hasUsage = item.monthly_usage > 0;
-      return `<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
-        <td style="padding:6px 8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-          <div style="font-weight:600;color:#0f172a;font-size:11px">${item.product_name.length>30?item.product_name.slice(0,30)+'…':item.product_name}</div>
-          <div style="font-size:9px;color:#94a3b8;font-family:monospace">${item.material_code}</div>
-        </td>
-        <td style="padding:6px 8px;font-size:10px;color:#64748b">${item.category||'—'}</td>
-        <td style="padding:6px 8px;text-align:right;font-weight:800;color:${item.stock_qty===0?'#ef4444':item.stock_qty<=item.min_stock?'#f97316':'#0f172a'}">${fN(Math.round(item.stock_qty))}</td>
-        <td style="padding:6px 8px;text-align:right;color:#64748b">${hasUsage?fN(item.min_stock):'—'}</td>
-        <td style="padding:6px 8px;text-align:right;color:#64748b">${hasUsage?fN(item.monthly_usage):'—'}</td>
-        <td style="padding:6px 8px;text-align:right">
-          ${item.days_of_stock!==null?`<span style="font-weight:700;color:${item.days_of_stock<=14?'#ef4444':item.days_of_stock<=30?'#f59e0b':'#10b981'}">${item.days_of_stock}d</span>`:'—'}
-        </td>
-        <td style="padding:6px 8px;text-align:right;font-weight:800;color:#6366f1">${item.reorder_qty>0?fN(item.reorder_qty):'—'}</td>
-        <td style="padding:6px 8px;text-align:right"><span class="${statusCls}">${statusLbl}</span></td>
-      </tr>`;
-    }).join('');
-
-    // ── FULL HTML ─────────────────────────────────────────────
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <title>Supply Policy Report — ${yearFilter === 'all' ? 'All Years' : yearFilter}</title>
-  <style>${sharedCSS}</style>
-</head>
-<body>
-
-<!-- ══ COVER ══ -->
-<div class="cover">
-  <div class="cover-stripe"></div>
-  <div class="cover-bg"></div>
-  <div class="cover-inner">
-    <div class="cover-top">
-      <span style="font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:#374151;">WEEG Financial · Supply Division</span>
-      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#0ea5e9;background:#ecfeff;border:1.5px solid #a5f3fc;padding:4px 13px;border-radius:20px;">Financial Report</span>
-    </div>
-    <div class="cover-main">
-      <div>
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:#94a3b8;margin-bottom:14px;">Supply Chain Management</div>
-        <h1 class="cover-title">Supply<br/><em>Policy</em><br/>Report</h1>
-        <p style="font-size:14px;color:#64748b;margin:14px 0 18px;">
-          ${yearFilter==='all'?'All Years':yearFilter}${branchFilter!=='all'?' · '+branchFilter:''}${catFilter!=='all'?' · '+catFilter:''}
-        </p>
-        <p style="font-size:12px;color:#94a3b8;line-height:1.85;border-left:3px solid #a5f3fc;padding-left:16px;">
-          Purchases (ف شراء) · Supplier performance &amp; lead times · Stock levels · Reorder recommendations across ${meta?.branches?.length??0} branches.
-        </p>
-        <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;">
-          <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;background:#ecfeff;color:#0ea5e9;border:1px solid #a5f3fc;">${meta?.total_transactions??0} invoices</span>
-          <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;background:#f0fdf4;color:#059669;border:1px solid #bbf7d0;">${fN(meta?.unique_suppliers??0)} suppliers</span>
-          <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;background:#fef3c7;color:#d97706;border:1px solid #fde68a;">${outCount+criticalCount+lowCount} stock alerts</span>
+          <h1 class="cover-title">
+            Supply<br/><span class="cover-title-accent">Policy</span><br/>Report
+          </h1>
+          <p class="cover-subtitle">
+            ${yearFilter === 'all' ? 'All Years' : yearFilter}${branchFilter !== 'all' ? ' · ' + branchFilter : ''}${catFilter !== 'all' ? ' · ' + catFilter : ''}
+          </p>
+          <p class="cover-desc">
+            Purchases (ف شراء) · Supplier performance &amp; lead times ·
+            Stock levels · Reorder recommendations across ${meta?.branches?.length ?? 0} branches.
+          </p>
+          <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;">
+            <span class="badge-info">${meta?.total_transactions ?? 0} invoices</span>
+            <span class="badge-ok">${fN(meta?.unique_suppliers ?? 0)} suppliers</span>
+            <span class="${alertBadgeClass}">${totalAlerts} stock alerts</span>
+          </div>
+        </div>
+        <div>
+          <div class="cover-kpi">
+            <div>
+              <span class="ck-label">Total Purchase Value</span>
+              <p class="ck-value" style="color:#6366f1;">${fC(meta?.total_value ?? 0)}</p>
+              <span class="ck-note">${meta?.total_transactions ?? 0} invoices · ${meta?.unique_skus ?? 0} SKUs</span>
+            </div>
+            <span class="badge-info">Purchases</span>
+          </div>
+          <div class="cover-kpi">
+            <div>
+              <span class="ck-label">Active Suppliers</span>
+              <p class="ck-value" style="color:#14b8a6;">${fN(meta?.unique_suppliers ?? 0)}</p>
+              <span class="ck-note">Unique vendor names</span>
+            </div>
+            <span class="badge-ok">Vendors</span>
+          </div>
+          <div class="cover-kpi">
+            <div>
+              <span class="ck-label">Most Active Month</span>
+              <p class="ck-value" style="color:#10b981;font-size:22px;">${mostActiveMonth}</p>
+              <span class="ck-note">Highest purchase value</span>
+            </div>
+            <span class="badge-ok">Peak</span>
+          </div>
+          <div class="cover-kpi">
+            <div>
+              <span class="ck-label">Stock Alerts</span>
+              <p class="ck-value" style="color:${(outCount + criticalCount) > 0 ? '#f97316' : '#10b981'};">
+                ${totalAlerts}
+              </p>
+              <span class="ck-note">${outCount} out · ${criticalCount} critical · ${lowCount} low</span>
+            </div>
+            <span class="${alertBadgeClass}">${alertBadgeText}</span>
+          </div>
         </div>
       </div>
-      <div style="padding-left:16px;">
-        <div class="cover-kc">
-          <div><div class="kc-lbl">Total Purchase Value</div><div class="kc-val" style="color:#0ea5e9;">${fC(meta?.total_value??0)}</div><div class="kc-note">${meta?.total_transactions??0} invoices · ${meta?.unique_skus??0} SKUs</div></div>
-          <span class="badge" style="background:#ecfeff;color:#0ea5e9;border:1px solid #a5f3fc;">Purchases</span>
+      <div class="cover-bottom">
+        <div class="cover-meta">
+          <span>Generated ${today}</span>
+          <span>·</span>
+          <span>${meta?.branches?.length ?? 0} branches · ${fN(meta?.unique_suppliers ?? 0)} suppliers</span>
+          <span>·</span>
+          <span>Period: ${yearFilter === 'all' ? 'All Years' : yearFilter}</span>
         </div>
-        <div class="cover-kc">
-          <div><div class="kc-lbl">Active Suppliers</div><div class="kc-val" style="color:#14b8a6;">${fN(meta?.unique_suppliers??0)}</div><div class="kc-note">Unique vendor names</div></div>
-          <span class="badge" style="background:#f0fdfa;color:#0d9488;border:1px solid #99f6e4;">Vendors</span>
-        </div>
-        <div class="cover-kc">
-          <div><div class="kc-lbl">Most Active Month</div><div class="kc-val" style="color:#10b981;font-size:22px;">${mostActiveMonth}</div><div class="kc-note">Highest purchase value</div></div>
-          <span class="badge" style="background:#f0fdf4;color:#059669;border:1px solid #bbf7d0;">Peak</span>
-        </div>
-        <div class="cover-kc">
-          <div><div class="kc-lbl">Stock Alerts</div><div class="kc-val" style="color:${outCount+criticalCount>0?'#f97316':'#10b981'};">${outCount+criticalCount+lowCount}</div><div class="kc-note">${outCount} out · ${criticalCount} critical · ${lowCount} low</div></div>
-          <span class="badge" style="background:${outCount+criticalCount>0?'#fff7ed':'#f0fdf4'};color:${outCount+criticalCount>0?'#f97316':'#059669'};border:1px solid ${outCount+criticalCount>0?'#fed7aa':'#bbf7d0'};">${outCount+criticalCount>0?'⚠ Action':'✓ OK'}</span>
-        </div>
+        <span class="cover-confidential">Confidential</span>
       </div>
     </div>
-    <div class="cover-footer">
-      <div style="display:flex;align-items:center;gap:12px;font-size:10px;color:#94a3b8;">
-        <span>Generated ${today}</span>
-        <span style="width:3px;height:3px;border-radius:50%;background:#cbd5e1;display:inline-block;"></span>
-        <span>${meta?.branches?.length??0} branches · ${fN(meta?.unique_suppliers??0)} suppliers</span>
-        <span style="width:3px;height:3px;border-radius:50%;background:#cbd5e1;display:inline-block;"></span>
-        <span>Period: ${yearFilter==='all'?'All Years':yearFilter}</span>
-      </div>
-      <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#0ea5e9;border:1.5px solid #a5f3fc;padding:3px 10px;border-radius:20px;background:#ecfeff;">Confidential</span>
-    </div>
-  </div>
-</div>
+  </div>`;
 
-<!-- ══ PAGE 1 — KPIs + Suppliers ══ -->
-<div class="page">
-  ${pageHdr(1,'Purchase Overview & Supplier Performance',`${meta?.total_transactions??0} transactions · top 15 suppliers ranked by value`,'PAGE 1')}
-  <div class="kpi-row">
-    <div class="kc"><div class="l">Total Purchase Value</div><div class="v">${fC(meta?.total_value??0)}</div><div class="s">${meta?.total_transactions??0} invoices</div></div>
-    <div class="kc"><div class="l">Total Qty Received</div><div class="v">${fN(Math.round(meta?.total_qty??0))}</div><div class="s">${meta?.unique_skus??0} SKUs</div></div>
-    <div class="kc"><div class="l">Active Suppliers</div><div class="v">${fN(meta?.unique_suppliers??0)}</div><div class="s">Unique vendors</div></div>
-    <div class="kc"><div class="l">Stock Alerts</div><div class="v">${outCount+criticalCount+lowCount}</div><div class="s">${outCount} out · ${criticalCount} crit · ${lowCount} low</div></div>
-  </div>
-  <table>
-    <thead><tr>
-      <th class="l" style="width:28px">#</th>
-      <th class="l">Supplier</th>
-      <th class="r">SKUs</th>
-      <th class="r">Total Value</th>
-      <th class="r">% Share</th>
-    </tr></thead>
-    <tbody>${supplierRows}</tbody>
-  </table>
-</div>
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:-1;visibility:hidden;';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument!;
 
-<!-- ══ PAGE 2 — Categories + Branch Analysis ══ -->
-<div class="page">
-  ${pageHdr(2,'Purchase Value by Category & Branch Analysis',`${byCategory.length} categories · ${byBranch.length} branches`,'PAGE 2')}
-  <div class="two-col" style="margin-bottom:14px">
-    <div class="cd">
-      <h3>Top Categories</h3>
-      <table>
-        <thead><tr><th class="l">Category</th><th class="r">Value</th><th class="r">%</th></tr></thead>
-        <tbody>${catRows}</tbody>
-      </table>
-    </div>
-    <div class="cd">
-      <h3>Purchase Value by Branch</h3>
-      <table>
-        <thead><tr><th class="l">Branch</th><th class="r">Value</th><th class="r">Share</th></tr></thead>
-        <tbody>${branchRows}</tbody>
-      </table>
-    </div>
-  </div>
-</div>
+    doc.open();
+    doc.write(`<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8"/>
+    <title>Supply Policy Report — ${yearFilter === 'all' ? 'All Years' : yearFilter}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+    <style>${PRINT_CSS}</style>
+  </head>
+  <body>
+    ${coverHTML}
+    ${clone.outerHTML}
+  </body>
+  </html>`);
+    doc.close();
 
-<!-- ══ PAGE 3 — Supplier SKUs ══ -->
-<div class="page">
-  ${pageHdr(3,'Supplier × Top SKUs','Top 5 items per top 10 suppliers','PAGE 3')}
-  <div class="cd">
-    <h3>Purchase by Branch — Last 6 Months</h3>
-    <table>
-      <thead><tr><th class="l">Branch</th>${bxmHeaderCells}</tr></thead>
-      <tbody>${bxmBodyRows}</tbody>
-    </table>
-  </div>
-  <div class="insights">
-    <div class="ic"><div class="l">Top Supplier</div><div class="v">${bySupplier[0]?.name?.slice(0,36)??'—'}</div>${bySupplier[0]?`<div class="s">${fC(bySupplier[0].value)}</div>`:''}</div>
-    <div class="ic"><div class="l">Critical Reorders</div><div class="v">${outCount+criticalCount} products</div><div class="s">Need immediate replenishment</div></div>
-    <div class="ic"><div class="l">Most Active Month</div><div class="v">${mostActiveMonth}</div><div class="s">Highest purchase value</div></div>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-    ${skuCards}
-  </div>
-</div>
+    iframe.style.visibility = 'visible';
+    iframe.style.zIndex = '9999';
 
-<!-- ══ PAGE 4 — Lead Times + Inventory ══ -->
-<div class="page">
-  ${pageHdr(4,'Lead Times & Inventory Status',`${validLeadTimes.length} suppliers with lead time data · current stock alerts`,'PAGE 4')}
-  <div class="two-col">
-    <div class="cd">
-      <h3>Supplier Lead Times — avg days between orders</h3>
-      ${validLeadTimes.length===0
-        ? '<p style="color:#94a3b8;font-size:12px">Not enough order history to calculate lead times.</p>'
-        : `<table>
-            <thead><tr><th class="l">Supplier</th><th class="r">Orders</th><th class="r">Avg Days</th><th class="r">Frequency</th></tr></thead>
-            <tbody>${leadRows}</tbody>
-          </table>`
-      }
-    </div>
-    <div class="cd">
-      <h3>Current Inventory Status</h3>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-        ${[
-          {lbl:'Out of Stock', val:outCount,      col:'#ef4444', sub:'Zero quantity'},
-          {lbl:'Critical',     val:criticalCount, col:'#f97316', sub:'Below min level'},
-          {lbl:'Low Stock',    val:lowCount,       col:'#f59e0b', sub:'Below safety'},
-          {lbl:'Total SKUs',   val:stockSummary?.total_products??0, col:'#10b981', sub:'Tracked'},
-        ].map(k=>`
-          <div style="background:#f8fafc;border-radius:10px;padding:12px 14px;border:1px solid #e2e8f0;border-top:3px solid ${k.col}">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#64748b">${k.lbl}</div>
-            <div style="font-size:18px;font-weight:800;color:${k.col};margin-top:5px">${k.val}</div>
-            <div style="font-size:10px;color:#94a3b8;margin-top:2px">${k.sub}</div>
-          </div>`).join('')}
-      </div>
-      <div style="padding:11px 14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0">
-        <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:5px">Total Stock Value</div>
-        <div style="font-size:20px;font-weight:800;color:#0f172a">${fC(stockSummary?.total_stock_value??0)}</div>
-        <div style="font-size:10px;color:#94a3b8;margin-top:2px">${stockSummary?.total_products??0} products tracked</div>
-      </div>
-    </div>
-  </div>
-</div>
+    const cleanup = () => {
+      iframe.style.visibility = 'hidden';
+      setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 1500);
+    };
 
-</body></html>`;
+    const triggerPrint = () => {
+      try { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); }
+      catch { window.print(); }
+    };
 
-    const win = window.open('', '_blank', 'width=1280,height=900');
-    if (!win) { alert('Please allow popups to print the report.'); return; }
-    win.document.write(html);
-    win.document.close();
-    win.onload = () => { setTimeout(() => { win.focus(); win.print(); }, 400); };
+    iframe.onload = () => setTimeout(triggerPrint, 800);
+    setTimeout(triggerPrint, 1800);
+
+    if (iframe.contentWindow) {
+      iframe.contentWindow.onafterprint = cleanup;
+      setTimeout(cleanup, 90000);
+    }
   };
 
   // ── Render ────────────────────────────────────────────────────
   return (
     <div style={{ background:css.bg, minHeight:'100vh', padding:'32px 28px', display:'flex', flexDirection:'column', gap:28 }}>
 
-      {/* Header */}
-      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:12 }}>
-        <div>
-          <h1 style={{ fontSize:24, fontWeight:800, color:css.fg, letterSpacing:'-0.03em', margin:0, display:'flex', alignItems:'center', gap:10 }}>
-            <span style={{ width:36, height:36, borderRadius:10, background:`${C.indigo}18`, display:'inline-flex', alignItems:'center', justifyContent:'center' }}>
-              <Truck size={18} style={{ color:C.indigo }} />
+      {/* ── Header ── */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 16,
+        minWidth: 0,
+      }}>
+        {/* Left: title + subtitle — flex:1 + minWidth:0 pour laisser la place aux boutons */}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <h1 style={{
+            fontSize: 24, fontWeight: 800, color: css.fg,
+            letterSpacing: '-0.03em', margin: 0,
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <span style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: `${C.indigo}18`,
+              display: 'inline-flex', alignItems: 'center',
+              justifyContent: 'center', flexShrink: 0,
+            }}>
+              <Truck size={18} style={{ color: C.indigo }} />
             </span>
             Supply Policy Report
           </h1>
-          <p style={{ fontSize:13, color:css.mutedFg, marginTop:4 }}>
+          <p style={{ fontSize: 13, color: css.mutedFg, margin: '4px 0 0' }}>
             Purchases (ف شراء) · Supplier performance · Stock levels · Reorder recommendations
           </p>
         </div>
-        <div style={{ display:'flex', gap:8 }}>
-          <button onClick={fetchAll} disabled={loading}
-            style={{ display:'flex', alignItems:'center', gap:6, height:36, padding:'0 14px', borderRadius:10, border:`1px solid ${css.border}`, background:css.card, color:css.cardFg, fontSize:13, cursor:loading?'not-allowed':'pointer', opacity:loading?0.6:1 }}>
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+
+        {/* Right: boutons — flexShrink:0 garantit qu'ils ne disparaissent jamais */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'row',
+          gap: 8,
+          flexShrink: 0,
+          flexWrap: 'nowrap',
+          alignItems: 'center',
+        }}>
+          {/* Refresh */}
+          <button
+            onClick={fetchAll}
+            disabled={loading}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              height: 36, padding: '0 14px', borderRadius: 10,
+              border: `1px solid ${css.border}`,
+              background: css.card, color: css.cardFg,
+              fontSize: 13, fontWeight: 500,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.6 : 1,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {loading
+              ? <Loader2 size={14} className="animate-spin" />
+              : <RefreshCw size={14} />
+            }
             Refresh
           </button>
-          <button onClick={printReport} disabled={loading}
-            style={{ display:'flex', alignItems:'center', gap:6, height:36, padding:'0 14px', borderRadius:10, border:`1px solid ${C.indigo}40`, background:`${C.indigo}10`, color:C.indigo, fontSize:13, fontWeight:600, cursor:'pointer', opacity:loading?0.5:1 }}>
-            <Printer size={14} /> Print 
+
+          {/* Print Report */}
+          <button
+            onClick={printReport}
+            disabled={loading}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              height: 36, padding: '0 16px', borderRadius: 10,
+              border: `1.5px solid ${C.cyan}`,
+              background: `${C.cyan}15`, color: C.cyan,
+              fontSize: 13, fontWeight: 700,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.5 : 1,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <Printer size={14} />
+            Print Report
           </button>
         </div>
       </div>
@@ -748,7 +662,8 @@ export function SupplyReportPage() {
       )}
 
       {!loading && !error && supply && (
-        <>
+        <div id="spr-printable" style={{ display:'flex', flexDirection:'column', gap:28 }}>
+
           {/* §1 — KPIs */}
           <div>
             <SH n={1} title="Total Purchase Overview" sub={`${meta?.total_transactions??0} transactions · ${yearFilter==='all'?'all years':yearFilter}`} color={C.indigo} />
@@ -1095,7 +1010,8 @@ export function SupplyReportPage() {
               ))}
             </div>
           </div>
-        </>
+
+        </div>
       )}
     </div>
   );
