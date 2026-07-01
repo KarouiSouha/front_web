@@ -34,7 +34,7 @@ const REPORT_TYPES = [
   { id: 'aging',         title: 'Aging Receivables',       desc: 'Receivables, top debtors, collection rate and customer balances — all branches',       live: true  },
   { id: 'turnover',      title: 'Inventory Turnover',      desc: 'Stock value, branches, categories, rotation and slow-moving items',                    live: true  },
   { id: 'profitability', title: 'Pricing & Profitability', desc: 'Revenue, profit and ratio by month/branch, product and customer profitability',        live: true  },
-  { id: 'supply',        title: 'Stock Policy',            desc: 'Reorder points, lead times, optimal stock levels',                                     live: true  },
+  { id: 'supply',        title: 'Supply Policy',            desc: 'Reorder points, lead times, optimal stock levels',                                     live: true  },
   { id: 'distribution',  title: 'Sales Behavior',          desc: 'AI-generated patterns by channel, region, and customer segment',                       live: true  },
 ];
 

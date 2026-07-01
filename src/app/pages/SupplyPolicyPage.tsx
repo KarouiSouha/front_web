@@ -4,7 +4,7 @@ import axios from 'axios';
 import {
   ShoppingCart, Package, AlertTriangle, RefreshCw,
   Loader2, ChevronDown, BarChart3, ArrowUpRight,
-  Truck, AlertCircle,
+  Truck, AlertCircle, Printer,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -199,7 +199,8 @@ export function SupplyPolicyPage() {
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState<string | null>(null);
 
-  const [yearFilter,    setYearFilter]    = useState('2025');
+  const currentYear = String(new Date().getFullYear());
+  const [yearFilter,    setYearFilter]    = useState<string>(currentYear);
   const [branchFilter,  setBranchFilter]  = useState('all');
   const [catFilter,     setCatFilter]     = useState('all');
   const [openDD,        setOpenDD]        = useState<string | null>(null);
@@ -207,13 +208,16 @@ export function SupplyPolicyPage() {
   const [reorderStatus, setReorderStatus] = useState('all');
   const REORDER_PAGE_SIZE = 20;
 
+  const selectedYear = yearFilter === 'all' ? undefined : Number(yearFilter);
+  
+
   const fetchAll = useCallback(async () => {
     setLoading(true); setError(null);
     try {
       const headers = getAuthHeaders();
       const [supRes, stockRes] = await Promise.all([
-        axios.get('/api/kpi/supply/', { headers, params: { year: yearFilter, branch: branchFilter, category: catFilter } }),
-        axios.get('/api/kpi/stock/',  { headers, params: { year: yearFilter === 'all' ? undefined : yearFilter } }),
+        axios.get('/api/kpi/supply/', { headers, params: { year: selectedYear, branch: branchFilter, category: catFilter } }),
+        axios.get('/api/kpi/stock/',  { headers, params: { year: selectedYear } }),
       ]);
       setSupply(supRes.data as SupplyData);
       const reorderRaw: StockProduct[] = (stockRes.data.reorder_list ?? []).map((p: any) => ({
@@ -234,7 +238,7 @@ export function SupplyPolicyPage() {
     } catch (e: any) {
       setError(e.response?.data?.detail ?? e.message ?? 'Failed to load supply data');
     } finally { setLoading(false); }
-  }, [yearFilter, branchFilter, catFilter]);
+  }, [selectedYear, branchFilter, catFilter]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -289,7 +293,7 @@ export function SupplyPolicyPage() {
   const reorderTotal   = reorderSorted.length;
   const itemsWithUsage = reorderList.filter(i => i.monthly_usage > 0).length;
 
-  const yearOptions   = [{ key:'all', label:'All Years' },     ...(meta?.years      ?? []).map(y => ({ key:y, label:y }))];
+  const yearOptions   = [{ key:'all', label:'All Years' },     ...(meta?.years      ?? []).map(y => ({ key:String(y), label:String(y) }))];
   const branchOptions = [{ key:'all', label:'All Branches' },  ...(meta?.branches   ?? []).sort().map(b => ({ key:b, label:b }))];
   const catOptions    = [{ key:'all', label:'All Categories' },...(meta?.categories ?? []).sort().map(c => ({ key:c, label:c }))];
 
@@ -297,7 +301,55 @@ export function SupplyPolicyPage() {
   const mostActiveMonth = monthly.length
     ? monthly.reduce((a, b) => b.value > a.value ? b : a).month : '—';
 
-  // ── Render ────────────────────────────────────────────────────
+    // ── Print Report Function ─────────────────────────────────────
+  const printReport = () => {
+    const printable = document.getElementById('supply-printable');
+    if (!printable) {
+      alert("Erreur: Zone d'impression non trouvée");
+      return;
+    }
+
+    const clone = printable.cloneNode(true) as HTMLElement;
+    
+    // Simplification des styles pour l'impression
+    const resolveVars = (el: HTMLElement) => {
+      if (el.style?.cssText) {
+        el.style.cssText = el.style.cssText
+          .replace(/hsl\(var\(--card\)\)/g, '#ffffff')
+          .replace(/hsl\(var\(--card-foreground\)\)/g, '#111827')
+          .replace(/hsl\(var\(--border\)\)/g, '#e5e7eb')
+          .replace(/hsl\(var\(--muted\)\)/g, '#f3f4f6')
+          .replace(/hsl\(var\(--muted-foreground\)\)/g, '#6b7280');
+      }
+      Array.from(el.children).forEach(c => resolveVars(c as HTMLElement));
+    };
+    resolveVars(clone);
+
+    const today = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Supply Policy Report - ${today}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        ${clone.outerHTML}
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 500);
+  };
+  
+    // ── Render ────────────────────────────────────────────────────
   return (
     <div style={{ background:css.bg, minHeight:'100vh', padding:'32px 28px', display:'flex', flexDirection:'column', gap:28 }}>
 
@@ -314,13 +366,34 @@ export function SupplyPolicyPage() {
             Purchases (ف شراء) · Supplier performance · Stock levels · Reorder recommendations
           </p>
         </div>
-        <div style={{ display:'flex', gap:8 }}>
-          <button onClick={fetchAll} disabled={loading}
-            style={{ display:'flex', alignItems:'center', gap:6, height:36, padding:'0 14px', borderRadius:10, border:`1px solid ${css.border}`, background:css.card, color:css.cardFg, fontSize:13, cursor:loading?'not-allowed':'pointer', opacity:loading?0.6:1 }}>
+                <div style={{ display:'flex', gap:8 }}>
+          <button 
+            onClick={fetchAll} 
+            disabled={loading}
+            style={{ 
+              display:'flex', alignItems:'center', gap:6, height:36, padding:'0 14px', 
+              borderRadius:10, border:`1px solid ${css.border}`, background:css.card, 
+              color:css.cardFg, fontSize:13, cursor:loading?'not-allowed':'pointer', 
+              opacity:loading?0.6:1 
+            }}
+          >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
             Refresh
           </button>
 
+          <button 
+            onClick={printReport}
+            disabled={loading}
+            style={{ 
+              display:'flex', alignItems:'center', gap:6, height:36, padding:'0 16px', 
+              borderRadius:10, border:`1.5px solid ${C.cyan}`, background:`${C.cyan}15`, 
+              color: C.cyan, fontSize:13, fontWeight:700, 
+              cursor:loading?'not-allowed':'pointer', opacity:loading?0.5:1 
+            }}
+          >
+            <Printer size={14} />
+            Print Report
+          </button>
         </div>
       </div>
 
@@ -351,7 +424,7 @@ export function SupplyPolicyPage() {
       )}
 
       {!loading && !error && supply && (
-        <>
+        <div id="supply-printable">
           {/* Section 1 — KPIs */}
           <div>
             <SH n={1} title="Total Purchase Overview" sub={`${meta?.total_transactions??0} transactions · ${yearFilter==='all'?'all years':yearFilter}`} color={C.indigo} />
@@ -700,7 +773,7 @@ export function SupplyPolicyPage() {
               ))}
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
